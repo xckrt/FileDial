@@ -46,6 +46,9 @@ public sealed record ConversionSpec
     /// </summary>
     public Func<string, ProbeInfo, string, IReadOnlyList<string>>? FilterArguments { get; init; }
 
+    /// <summary>Доработка готового временного файла перед переносом (например, нумерация SRT).</summary>
+    public Action<string>? PostProcess { get; init; }
+
     /// <summary>Что сказать, если результат пуст (например, в записи нет речи). null — пустой результат считается ошибкой.</summary>
     public string? EmptyOutputMessage { get; init; }
 }
@@ -107,6 +110,7 @@ public sealed class ConversionJob(FfmpegTools tools, ConversionSpec spec, string
                 return new JobResult(JobStatus.NothingToDo, empty);
             if (!File.Exists(tempOutput))
                 throw new CompressionException("ffmpeg не создал результат.", result.ErrorTail);
+            spec.PostProcess?.Invoke(tempOutput);
 
             var finalPath = OutputFiles.MoveToFreeName(tempOutput,
                 () => OutputNameGenerator.Generate(sourcePath, spec.Suffix, extension, OutputNameGenerator.PathTaken, directory));

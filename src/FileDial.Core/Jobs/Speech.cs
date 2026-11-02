@@ -1,4 +1,4 @@
-using FileDial.Core.Compression;
+﻿using FileDial.Core.Compression;
 using FileDial.Core.Menu;
 using FileDial.Core.Settings;
 
@@ -88,6 +88,27 @@ public static class Speech
             EstimateBytes = (_, _) => 10_000_000,
             Timed = true,
             EmptyOutputMessage = "Речь не найдена — файл не создан.",
+            PostProcess = format == "srt" ? RenumberSrtFile : null,
         };
     }
+
+    /// <summary>
+    /// whisper нумерует субтитры с 0, а по стандарту SRT — с 1; строгие плееры пропускают «нулевой».
+    /// Перенумеровываем блоки по порядку, остальное не трогаем.
+    /// </summary>
+    public static string RenumberSrt(string srt)
+    {
+        var lines = srt.Replace("\r\n", "\n").Split('\n');
+        var number = 0;
+        for (var i = 0; i < lines.Length - 1; i++)
+        {
+            // Номер блока — строка из цифр, за которой идёт строка таймкодов.
+            if (lines[i].Trim().All(char.IsAsciiDigit) && lines[i].Trim().Length > 0 && lines[i + 1].Contains("-->"))
+                lines[i] = (++number).ToString(System.Globalization.CultureInfo.InvariantCulture);
+        }
+        return string.Join("\r\n", lines);
+    }
+
+    private static void RenumberSrtFile(string path) =>
+        File.WriteAllText(path, RenumberSrt(File.ReadAllText(path)), new System.Text.UTF8Encoding(false));
 }

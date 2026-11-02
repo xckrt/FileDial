@@ -1,4 +1,4 @@
-using FileDial.Core.Compression;
+﻿using FileDial.Core.Compression;
 using FileDial.Core.Jobs;
 using FileDial.Core.Menu;
 using FileDial.Core.Settings;
@@ -89,6 +89,14 @@ public class SpeechTests : IDisposable
         Assert.Equal(".txt", Speech.For(ActionIds.SpeechToText, settings)!.OutputExtension(@"C:\a.mp3", new ProbeInfo(1, false, true, 0, 0)));
         Assert.Contains("format=text", Speech.For(ActionIds.SpeechToText, settings)!
             .FilterArguments!(@"C:\a.mp3", new ProbeInfo(1, false, true, 0, 0), @"C:\t.tmp")[4]);
+    }
+
+    [Fact]
+    public void Srt_IsRenumberedFromOne_TextUntouched()
+    {
+        const string whisper = "0\n00:00:00,000 --> 00:00:01,000\nПривет.\n\n1\n00:00:01,000 --> 00:00:06,580\n12345\n\n";
+        var fixedSrt = Speech.RenumberSrt(whisper);
+        Assert.Equal("1\r\n00:00:00,000 --> 00:00:01,000\r\nПривет.\r\n\r\n2\r\n00:00:01,000 --> 00:00:06,580\r\n12345\r\n\r\n", fixedSrt);
     }
 
     [Fact]
