@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using System.IO.Compression;
 using System.Text.Json;
 using System.Text.RegularExpressions;
@@ -59,11 +59,11 @@ public static partial class FfmpegInstaller
 
     private static async Task<FfmpegPackage?> FindGyanAsync(HttpClient http, CancellationToken ct)
     {
-        var version = await http.GetStringAsync(GyanBase + "release-version", ct).ConfigureAwait(false);
+        var version = await VerifiedDownload.GetStringAsync(http, GyanBase + "release-version", ct).ConfigureAwait(false);
         var name = $"ffmpeg-{version.Trim()}-full_build.7z";
         if (!VersionText().IsMatch(version.Trim()))
             return null;
-        var sha = await http.GetStringAsync(GyanBase + "packages/" + name + ".sha256", ct).ConfigureAwait(false);
+        var sha = await VerifiedDownload.GetStringAsync(http, GyanBase + "packages/" + name + ".sha256", ct).ConfigureAwait(false);
         return GyanPackage(version, sha);
     }
 
@@ -131,7 +131,7 @@ public static partial class FfmpegInstaller
                 if (await FindGyanAsync(http, ct).ConfigureAwait(false) is { } gyan)
                     return gyan;
             }
-            catch (HttpRequestException)
+            catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
             {
                 // gyan.dev недоступен — пробуем GitHub
             }

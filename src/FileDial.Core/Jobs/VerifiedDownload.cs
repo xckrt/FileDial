@@ -8,17 +8,42 @@ namespace FileDial.Core.Jobs;
 /// </summary>
 public static class VerifiedDownload
 {
-    /// <param name="expectedSize">Размер, если известен заранее; иначе берётся из ответа сервера (только для прогресса).</param>
-    public static async Task DownloadAsync(HttpClient http, string url, long? expectedSize, string expectedSha256,
-        string partPath, IProgress<(long Done, long Total)>? progress, CancellationToken ct)
+    /// <summary>Некоторые серверы (gyan.dev) отвечают 503 или молчат на запросы без User-Agent.</summary>
+    public const string UserAgent = "FileDial/1.0 (Windows; file tool)";
+
+    /// <summary>Сколько ждать очередную порцию данных, прежде чем считать загрузку зависшей.</summary>
+    public static readonly TimeSpan DefaultStallTimeout = TimeSpan.FromSeconds(60);
+
+    public static HttpRequestMessage Get(string url)
     {
+        var request = new HttpRequestMessage(HttpMethod.Get, url);
+        request.Headers.UserAgent.ParseAdd(UserAgent);
+        return request;
+    }
+
+    /// <summary>Небольшой текстовый ответ (номер версии, контрольная сумма) — с User-Agent.</summary>
+    public static async Task<string> GetStringAsync(HttpClient http, string url, CancellationToken ct)
+    {
+        using var request = Get(url);
+        using var response = await http.SendAsync(request, ct).ConfigureAwait(false);
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+    }
+
+    /// <param name="expectedSize">Размер, если известен заранее; иначе берётся из ответа сервера (только для прогресса).</param>
+    /// <param name="stallTimeout">Сколько ждать данных без единого байта; по умолчанию 60 с.</param>
+    public static async Task DownloadAsync(HttpClient http, string url, long? expectedSize, string expectedSha256,
+        string partPath, IProgress<(long Done, long Total)>? progress, CancellationToken ct, TimeSpan? stallTimeout = null)
+    {
+        var stall = stallTimeout ?? DefaultStallTimeout;
         var folder = Path.GetDirectoryName(partPath)!;
         Directory.CreateDirectory(folder);
 
         var ok = false;
         try
         {
-            using var response = await http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
+            using var request = Get(url);
+            using var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
             response.EnsureSuccessStatusCode();
             var total = expectedSize ?? response.Content.Headers.ContentLength ?? 0;
             // Архиву нужно место и на себя, и на распакованное.
@@ -32,7 +57,7 @@ public static class VerifiedDownload
                 var buffer = new byte[1 << 16];
                 long done = 0;
                 int read;
-                while ((read = await input.ReadAsync(buffer, ct).ConfigureAwait(false)) > 0)
+                while ((read = await ReadWithStallTimeoutAsync(input, buffer, stall, ct).ConfigureAwait(false)) > 0)
                 {
                     await output.WriteAsync(buffer.AsMemory(0, read), ct).ConfigureAwait(false);
                     hash.AppendData(buffer, 0, read);
@@ -51,6 +76,21 @@ public static class VerifiedDownload
         {
             if (!ok)
                 TryDelete(partPath);
+        }
+    }
+
+    /// <summary>Чтение очередной порции: если данных нет дольше <paramref name="stall"/> — понятная ошибка, а не вечное ожидание.</summary>
+    private static async Task<int> ReadWithStallTimeoutAsync(Stream input, byte[] buffer, TimeSpan stall, CancellationToken ct)
+    {
+        using var timer = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        timer.CancelAfter(stall);
+        try
+        {
+            return await input.ReadAsync(buffer, timer.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        {
+            throw new IOException("Загрузка остановилась: сервер перестал присылать данные. Попробуйте ещё раз позже.");
         }
     }
 
