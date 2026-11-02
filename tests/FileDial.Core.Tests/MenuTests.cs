@@ -10,7 +10,7 @@ public class ActionCatalogTests
     [InlineData(@"C:\v\a.MOV")]
     [InlineData(@"C:\v\a.mkv")]
     [InlineData(@"C:\v\a.WebM")]
-    public void VideoFiles_GetEightActions_OnlyCompressEnabled(string path)
+    public void VideoFiles_GetEightActions_TrimAndSubtitlesAreStubs(string path)
     {
         var actions = ActionCatalog.ForFile(path, 80_000_000);
 
@@ -21,11 +21,13 @@ public class ActionCatalogTests
         Assert.Equal(ActionIds.Compress25, actions[0].Id);
         Assert.True(actions[0].IsEnabled);
         Assert.Null(actions[0].DisabledReason);
-        Assert.All(actions.Skip(1), a =>
-        {
-            Assert.False(a.IsEnabled);
-            Assert.Equal(ActionCatalog.NotInPrototype, a.DisabledReason);
-        });
+        Assert.Equal([ActionIds.Trim, ActionIds.Subtitles],
+            actions.Where(a => a.DisabledReason == ActionCatalog.NotInPrototype).Select(a => a.Id));
+        // Без сведений ffprobe звук и длительность неизвестны — эти действия не запрещаем.
+        Assert.True(actions.Single(a => a.Id == ActionIds.Gif).IsEnabled);
+        Assert.True(actions.Single(a => a.Id == ActionIds.ExtractAudio).IsEnabled);
+        Assert.True(actions.Single(a => a.Id == ActionIds.Frame).IsEnabled);
+        Assert.True(actions.Single(a => a.Id == ActionIds.Mute).IsEnabled);
     }
 
     [Theory]
@@ -90,7 +92,7 @@ public class SelectionInterpreterTests
         var menu = Assert.IsType<HotkeyOutcome.ShowMenu>(outcome).Menu;
         Assert.Equal(DialMenuKind.Actions, menu.Kind);
         Assert.Equal("521,8 КБ", menu.Subtitle);
-        Assert.DoesNotContain(menu.Actions, a => a.IsEnabled);
+        Assert.False(menu.Actions[0].IsEnabled);
         Assert.Equal(ActionCatalog.AlreadySmall, menu.Actions[0].DisabledReason);
     }
 

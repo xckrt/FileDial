@@ -2,23 +2,41 @@ using FileDial.Core.Compression;
 
 namespace FileDial.Core.Jobs;
 
-public enum MediaRequirement
+/// <summary>Какие дорожки нужны во входном файле.</summary>
+[Flags]
+public enum MediaNeeds
 {
-    Image,
-    Audio,
+    None = 0,
+    Picture = 1,
+    Sound = 2,
 }
 
 /// <summary>Описание однопроходного преобразования через ffmpeg.</summary>
-public sealed record ConversionSpec(
+public sealed record ConversionSpec
+{
     /// <summary>Добавка к имени результата (пустая при простой смене формата).</summary>
-    string Suffix,
-    MediaRequirement Requires,
-    /// <summary>Расширение результата по пути исходника.</summary>
-    Func<string, string> OutputExtension,
-    /// <summary>Аргументы ffmpeg после «-i вход» и до имени результата (фильтры, кодек, формат).</summary>
-    Func<string, ProbeInfo, IReadOnlyList<string>> Arguments,
+    public required string Suffix { get; init; }
+
+    public required MediaNeeds Needs { get; init; }
+
+    /// <summary>Текст, если изображения нет (для картинок и видео он разный).</summary>
+    public string MissingPictureMessage { get; init; } = "В файле нет видеодорожки.";
+
+    /// <summary>Расширение результата: по пути исходника и сведениям ffprobe (например, кодеку звука).</summary>
+    public required Func<string, ProbeInfo, string> OutputExtension { get; init; }
+
+    /// <summary>Аргументы до «-i вход» (например, быстрый переход к нужному месту).</summary>
+    public Func<string, ProbeInfo, IReadOnlyList<string>> InputArguments { get; init; } = (_, _) => [];
+
+    /// <summary>Аргументы после «-i вход» и до имени результата (дорожки, фильтры, кодек, формат).</summary>
+    public required Func<string, ProbeInfo, IReadOnlyList<string>> Arguments { get; init; }
+
     /// <summary>Оценка размера результата — для проверки свободного места.</summary>
-    Func<long, ProbeInfo, long> EstimateBytes);
+    public required Func<long, ProbeInfo, long> EstimateBytes { get; init; }
+
+    /// <summary>Показывать проценты по длительности (для однокадровых операций — нет).</summary>
+    public bool Timed { get; init; }
+}
 
 /// <summary>Преобразование файла в новый файл рядом с исходником.</summary>
 public sealed class ConversionJob(FfmpegTools tools, ConversionSpec spec) : IFileJob
@@ -31,28 +49,29 @@ public sealed class ConversionJob(FfmpegTools tools, ConversionSpec spec) : IFil
         progress?.Report(new JobProgress("Анализ файла", null));
         var info = await ProbeInfo.RunAsync(tools, sourcePath, ct).ConfigureAwait(false);
 
-        if (spec.Requires == MediaRequirement.Image && !info.HasVideo)
-            throw new CompressionException("Не удалось прочитать изображение.");
-        if (spec.Requires == MediaRequirement.Audio && !info.HasAudio)
+        if (spec.Needs.HasFlag(MediaNeeds.Picture) && !info.HasVideo)
+            throw new CompressionException(spec.MissingPictureMessage);
+        if (spec.Needs.HasFlag(MediaNeeds.Sound) && !info.HasAudio)
             throw new CompressionException("В файле нет звуковой дорожки.");
 
         var directory = Path.GetDirectoryName(sourcePath)!;
         if (OutputFolderCheck.WhyNot(directory, spec.EstimateBytes(sourceSize, info)) is { } folderProblem)
             throw new CompressionException(folderProblem);
 
-        var extension = spec.OutputExtension(sourcePath);
+        var extension = spec.OutputExtension(sourcePath, info);
         var tempOutput = Path.Combine(directory, $".filedial-{Guid.NewGuid():N}.tmp");
         try
         {
             var args = new List<string>
             {
                 "-hide_banner", "-nostdin", "-y", "-loglevel", "error", "-nostats", "-progress", "pipe:1",
-                "-i", sourcePath,
             };
+            args.AddRange(spec.InputArguments(sourcePath, info));
+            args.AddRange(["-i", sourcePath]);
             args.AddRange(spec.Arguments(sourcePath, info));
             args.Add(tempOutput);
 
-            var timed = spec.Requires == MediaRequirement.Audio && info.DurationSeconds > 0;
+            var timed = spec.Timed && info.DurationSeconds > 0;
             progress?.Report(new JobProgress("Обработка", timed ? 0 : null));
 
             var result = await ProcessRunner.RunAsync(tools.Ffmpeg, args, line =>

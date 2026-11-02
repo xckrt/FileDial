@@ -1,4 +1,4 @@
-using FileDial.Core.Compression;
+﻿using FileDial.Core.Compression;
 using FileDial.Core.Jobs;
 using FileDial.Core.Menu;
 using FileDial.Core.Selection;
@@ -40,7 +40,8 @@ public class ImageActionTests
         Assert.True(actions[2].IsEnabled);
         Assert.True(actions[3].IsEnabled);
         Assert.True(actions[4].IsEnabled);
-        Assert.All(actions.Skip(5), a => Assert.Equal(ActionCatalog.NotInPrototype, a.DisabledReason));
+        Assert.Equal("Файл уже меньше 1 МБ", actions[5].DisabledReason);
+        Assert.All(actions.Skip(6), a => Assert.Equal(ActionCatalog.NotInPrototype, a.DisabledReason));
     }
 
     [Theory]
@@ -80,13 +81,16 @@ public class AudioActionTests
     {
         var actions = ActionCatalog.ForFile(@"C:\m\песня.mp3", 5_000_000);
 
-        Assert.Equal(["В MP3", "В M4A", "В WAV", "Выровнять громкость", "Обрезать", "Убрать шум", "Ускорить", "В текст"],
+        Assert.Equal(["В MP3", "В M4A", "В WAV", "Выровнять громкость", "Обрезать", "Убрать шум", "Ускорить ×1,5", "В текст"],
             actions.Select(a => a.Label));
         Assert.Equal("Файл уже в MP3", actions[0].DisabledReason);
         Assert.True(actions[1].IsEnabled);
         Assert.True(actions[2].IsEnabled);
         Assert.True(actions[3].IsEnabled);
-        Assert.All(actions.Skip(4), a => Assert.False(a.IsEnabled));
+        Assert.Equal([ActionIds.AudioTrim, ActionIds.SpeechToText],
+            actions.Where(a => !a.IsEnabled && a.DisabledReason == ActionCatalog.NotInPrototype).Select(a => a.Id));
+        Assert.True(actions[5].IsEnabled);
+        Assert.True(actions[6].IsEnabled);
     }
 
     [Fact]
@@ -190,8 +194,8 @@ public class ConversionSpecTests
     [InlineData(@"C:\a.tiff", ".png")]
     public void ResizeAndRotate_KeepFormatWhenPossible(string path, string expected)
     {
-        Assert.Equal(expected, ConversionSpecs.For(ActionIds.Resize1920)!.OutputExtension(path));
-        Assert.Equal(expected, ConversionSpecs.For(ActionIds.RotateRight)!.OutputExtension(path));
+        Assert.Equal(expected, ConversionSpecs.For(ActionIds.Resize1920)!.OutputExtension(path, Picture));
+        Assert.Equal(expected, ConversionSpecs.For(ActionIds.RotateRight)!.OutputExtension(path, Picture));
     }
 
     [Fact]
@@ -226,7 +230,7 @@ public class ConversionSpecTests
     public void Normalize_KeepsSourceFormat_AndUsesLoudnorm()
     {
         var spec = ConversionSpecs.For(ActionIds.Normalize)!;
-        Assert.Equal(".ogg", spec.OutputExtension(@"C:\a.OGG"));
+        Assert.Equal(".ogg", spec.OutputExtension(@"C:\a.OGG", Sound));
         Assert.Equal("_выровнено", spec.Suffix);
         var args = spec.Arguments(@"C:\a.ogg", Sound).ToList();
         Assert.StartsWith("loudnorm", args[args.IndexOf("-af") + 1]);

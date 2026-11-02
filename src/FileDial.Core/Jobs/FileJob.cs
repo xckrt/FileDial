@@ -25,13 +25,15 @@ public interface IFileJob
 public static class FileJobs
 {
     /// <summary>Задача для действия или null, если действие не реализовано.</summary>
-    public static IFileJob? Create(string actionId, FfmpegTools tools) =>
-        actionId == ActionIds.Compress25
-            ? new CompressJob(tools)
-            : ConversionSpecs.For(actionId) is { } spec ? new ConversionJob(tools, spec) : null;
+    public static IFileJob? Create(string actionId, FfmpegTools tools) => actionId switch
+    {
+        ActionIds.Compress25 => new CompressJob(tools),
+        ActionIds.ImageCompress1Mb => new ImageCompressJob(tools),
+        _ => ConversionSpecs.For(actionId) is { } spec ? new ConversionJob(tools, spec) : null,
+    };
 
     public static bool IsImplemented(string actionId) =>
-        actionId == ActionIds.Compress25 || ConversionSpecs.For(actionId) is not null;
+        actionId is ActionIds.Compress25 or ActionIds.ImageCompress1Mb || ConversionSpecs.For(actionId) is not null;
 
     internal static string DoneMessage(long sourceSize, string outputPath) =>
         $"{SizeFormatter.Format(sourceSize)} → {SizeFormatter.Format(new FileInfo(outputPath).Length)}. " +

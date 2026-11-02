@@ -5,12 +5,12 @@ namespace FileDial.Core.Compression;
 
 /// <summary>Нужные для расчёта сведения из ffprobe.</summary>
 public sealed record ProbeInfo(double DurationSeconds, bool HasVideo, bool HasAudio, int Width, int Height,
-    int AudioChannels = 0, int AudioSampleRate = 0)
+    int AudioChannels = 0, int AudioSampleRate = 0, string? VideoCodec = null, string? AudioCodec = null)
 {
     public static IReadOnlyList<string> Arguments(string input) =>
     [
         "-v", "error",
-        "-show_entries", "stream=codec_type,width,height,channels,sample_rate:format=duration",
+        "-show_entries", "stream=codec_type,codec_name,width,height,channels,sample_rate:format=duration",
         "-of", "json",
         input,
     ];
@@ -47,16 +47,19 @@ public sealed record ProbeInfo(double DurationSeconds, bool HasVideo, bool HasAu
 
         bool hasVideo = false, hasAudio = false;
         int width = 0, height = 0, channels = 0, sampleRate = 0;
+        string? videoCodec = null, audioCodec = null;
         if (root.TryGetProperty("streams", out var streams) && streams.ValueKind == JsonValueKind.Array)
         {
             foreach (var s in streams.EnumerateArray())
             {
                 var type = s.TryGetProperty("codec_type", out var t) ? t.GetString() : null;
+                var codec = s.TryGetProperty("codec_name", out var cn) ? cn.GetString() : null;
                 if (type == "audio")
                 {
                     // Сжимаем первую звуковую дорожку (-map 0:a:0) — её каналы и важны.
                     if (!hasAudio)
                     {
+                        audioCodec = codec;
                         channels = s.TryGetProperty("channels", out var ch) && ch.TryGetInt32(out var cv) ? cv : 0;
                         // ffprobe отдаёт sample_rate строкой.
                         if (s.TryGetProperty("sample_rate", out var sr) && sr.ValueKind == JsonValueKind.String)
@@ -67,12 +70,13 @@ public sealed record ProbeInfo(double DurationSeconds, bool HasVideo, bool HasAu
                 else if (type == "video" && !hasVideo)
                 {
                     hasVideo = true;
+                    videoCodec = codec;
                     width = s.TryGetProperty("width", out var w) && w.TryGetInt32(out var wv) ? wv : 0;
                     height = s.TryGetProperty("height", out var h) && h.TryGetInt32(out var hv) ? hv : 0;
                 }
             }
         }
 
-        return new ProbeInfo(duration, hasVideo, hasAudio, width, height, channels, sampleRate);
+        return new ProbeInfo(duration, hasVideo, hasAudio, width, height, channels, sampleRate, videoCodec, audioCodec);
     }
 }

@@ -1,4 +1,5 @@
-using FileDial.Core.Compression;
+﻿using FileDial.Core.Compression;
+using FileDial.Core.Jobs;
 
 namespace FileDial.Core.Menu;
 
@@ -23,29 +24,34 @@ public static class ActionCatalog
     public static IReadOnlyList<DialAction> ForFile(string path, long sizeBytes, ProbeInfo? media = null) =>
         FileKinds.Of(path) switch
         {
-            FileKind.Video => ForVideo(sizeBytes, media),
-            FileKind.Image => ForImage(path, media),
+            FileKind.Video => ForVideo(path, sizeBytes, media),
+            FileKind.Image => ForImage(path, sizeBytes, media),
             FileKind.Audio => ForAudio(path),
             _ => [],
         };
 
-    private static IReadOnlyList<DialAction> ForVideo(long sizeBytes, ProbeInfo? media)
+    private static IReadOnlyList<DialAction> ForVideo(string path, long sizeBytes, ProbeInfo? media)
     {
-        var whyNot = CompressionCheck.WhyNot(sizeBytes, media);
+        // Без сведений ffprobe звук и длительность неизвестны — тогда не запрещаем, окно действия объяснит ошибку.
+        var noSound = media is { HasAudio: false };
+        var tooLongForGif = media is { DurationSeconds: > ConversionSpecs.GifMaxSeconds };
+        var isMp4 = Path.GetExtension(path).Equals(".mp4", StringComparison.OrdinalIgnoreCase);
+
         return
         [
-            Action(ActionIds.Compress25, "Сжать до 25 МБ", whyNot),
+            Action(ActionIds.Compress25, "Сжать до 25 МБ", CompressionCheck.WhyNot(sizeBytes, media)),
             Stub(ActionIds.Trim, "Обрезать"),
-            Stub(ActionIds.Gif, "Сделать GIF"),
-            Stub(ActionIds.ExtractAudio, "Извлечь звук"),
-            Stub(ActionIds.Frame, "Кадр в картинку"),
+            Action(ActionIds.Gif, "Сделать GIF",
+                tooLongForGif ? $"GIF — только для роликов до {ConversionSpecs.GifMaxSeconds} с" : null),
+            Action(ActionIds.ExtractAudio, "Извлечь звук", noSound ? "В видео нет звука" : null),
+            Action(ActionIds.Frame, "Кадр в картинку", null),
             Stub(ActionIds.Subtitles, "Субтитры"),
-            Stub(ActionIds.Mute, "Убрать звук"),
-            Stub(ActionIds.Convert, "Формат"),
+            Action(ActionIds.Mute, "Убрать звук", noSound ? "В видео и так нет звука" : null),
+            Action(ActionIds.Convert, "Формат", isMp4 ? "Файл уже в MP4" : null),
         ];
     }
 
-    private static IReadOnlyList<DialAction> ForImage(string path, ProbeInfo? media)
+    private static IReadOnlyList<DialAction> ForImage(string path, long sizeBytes, ProbeInfo? media)
     {
         var ext = Path.GetExtension(path).ToLowerInvariant();
         string? resizeWhyNot = null;
@@ -59,7 +65,8 @@ public static class ActionCatalog
             Action(ActionIds.ToWebp, "В WebP", ext == ".webp" ? "Файл уже в WebP" : null),
             Action(ActionIds.Resize1920, $"Уменьшить до {ResizeLongSide} px", resizeWhyNot),
             Action(ActionIds.RotateRight, "Повернуть вправо", null),
-            Stub(ActionIds.ImageCompress1Mb, "Сжать до 1 МБ"),
+            Action(ActionIds.ImageCompress1Mb, "Сжать до 1 МБ",
+                sizeBytes <= ImageCompressJob.DefaultTargetBytes ? "Файл уже меньше 1 МБ" : null),
             Stub(ActionIds.RemoveBackground, "Убрать фон"),
             Stub(ActionIds.ImageToPdf, "В PDF"),
         ];
@@ -75,8 +82,8 @@ public static class ActionCatalog
             Action(ActionIds.ToWav, "В WAV", ext == ".wav" ? "Файл уже в WAV" : null),
             Action(ActionIds.Normalize, "Выровнять громкость", null),
             Stub(ActionIds.AudioTrim, "Обрезать"),
-            Stub(ActionIds.Denoise, "Убрать шум"),
-            Stub(ActionIds.SpeedUp, "Ускорить"),
+            Action(ActionIds.Denoise, "Убрать шум", null),
+            Action(ActionIds.SpeedUp, "Ускорить ×1,5", null),
             Stub(ActionIds.SpeechToText, "В текст"),
         ];
     }
