@@ -7,7 +7,7 @@ public static class ActionCatalog
 {
     public const int SectorCount = 8;
     public const string NotInPrototype = "Недоступно в прототипе";
-    public const string AlreadySmall = "Файл уже меньше 25 МБ";
+    public const string AlreadySmall = CompressionCheck.AlreadySmall;
 
     public static readonly IReadOnlySet<string> VideoExtensions =
         new HashSet<string>(StringComparer.OrdinalIgnoreCase) { ".mp4", ".mov", ".mkv", ".webm" };
@@ -19,16 +19,17 @@ public static class ActionCatalog
     /// Действия для файла; пустой список — тип не поддерживается.
     /// Порядок = порядок секторов по часовой стрелке, начиная сверху (клавиши 1–8).
     /// </summary>
-    public static IReadOnlyList<DialAction> ForFile(string path, long sizeBytes)
+    /// <param name="media">Сведения ffprobe, если удалось получить; без них проверяем только размер.</param>
+    public static IReadOnlyList<DialAction> ForFile(string path, long sizeBytes, ProbeInfo? media = null)
     {
         if (!IsVideo(path))
             return [];
 
-        // Сжимать до 25 МБ то, что уже не больше 25 МБ, бессмысленно.
-        var canCompress = sizeBytes > BitrateCalculator.DefaultTargetBytes;
+        // Не предлагаем то, что заведомо не получится или не нужно.
+        var whyNot = CompressionCheck.WhyNot(sizeBytes, media);
         return
         [
-            new(ActionIds.Compress25, "Сжать до 25 МБ", canCompress, canCompress ? null : AlreadySmall),
+            new(ActionIds.Compress25, "Сжать до 25 МБ", whyNot is null, whyNot),
             Stub(ActionIds.Trim, "Обрезать"),
             Stub(ActionIds.Gif, "Сделать GIF"),
             Stub(ActionIds.ExtractAudio, "Извлечь звук"),

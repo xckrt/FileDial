@@ -65,6 +65,22 @@ public sealed class VideoCompressor(FfmpegTools tools, CompressionOptions? optio
             await RunPassAsync(2, FfmpegArguments.SecondPass(sourcePath, plan, passLog, tempOutput),
                 info.DurationSeconds, progress, cancellationToken).ConfigureAwait(false);
 
+            // Кодер иногда промахивается вверх (короткие ролики, тяжёлые сцены). Один раз повторяем второй проход
+            // с поправленным битрейтом: статистика первого прохода от битрейта не зависит.
+            var size = new FileInfo(tempOutput).Length;
+            if (size > _options.TargetBytes)
+            {
+                var corrected = BitrateCalculator.CorrectedVideoKbps(plan.VideoKbps, size, info.DurationSeconds,
+                    _options.TargetBytes);
+                if (corrected >= BitrateCalculator.MinVideoKbps && corrected < plan.VideoKbps)
+                {
+                    var retryPlan = plan with { VideoKbps = corrected, TotalKbps = corrected + plan.AudioKbps };
+                    await RunPassAsync(2, FfmpegArguments.SecondPass(sourcePath, retryPlan, passLog, tempOutput),
+                        info.DurationSeconds, progress, cancellationToken, "Проход 2 из 2, уточнение")
+                        .ConfigureAwait(false);
+                }
+            }
+
             var finalPath = MoveToFreeName(sourcePath, tempOutput);
             progress?.Report(new CompressionProgress("Готово", 1));
             return new CompressionResult(CompressionStatus.Done, sourceSize, finalPath, new FileInfo(finalPath).Length);
@@ -101,9 +117,9 @@ public sealed class VideoCompressor(FfmpegTools tools, CompressionOptions? optio
     }
 
     private async Task RunPassAsync(int pass, IReadOnlyList<string> args, double duration,
-        IProgress<CompressionProgress>? progress, CancellationToken ct)
+        IProgress<CompressionProgress>? progress, CancellationToken ct, string? stageName = null)
     {
-        var stage = $"Проход {pass} из 2";
+        var stage = stageName ?? $"Проход {pass} из 2";
         progress?.Report(new CompressionProgress(stage, FfmpegProgressParser.OverallFraction(pass, TimeSpan.Zero, duration)));
 
         var result = await ProcessRunner.RunAsync(tools.Ffmpeg, args, line =>

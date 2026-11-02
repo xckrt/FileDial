@@ -5,6 +5,7 @@ using FileDial.App.Interop;
 using FileDial.App.Selection;
 using FileDial.App.Tray;
 using FileDial.App.UI;
+using FileDial.Core.Compression;
 using FileDial.Core.Menu;
 using FileDial.Core.Selection;
 
@@ -14,6 +15,7 @@ namespace FileDial.App;
 public partial class App : Application
 {
     private static readonly TimeSpan SelectionTimeout = TimeSpan.FromSeconds(5);
+    private static readonly TimeSpan MediaProbeTimeout = TimeSpan.FromSeconds(2);
 
     private Mutex? _singleInstance;
     private HotkeyManager? _hotkey;
@@ -83,8 +85,13 @@ public partial class App : Application
                 SelectionTimeout,
                 () => SelectionResult.Fail("Проводник не отвечает"));
 
-            // Проверка файла может обращаться к сетевому диску — не в UI-потоке.
-            var outcome = await Task.Run(() => SelectionInterpreter.Interpret(selection, new FileSystemProbe()));
+            // Проверка файла и ffprobe могут занять время (сетевой диск, процесс) — не в UI-потоке.
+            var outcome = await Task.Run(() =>
+            {
+                var tools = FfmpegLocator.LocateDefault();
+                var media = tools is null ? null : new FfprobeMediaProbe(tools, MediaProbeTimeout);
+                return SelectionInterpreter.Interpret(selection, new FileSystemProbe(), media);
+            });
 
             switch (outcome)
             {

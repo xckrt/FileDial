@@ -1,3 +1,4 @@
+using FileDial.Core.Compression;
 using FileDial.Core.Selection;
 using FileDial.Core.Text;
 
@@ -29,7 +30,10 @@ public static class SelectionInterpreter
 {
     public const string UnsupportedText = "Пока не поддерживается";
 
-    public static HotkeyOutcome Interpret(SelectionResult selection, IFileProbe probe)
+    /// <summary>Длина имени в центре круга: две строки текста.</summary>
+    public const int MaxTitleLength = 34;
+
+    public static HotkeyOutcome Interpret(SelectionResult selection, IFileProbe probe, IMediaProbe? media = null)
     {
         if (!selection.IsSuccess)
             return new HotkeyOutcome.ShowToast(selection.Error!);
@@ -54,18 +58,23 @@ public static class SelectionInterpreter
         }
 
         var name = Path.GetFileName(path);
-        var actions = ActionCatalog.ForFile(path, state.Size);
-        if (actions.Count == 0)
-            return Unsupported(name, path, SizeFormatter.Format(state.Size));
+        var size = SizeFormatter.Format(state.Size);
+        if (!ActionCatalog.IsVideo(path))
+            return Unsupported(name, path, size);
+
+        // Длительность нужна, чтобы не предлагать заведомо невозможное сжатие; без ffprobe обходимся размером.
+        var info = media?.TryProbe(path);
+        var actions = ActionCatalog.ForFile(path, state.Size, info);
+        var subtitle = info is { DurationSeconds: > 0 } ? $"{size} · {DurationFormatter.Format(info.DurationSeconds)}" : size;
 
         return new HotkeyOutcome.ShowMenu(
-            new DialMenu(DialMenuKind.Actions, name, SizeFormatter.Format(state.Size), actions, path));
+            new DialMenu(DialMenuKind.Actions, NameShortener.Middle(name, MaxTitleLength), subtitle, actions, path));
     }
 
     private static HotkeyOutcome Unsupported(string title, string? path, string? size = null) =>
         new HotkeyOutcome.ShowMenu(new DialMenu(
             DialMenuKind.Unsupported,
-            title,
+            NameShortener.Middle(title, MaxTitleLength),
             size is null ? UnsupportedText : $"{size} · {UnsupportedText}",
             [],
             path));

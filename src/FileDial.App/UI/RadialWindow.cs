@@ -15,12 +15,14 @@ namespace FileDial.App.UI;
 /// <summary>Круговое меню: прозрачное окно без рамки поверх всех окон, не в панели задач.</summary>
 internal sealed class RadialWindow : Window
 {
-    private const double Diameter = 380;
-    private const double Center = Diameter / 2;
+    private const double FullDiameter = 380;
+    // Для неподдерживаемых файлов — небольшой круг без секторов: пустые секторы выглядят как сломанное меню.
+    private const double CompactDiameter = 220;
     private const double LabelWidth = 92;
 
     private readonly SectorGeometry _geometry = new(ActionCatalog.SectorCount, innerRadius: 72, outerRadius: 182, gapDegrees: 1.5);
     private readonly DialMenu _menu;
+    private readonly double _diameter;
     private readonly WindowPlacement _placement;
     private readonly Path[] _sectors = new Path[ActionCatalog.SectorCount];
     private readonly TextBlock[] _labels = new TextBlock[ActionCatalog.SectorCount];
@@ -31,6 +33,7 @@ internal sealed class RadialWindow : Window
     public RadialWindow(DialMenu menu, NativeMethods.POINT cursor)
     {
         _menu = menu;
+        _diameter = HasSectors ? FullDiameter : CompactDiameter;
 
         WindowStyle = WindowStyle.None;
         AllowsTransparency = true;
@@ -39,14 +42,14 @@ internal sealed class RadialWindow : Window
         ShowInTaskbar = false;
         ResizeMode = ResizeMode.NoResize;
         ShowActivated = true;
-        Width = Height = Diameter;
+        Width = Height = _diameter;
         Title = "FileDial";
         UseLayoutRounding = true;
 
-        var canvas = new Canvas { Width = Diameter, Height = Diameter };
-        canvas.Children.Add(new Ellipse { Width = Diameter, Height = Diameter, Fill = Palette.Background });
+        var canvas = new Canvas { Width = _diameter, Height = _diameter };
+        canvas.Children.Add(new Ellipse { Width = _diameter, Height = _diameter, Fill = Palette.Background });
 
-        for (var i = 0; i < ActionCatalog.SectorCount; i++)
+        for (var i = 0; i < (HasSectors ? ActionCatalog.SectorCount : 0); i++)
         {
             _sectors[i] = new Path { Data = BuildSectorGeometry(i), Fill = Palette.Sector };
             canvas.Children.Add(_sectors[i]);
@@ -84,7 +87,7 @@ internal sealed class RadialWindow : Window
 
         UpdateVisuals();
 
-        _placement = new WindowPlacement(this, cursor, PlacementMode.CenterOnCursor, Diameter, Diameter);
+        _placement = new WindowPlacement(this, cursor, PlacementMode.CenterOnCursor, _diameter, _diameter);
         SourceInitialized += (_, _) =>
         {
             WindowPlacement.MakeToolWindow(this, noActivate: false);
@@ -113,6 +116,12 @@ internal sealed class RadialWindow : Window
 
     /// <summary>Выбранное действие после закрытия окна (null — закрыто без действия).</summary>
     public DialAction? Chosen { get; private set; }
+
+    private bool HasSectors => _menu.Kind == DialMenuKind.Actions;
+
+    private double Center => _diameter / 2;
+
+    private int? HitSector(Point p) => HasSectors ? _geometry.HitTest(p.X - Center, p.Y - Center) : null;
 
     private DialAction? ActionAt(int index) =>
         index < _menu.Actions.Count ? _menu.Actions[index] : null;
@@ -149,7 +158,7 @@ internal sealed class RadialWindow : Window
 
     private FrameworkElement BuildCenter()
     {
-        var size = _geometry.InnerRadius * 2 - 16;
+        var size = HasSectors ? _geometry.InnerRadius * 2 - 16 : _diameter - 48;
         var title = new TextBlock
         {
             Text = _menu.Title,
@@ -185,6 +194,8 @@ internal sealed class RadialWindow : Window
     {
         for (var i = 0; i < _sectors.Length; i++)
         {
+            if (_sectors[i] is null)
+                continue;
             var action = ActionAt(i);
             var enabled = action?.IsEnabled == true;
             var selected = _selected == i && action is not null;
@@ -235,15 +246,13 @@ internal sealed class RadialWindow : Window
     protected override void OnMouseMove(MouseEventArgs e)
     {
         base.OnMouseMove(e);
-        var p = e.GetPosition(this);
-        Select(_geometry.HitTest(p.X - Center, p.Y - Center));
+        Select(HitSector(e.GetPosition(this)));
     }
 
     protected override void OnMouseLeftButtonUp(MouseButtonEventArgs e)
     {
         base.OnMouseLeftButtonUp(e);
-        var p = e.GetPosition(this);
-        var index = _geometry.HitTest(p.X - Center, p.Y - Center);
+        var index = HitSector(e.GetPosition(this));
         if (index is { } i)
             Invoke(i);
         else
@@ -281,7 +290,7 @@ internal sealed class RadialWindow : Window
             >= Key.NumPad1 and <= Key.NumPad9 => key - Key.NumPad0,
             _ => null,
         };
-        if (digit is { } d && _geometry.IndexForDigit(d) is { } index)
+        if (HasSectors && digit is { } d && _geometry.IndexForDigit(d) is { } index)
             Select(index);
         else
             e.Handled = false;

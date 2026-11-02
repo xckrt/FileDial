@@ -52,6 +52,25 @@ public static class BitrateCalculator
         return new CompressionPlan(total, video, audio, scale);
     }
 
+    /// <summary>Самое длинное видео, для которого на изображение остаётся хотя бы <see cref="MinVideoKbps"/>.</summary>
+    public static double MaxDurationSeconds(bool hasAudio, long targetBytes = DefaultTargetBytes)
+    {
+        var minTotalKbps = MinVideoKbps + (hasAudio ? AudioKbps : 0);
+        return targetBytes * 8.0 * (1 - SafetyMargin) / (minTotalKbps * 1000.0);
+    }
+
+    /// <summary>
+    /// Поправка видеобитрейта, если после второго прохода файл вышел больше цели:
+    /// вычитаем перебор, пересчитанный в кбит/с, целясь снова в цель минус запас.
+    /// </summary>
+    public static int CorrectedVideoKbps(int videoKbps, long actualBytes, double durationSeconds,
+        long targetBytes = DefaultTargetBytes)
+    {
+        var aimBytes = targetBytes * (1 - SafetyMargin);
+        var excessKbps = (actualBytes - aimBytes) * 8.0 / durationSeconds / 1000.0;
+        return excessKbps <= 0 ? videoKbps : videoKbps - (int)Math.Ceiling(excessKbps);
+    }
+
     /// <summary>Максимальная длинная сторона для низкого битрейта (480p / 360p / 240p).</summary>
     public static int LongSideLimit(int videoKbps) => videoKbps switch
     {
