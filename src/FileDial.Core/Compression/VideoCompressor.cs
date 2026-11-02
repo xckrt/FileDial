@@ -85,33 +85,21 @@ public sealed class VideoCompressor(FfmpegTools tools, CompressionOptions? optio
                 }
             }
 
-            var finalPath = MoveToFreeName(sourcePath, tempOutput);
+            var finalPath = OutputFiles.MoveToFreeName(tempOutput,
+                () => OutputNameGenerator.Generate(sourcePath, OutputNameGenerator.PathTaken));
             progress?.Report(new CompressionProgress("Готово", 1));
             return new CompressionResult(CompressionStatus.Done, sourceSize, finalPath, new FileInfo(finalPath).Length);
         }
         finally
         {
-            TryDeleteFile(tempOutput);
-            TryDeleteDirectory(workDir);
+            OutputFiles.TryDeleteFile(tempOutput);
+            OutputFiles.TryDeleteDirectory(workDir);
         }
     }
 
     private async Task<ProbeInfo> ProbeAsync(string sourcePath, CancellationToken ct)
     {
-        var result = await ProcessRunner.RunAsync(tools.Ffprobe, ProbeInfo.Arguments(sourcePath), null,
-            captureOutput: true, ct).ConfigureAwait(false);
-        if (result.ExitCode != 0)
-            throw new CompressionException("ffprobe не смог прочитать файл. Возможно, он повреждён.", result.ErrorTail);
-
-        ProbeInfo info;
-        try
-        {
-            info = ProbeInfo.Parse(result.StandardOutput);
-        }
-        catch (System.Text.Json.JsonException ex)
-        {
-            throw new CompressionException("Не удалось разобрать ответ ffprobe.", ex.Message);
-        }
+        var info = await ProbeInfo.RunAsync(tools, sourcePath, ct).ConfigureAwait(false);
 
         if (!info.HasVideo)
             throw new CompressionException("В файле нет видеодорожки.");
@@ -135,37 +123,5 @@ public sealed class VideoCompressor(FfmpegTools tools, CompressionOptions? optio
         if (result.ExitCode != 0)
             throw new CompressionException($"ffmpeg завершился с ошибкой на проходе {pass} (код {result.ExitCode}).",
                 result.ErrorTail);
-    }
-
-    /// <summary>Переименовывает готовый файл, не перезаписывая существующие (даже появившиеся во время кодирования).</summary>
-    private static string MoveToFreeName(string sourcePath, string tempOutput)
-    {
-        for (var attempt = 0; attempt < 20; attempt++)
-        {
-            var target = OutputNameGenerator.Generate(sourcePath, OutputNameGenerator.PathTaken);
-            try
-            {
-                File.Move(tempOutput, target, overwrite: false);
-                return target;
-            }
-            catch (IOException) when (OutputNameGenerator.PathTaken(target))
-            {
-                // Имя заняли между проверкой и переносом — берём следующее.
-            }
-        }
-
-        throw new CompressionException("Не удалось подобрать свободное имя для результата.");
-    }
-
-    private static void TryDeleteFile(string path)
-    {
-        try { if (File.Exists(path)) File.Delete(path); }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
-    }
-
-    private static void TryDeleteDirectory(string path)
-    {
-        try { if (Directory.Exists(path)) Directory.Delete(path, recursive: true); }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
     }
 }

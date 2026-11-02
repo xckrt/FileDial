@@ -6,6 +6,7 @@ using FileDial.App.Selection;
 using FileDial.App.Tray;
 using FileDial.App.UI;
 using FileDial.Core.Compression;
+using FileDial.Core.Jobs;
 using FileDial.Core.Menu;
 using FileDial.Core.Selection;
 
@@ -22,7 +23,7 @@ public partial class App : Application
     private TrayIcon? _tray;
     private RadialWindow? _radial;
     private bool _readingSelection;
-    private readonly List<CompressionWindow> _jobs = [];
+    private readonly List<JobWindow> _jobs = [];
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -69,7 +70,7 @@ public partial class App : Application
         // Повторное нажатие при открытом круге закрывает его.
         if (_radial is not null)
         {
-            _radial.Close();
+            _radial.Dismiss();
             return;
         }
         if (_readingSelection)
@@ -120,26 +121,26 @@ public partial class App : Application
         radial.Closed += (_, _) =>
         {
             _radial = null;
-            if (radial.Chosen?.Id == ActionIds.Compress25 && menu.SourcePath is not null)
-                StartCompression(menu.SourcePath);
+            if (radial.Chosen is { } action && menu.SourcePath is not null && FileJobs.IsImplemented(action.Id))
+                StartJob(action, menu.SourcePath);
         };
         _radial = radial;
         radial.Show();
     }
 
-    private void StartCompression(string sourcePath)
+    private void StartJob(DialAction action, string sourcePath)
     {
-        // Второе сжатие того же файла параллельно бессмысленно — показываем уже идущее.
-        var running = _jobs.FirstOrDefault(j => j.IsBusy &&
+        // То же действие над тем же файлом параллельно бессмысленно — показываем уже идущее.
+        var running = _jobs.FirstOrDefault(j => j.IsBusy && j.ActionId == action.Id &&
             string.Equals(j.SourcePath, sourcePath, StringComparison.OrdinalIgnoreCase));
         if (running is not null)
         {
             running.Activate();
-            ToastWindow.ShowAt("Этот файл уже сжимается", WindowPlacement.CursorPosition());
+            ToastWindow.ShowAt("Это уже выполняется для этого файла", WindowPlacement.CursorPosition());
             return;
         }
 
-        var window = new CompressionWindow(sourcePath, WindowPlacement.CursorPosition());
+        var window = new JobWindow(action.Id, action.Label, sourcePath, WindowPlacement.CursorPosition());
         window.Closed += (_, _) => _jobs.Remove(window);
         _jobs.Add(window);
         window.Show();
@@ -148,7 +149,7 @@ public partial class App : Application
 
     private void ExitApp()
     {
-        // Отменяем активные сжатия: процессы ffmpeg завершаются, временные файлы удаляются.
+        // Отменяем активные задачи: процессы ffmpeg завершаются, временные файлы удаляются.
         foreach (var job in _jobs.ToList())
             job.CancelAndClose();
 

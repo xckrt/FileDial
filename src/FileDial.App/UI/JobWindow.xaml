@@ -1,7 +1,7 @@
-﻿<Window x:Class="FileDial.App.UI.CompressionWindow"
+﻿<Window x:Class="FileDial.App.UI.JobWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="FileDial — сжатие" Width="440" Height="236"
+        Title="FileDial" Width="440" Height="236"
         WindowStyle="None" ResizeMode="NoResize" AllowsTransparency="True" Background="Transparent"
         ShowInTaskbar="True" UseLayoutRounding="True">
     <Border Background="{StaticResource BackgroundBrush}" BorderBrush="{StaticResource SectorBrush}"
@@ -18,7 +18,7 @@
             </StackPanel>
 
             <StackPanel>
-                <TextBlock Text="Сжать до 25 МБ" Foreground="{StaticResource MutedBrush}" FontSize="12" />
+                <TextBlock x:Name="ActionText" Foreground="{StaticResource MutedBrush}" FontSize="12" />
                 <TextBlock x:Name="FileNameText" Foreground="{StaticResource TextBrush}" FontSize="15"
                            FontWeight="SemiBold" TextTrimming="CharacterEllipsis" Margin="0,2,0,12" />
 

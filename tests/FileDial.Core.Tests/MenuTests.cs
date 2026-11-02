@@ -1,4 +1,4 @@
-using FileDial.Core.Menu;
+﻿using FileDial.Core.Menu;
 using FileDial.Core.Selection;
 
 namespace FileDial.Core.Tests;
@@ -48,7 +48,8 @@ public class ActionCatalogTests
 
     [Theory]
     [InlineData(@"C:\v\a.avi")]
-    [InlineData(@"C:\v\a.jpg")]
+    [InlineData(@"C:\v\a.pdf")]
+    [InlineData(@"C:\v\a.docx")]
     [InlineData(@"C:\v\mp4")]
     [InlineData(@"C:\v\a.mp4.txt")]
     public void OtherFiles_GetNoActions(string path)

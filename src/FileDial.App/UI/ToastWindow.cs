@@ -1,4 +1,4 @@
-using System.Windows;
+﻿using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Threading;
@@ -50,26 +50,48 @@ internal sealed class ToastWindow : Window
             WindowPlacement.MakeToolWindow(this, noActivate: true);
             placement.Apply();
         };
-        Loaded += (_, _) => placement.Apply();
-        MouseLeftButtonUp += (_, _) => Close();
+        // Появляется из лёгкого уменьшения, исчезает плавно.
+        var scale = new ScaleTransform(Motion.Enabled ? 0.96 : 1, Motion.Enabled ? 0.96 : 1);
+        border.RenderTransform = scale;
+        border.RenderTransformOrigin = new Point(0.5, 0.5);
+        if (Motion.Enabled)
+            border.Opacity = 0;
+        Loaded += (_, _) =>
+        {
+            placement.Apply();
+            Motion.To(border, OpacityProperty, 1, Motion.Normal);
+            Motion.To(scale, ScaleTransform.ScaleXProperty, 1, Motion.Normal);
+            Motion.To(scale, ScaleTransform.ScaleYProperty, 1, Motion.Normal);
+        };
+        MouseLeftButtonUp += (_, _) => CloseOnce();
 
         var timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(3) };
         timer.Tick += (_, _) =>
         {
             timer.Stop();
-            Close();
+            Motion.To(border, OpacityProperty, 0, 200, CloseOnce);
         };
         Closed += (_, _) =>
         {
             timer.Stop();
+            _closed = true;
             if (_current == this) _current = null;
         };
         timer.Start();
     }
 
+    private bool _closed;
+
+    /// <summary>Закрытие может прийти дважды (клик и конец анимации) — второй раз игнорируем.</summary>
+    private void CloseOnce()
+    {
+        if (!_closed)
+            Close();
+    }
+
     public static void ShowAt(string message, NativeMethods.POINT cursor)
     {
-        _current?.Close();
+        _current?.CloseOnce();
         _current = new ToastWindow(message, cursor);
         _current.Show();
     }

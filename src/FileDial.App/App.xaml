@@ -64,11 +64,40 @@
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="ProgressBar">
-                        <Grid>
+                        <Grid ClipToBounds="True">
+                            <VisualStateManager.VisualStateGroups>
+                                <VisualStateGroup x:Name="CommonStates">
+                                    <VisualState x:Name="Determinate" />
+                                    <!-- Без процентов: по дорожке бежит короткий отрезок. -->
+                                    <VisualState x:Name="Indeterminate">
+                                        <Storyboard RepeatBehavior="Forever">
+                                            <DoubleAnimation Storyboard.TargetName="RunnerShift"
+                                                             Storyboard.TargetProperty="X"
+                                                             From="-90" To="420" Duration="0:0:1.2">
+                                                <DoubleAnimation.EasingFunction>
+                                                    <SineEase EasingMode="EaseInOut" />
+                                                </DoubleAnimation.EasingFunction>
+                                            </DoubleAnimation>
+                                        </Storyboard>
+                                    </VisualState>
+                                </VisualStateGroup>
+                            </VisualStateManager.VisualStateGroups>
                             <Border x:Name="PART_Track" Background="{StaticResource SectorBrush}" CornerRadius="3" />
                             <Border x:Name="PART_Indicator" Background="{StaticResource AccentBrush}" CornerRadius="3"
                                     HorizontalAlignment="Left" />
+                            <Border x:Name="Runner" Width="90" HorizontalAlignment="Left" CornerRadius="3"
+                                    Background="{StaticResource AccentBrush}" Visibility="Collapsed">
+                                <Border.RenderTransform>
+                                    <TranslateTransform x:Name="RunnerShift" />
+                                </Border.RenderTransform>
+                            </Border>
                         </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsIndeterminate" Value="True">
+                                <Setter TargetName="PART_Indicator" Property="Visibility" Value="Collapsed" />
+                                <Setter TargetName="Runner" Property="Visibility" Value="Visible" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
                     </ControlTemplate>
                 </Setter.Value>
             </Setter>

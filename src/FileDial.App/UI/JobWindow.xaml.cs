@@ -1,32 +1,41 @@
 ﻿using System.Windows;
+using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using FileDial.App.Interop;
 using FileDial.Core.Compression;
-using FileDial.Core.Text;
+using FileDial.Core.Jobs;
 
 namespace FileDial.App.UI;
 
-/// <summary>Окно прогресса сжатия. Вся работа — асинхронно, UI не блокируется.</summary>
-public partial class CompressionWindow : Window
+/// <summary>Окно выполнения действия над файлом. Вся работа — асинхронно, UI не блокируется.</summary>
+public partial class JobWindow : Window
 {
     private readonly string _sourcePath;
+    private readonly string _actionId;
     private readonly CancellationTokenSource _cts = new();
     private string? _resultPath;
     private bool _running;
 
-    internal CompressionWindow(string sourcePath, NativeMethods.POINT cursor)
+    /// <summary>Закрыть окно после отмены (например, при выходе из программы).</summary>
+    private bool _closeWhenStopped;
+
+    internal JobWindow(string actionId, string actionLabel, string sourcePath, NativeMethods.POINT cursor)
     {
         InitializeComponent();
         _sourcePath = sourcePath;
+        _actionId = actionId;
+        ActionText.Text = actionLabel.Replace(' ', ' ');
         FileNameText.Text = Path.GetFileName(sourcePath);
         FileNameText.ToolTip = sourcePath;
         StageText.Text = "Подготовка";
+        Opacity = 0;
 
         var placement = new WindowPlacement(this, cursor, PlacementMode.NearCursor, Width, Height);
         SourceInitialized += (_, _) => placement.Apply();
         Loaded += async (_, _) =>
         {
             placement.Apply();
+            Motion.To(this, OpacityProperty, 1, Motion.Normal);
             await RunAsync();
         };
         Closing += (_, e) =>
@@ -43,11 +52,10 @@ public partial class CompressionWindow : Window
 
     public string SourcePath => _sourcePath;
 
+    public string ActionId => _actionId;
+
     /// <summary>Работа ещё идёт (или вот-вот начнётся) — итог не показан.</summary>
     public bool IsBusy { get; private set; } = true;
-
-    /// <summary>Закрыть окно после отмены (например, при выходе из программы).</summary>
-    private bool _closeWhenStopped;
 
     private async Task RunAsync()
     {
@@ -60,37 +68,39 @@ public partial class CompressionWindow : Window
             return;
         }
 
-        _running = true;
-        var progress = new Progress<CompressionProgress>(p =>
+        var job = FileJobs.Create(_actionId, tools);
+        if (job is null)
         {
+            ShowFinished("Это действие пока не реализовано.");
+            return;
+        }
+
+        _running = true;
+        var progress = new Progress<JobProgress>(p =>
+        {
+            if (!_running) return; // поздние отчёты после завершения не должны перетирать итог
             StageText.Text = p.Stage;
-            ProgressIndicator.Value = p.Fraction;
-            PercentText.Text = $"{p.Fraction * 100:0}%";
+            SetProgress(p.Fraction);
         });
 
         try
         {
-            var compressor = new VideoCompressor(tools);
             // Отдельный поток пула: чтение файла и ожидание процессов не трогают UI-поток.
-            var result = await Task.Run(() => compressor.CompressAsync(_sourcePath, progress, _cts.Token));
+            var result = await Task.Run(() => job.RunAsync(_sourcePath, progress, _cts.Token));
             _running = false;
 
-            if (result.Status == CompressionStatus.AlreadySmall)
+            if (result.Status == JobStatus.NothingToDo)
             {
-                ShowFinished($"Файл уже меньше 25 МБ ({SizeFormatter.Format(result.SourceSize)}), сжимать не нужно.");
+                StageText.Text = "Ничего делать не нужно";
+                ResetProgress();
+                ShowFinished(result.Message);
                 return;
             }
 
             _resultPath = result.OutputPath;
-            ProgressIndicator.Value = 1;
-            PercentText.Text = "100%";
             StageText.Text = "Готово";
-            var over = result.OutputSize > BitrateCalculator.DefaultTargetBytes
-                ? " Чуть больше цели: кодер не попал точно."
-                : string.Empty;
-            ShowFinished(
-                $"{SizeFormatter.Format(result.SourceSize)} → {SizeFormatter.Format(result.OutputSize)}. " +
-                $"Сохранено как {Path.GetFileName(result.OutputPath)}.{over}");
+            SetProgress(1);
+            ShowFinished(result.Message);
             RevealButton.Visibility = Visibility.Visible;
             RevealButton.Focus();
         }
@@ -103,23 +113,56 @@ public partial class CompressionWindow : Window
                 return;
             }
             StageText.Text = "Отменено";
-            ShowFinished("Сжатие отменено. Исходный файл не изменён, временные файлы удалены.");
+            ResetProgress();
+            ShowFinished("Отменено. Исходный файл не изменён, временные файлы удалены.");
         }
         catch (CompressionException ex)
         {
             _running = false;
             StageText.Text = "Ошибка";
+            ResetProgress();
             ShowFinished(ex.Details is { Length: > 0 } d ? $"{ex.Message}\n{LastLine(d)}" : ex.Message);
             if (ex.Details is not null)
                 ErrorLog.Write("ffmpeg", ex);
         }
+        catch (Exception ex) when (ex is FileNotFoundException or DirectoryNotFoundException)
+        {
+            _running = false;
+            StageText.Text = "Ошибка";
+            ResetProgress();
+            ShowFinished("Исходный файл не найден: его переместили, переименовали или удалили.");
+        }
+        catch (UnauthorizedAccessException)
+        {
+            _running = false;
+            StageText.Text = "Ошибка";
+            ResetProgress();
+            ShowFinished("Нет доступа к исходному файлу.");
+        }
         catch (Exception ex)
         {
             _running = false;
-            ErrorLog.Write("Сжатие", ex);
+            ErrorLog.Write("Действие над файлом", ex);
             StageText.Text = "Ошибка";
-            ShowFinished($"Не удалось сжать файл: {ex.Message}");
+            ResetProgress();
+            ShowFinished($"Не удалось обработать файл: {ex.Message}");
         }
+    }
+
+    /// <summary>null — бегущая полоса без процентов (короткие операции, где длительность неизвестна).</summary>
+    private void SetProgress(double? fraction)
+    {
+        ProgressIndicator.IsIndeterminate = fraction is null;
+        PercentText.Text = fraction is { } f ? $"{f * 100:0}%" : string.Empty;
+        if (fraction is { } value)
+            Motion.To(ProgressIndicator, RangeBase.ValueProperty, value, 200);
+    }
+
+    /// <summary>Итог без результата (ошибка, отмена, нечего делать): пустая полоса без процентов.</summary>
+    private void ResetProgress()
+    {
+        SetProgress(0);
+        PercentText.Text = string.Empty;
     }
 
     private static string LastLine(string text) =>
@@ -128,9 +171,12 @@ public partial class CompressionWindow : Window
     private void ShowFinished(string message, bool showHelp = false)
     {
         IsBusy = false;
+        ProgressIndicator.IsIndeterminate = false;
         MessageText.Text = message;
         MessageText.ToolTip = message;
         MessageText.Visibility = Visibility.Visible;
+        MessageText.Opacity = 0;
+        Motion.To(MessageText, OpacityProperty, 1, Motion.Normal);
         HelpLinkText.Visibility = showHelp ? Visibility.Visible : Visibility.Collapsed;
         CancelButton.Visibility = Visibility.Collapsed;
         CloseButton.Visibility = Visibility.Visible;

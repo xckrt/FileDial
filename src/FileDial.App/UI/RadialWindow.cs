@@ -19,6 +19,8 @@ internal sealed class RadialWindow : Window
     // Для неподдерживаемых файлов — небольшой круг без секторов: пустые секторы выглядят как сломанное меню.
     private const double CompactDiameter = 220;
     private const double LabelWidth = 92;
+    /// <summary>На сколько выбранный сектор выдвигается наружу.</summary>
+    private const double PopDistance = 5;
 
     private readonly SectorGeometry _geometry = new(ActionCatalog.SectorCount, innerRadius: 72, outerRadius: 182, gapDegrees: 1.5);
     private readonly DialMenu _menu;
@@ -26,6 +28,12 @@ internal sealed class RadialWindow : Window
     private readonly WindowPlacement _placement;
     private readonly Path[] _sectors = new Path[ActionCatalog.SectorCount];
     private readonly TextBlock[] _labels = new TextBlock[ActionCatalog.SectorCount];
+    // Свои (незамороженные) кисти и сдвиги у каждого сектора — чтобы их можно было анимировать.
+    private readonly SolidColorBrush[] _fills = new SolidColorBrush[ActionCatalog.SectorCount];
+    private readonly SolidColorBrush[] _labelBrushes = new SolidColorBrush[ActionCatalog.SectorCount];
+    private readonly TranslateTransform[] _shifts = new TranslateTransform[ActionCatalog.SectorCount];
+    private readonly Canvas _canvas;
+    private readonly ScaleTransform _scale = new(1, 1);
     private readonly TextBlock _hint;
     private int? _selected;
     private bool _closing;
@@ -46,12 +54,21 @@ internal sealed class RadialWindow : Window
         Title = "FileDial";
         UseLayoutRounding = true;
 
-        var canvas = new Canvas { Width = _diameter, Height = _diameter };
+        var canvas = _canvas = new Canvas
+        {
+            Width = _diameter,
+            Height = _diameter,
+            RenderTransform = _scale,
+            RenderTransformOrigin = new Point(0.5, 0.5),
+        };
         canvas.Children.Add(new Ellipse { Width = _diameter, Height = _diameter, Fill = Palette.Background });
 
         for (var i = 0; i < (HasSectors ? ActionCatalog.SectorCount : 0); i++)
         {
-            _sectors[i] = new Path { Data = BuildSectorGeometry(i), Fill = Palette.Sector };
+            _fills[i] = new SolidColorBrush(Palette.Sector.Color);
+            _labelBrushes[i] = new SolidColorBrush(Palette.Text.Color);
+            _shifts[i] = new TranslateTransform();
+            _sectors[i] = new Path { Data = BuildSectorGeometry(i), Fill = _fills[i], RenderTransform = _shifts[i] };
             canvas.Children.Add(_sectors[i]);
 
             var action = ActionAt(i);
@@ -62,6 +79,8 @@ internal sealed class RadialWindow : Window
                 TextWrapping = TextWrapping.Wrap,
                 FontSize = 13,
                 IsHitTestVisible = false,
+                Foreground = _labelBrushes[i],
+                RenderTransform = _shifts[i], // подпись едет вместе со своим сектором
             };
             if (action is not null)
             {
@@ -93,8 +112,17 @@ internal sealed class RadialWindow : Window
             WindowPlacement.MakeToolWindow(this, noActivate: false);
             _placement.Apply();
         };
+        // Появление: из лёгкого уменьшения и прозрачности.
+        if (Motion.Enabled)
+        {
+            _canvas.Opacity = 0;
+            _scale.ScaleX = _scale.ScaleY = 0.88;
+        }
         Loaded += (_, _) =>
         {
+            Motion.To(_canvas, OpacityProperty, 1, Motion.Normal);
+            Motion.To(_scale, ScaleTransform.ScaleXProperty, 1, Motion.Normal);
+            Motion.To(_scale, ScaleTransform.ScaleYProperty, 1, Motion.Normal);
             _placement.Apply();
             TakeFocus();
             // Если система не отдала фокус сразу, пробуем ещё раз; без фокуса круг закрываем, чтобы он не «висел».
@@ -112,6 +140,7 @@ internal sealed class RadialWindow : Window
             timer.Start();
         };
         Deactivated += (_, _) => SafeClose();
+        Closed += (_, _) => _isClosed = true;
     }
 
     /// <summary>Выбранное действие после закрытия окна (null — закрыто без действия).</summary>
@@ -200,8 +229,15 @@ internal sealed class RadialWindow : Window
             var enabled = action?.IsEnabled == true;
             var selected = _selected == i && action is not null;
 
-            _sectors[i].Fill = selected ? (enabled ? Palette.Accent : Palette.SectorDisabledHover) : Palette.Sector;
-            _labels[i].Foreground = selected && enabled ? Palette.AccentText : enabled ? Palette.Text : Palette.TextMuted;
+            var fill = selected ? (enabled ? Palette.Accent : Palette.SectorDisabledHover) : Palette.Sector;
+            var text = selected && enabled ? Palette.AccentText : enabled ? Palette.Text : Palette.TextMuted;
+            Motion.ColorTo(_fills[i], fill.Color, Motion.Fast);
+            Motion.ColorTo(_labelBrushes[i], text.Color, Motion.Fast);
+
+            // Активный сектор слегка выдвигается наружу по своей оси.
+            var push = selected && enabled ? SectorGeometry.PointAt(_geometry.CenterAngle(i), PopDistance) : default;
+            Motion.To(_shifts[i], TranslateTransform.XProperty, push.X, 120);
+            Motion.To(_shifts[i], TranslateTransform.YProperty, push.Y, 120);
         }
 
         var current = _selected is { } s ? ActionAt(s) : null;
@@ -236,6 +272,8 @@ internal sealed class RadialWindow : Window
 
     private void Invoke(int index)
     {
+        if (_closing)
+            return;
         var action = ActionAt(index);
         if (action is not { IsEnabled: true })
             return; // неактивный сектор: ничего не делаем, круг остаётся открытым
@@ -321,12 +359,31 @@ internal sealed class RadialWindow : Window
         Keyboard.Focus(this);
     }
 
+    /// <summary>Закрыть без действия (повторное нажатие горячей клавиши).</summary>
+    public void Dismiss() => SafeClose();
+
+    private bool _isClosed;
+
+    private void CloseIfOpen()
+    {
+        if (!_isClosed)
+            Close();
+    }
+
     private void SafeClose()
     {
         if (_closing)
             return;
         _closing = true;
-        // Закрываем асинхронно: Close внутри Deactivated/обработчиков ввода допустим, но так надёжнее.
-        Dispatcher.BeginInvoke(Close);
+        IsHitTestVisible = false;
+        // Короткое исчезновение; Close — асинхронно, так надёжнее внутри Deactivated и обработчиков ввода.
+        if (!Motion.Enabled || !IsLoaded)
+        {
+            Dispatcher.BeginInvoke(CloseIfOpen);
+            return;
+        }
+        Motion.To(_canvas, OpacityProperty, 0, Motion.Fast);
+        Motion.To(_scale, ScaleTransform.ScaleXProperty, 0.94, Motion.Fast);
+        Motion.To(_scale, ScaleTransform.ScaleYProperty, 0.94, Motion.Fast, () => Dispatcher.BeginInvoke(CloseIfOpen));
     }
 }

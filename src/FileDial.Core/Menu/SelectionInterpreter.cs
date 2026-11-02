@@ -1,4 +1,4 @@
-using FileDial.Core.Compression;
+﻿using FileDial.Core.Compression;
 using FileDial.Core.Selection;
 using FileDial.Core.Text;
 
@@ -59,13 +59,21 @@ public static class SelectionInterpreter
 
         var name = Path.GetFileName(path);
         var size = SizeFormatter.Format(state.Size);
-        if (!ActionCatalog.IsVideo(path))
+        var kind = FileKinds.Of(path);
+        if (kind == FileKind.Other)
             return Unsupported(name, path, size);
 
-        // Длительность нужна, чтобы не предлагать заведомо невозможное сжатие; без ffprobe обходимся размером.
+        // Длительность и размер кадра нужны, чтобы не предлагать заведомо ненужное или невозможное;
+        // без ffprobe обходимся тем, что знаем по имени и размеру файла.
         var info = media?.TryProbe(path);
         var actions = ActionCatalog.ForFile(path, state.Size, info);
-        var subtitle = info is { DurationSeconds: > 0 } ? $"{size} · {DurationFormatter.Format(info.DurationSeconds)}" : size;
+        var details = kind switch
+        {
+            FileKind.Image when info is { Width: > 0, Height: > 0 } => $"{info.Width}×{info.Height}",
+            FileKind.Video or FileKind.Audio when info is { DurationSeconds: > 0 } => DurationFormatter.Format(info.DurationSeconds),
+            _ => null,
+        };
+        var subtitle = details is null ? size : $"{size} · {details}";
 
         return new HotkeyOutcome.ShowMenu(
             new DialMenu(DialMenuKind.Actions, NameShortener.Middle(name, MaxTitleLength), subtitle, actions, path));
@@ -75,7 +83,7 @@ public static class SelectionInterpreter
         new HotkeyOutcome.ShowMenu(new DialMenu(
             DialMenuKind.Unsupported,
             NameShortener.Middle(title, MaxTitleLength),
-            size is null ? UnsupportedText : $"{size} · {UnsupportedText}",
+            size is null ? UnsupportedText : $"{size}\n{UnsupportedText}",
             [],
             path));
 }
