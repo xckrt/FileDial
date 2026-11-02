@@ -1,0 +1,8 @@
+bin/
+obj/
+.vs/
+*.user
+TestResults/
+# Локальные копии ffmpeg рядом с программой не коммитим
+ffmpeg.exe
+ffprobe.exe

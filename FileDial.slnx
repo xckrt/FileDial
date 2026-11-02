@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/FileDial.App/FileDial.App.csproj" />
+    <Project Path="src/FileDial.Core/FileDial.Core.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/FileDial.Core.Tests/FileDial.Core.Tests.csproj" />
+  </Folder>
+</Solution>
