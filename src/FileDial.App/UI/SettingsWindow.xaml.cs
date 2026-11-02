@@ -249,7 +249,7 @@ public partial class SettingsWindow : Window
         // Кнопка установки: когда ffmpeg нет, когда в нём нет whisper или чтобы обновить уже поставленный нами.
         FfmpegInstallButtons.Children.Clear();
         var ours = File.Exists(Path.Combine(FfmpegInstaller.InstallFolder, "ffmpeg.exe"));
-        string? text = found is null ? "Установить ffmpeg (около 200 МБ)"
+        string? text = found is null ? "Установить ffmpeg (около 170 МБ)"
             : !_speechFilter ? "Установить ffmpeg с распознаванием речи"
             : ours ? "Обновить ffmpeg"
             : null;
@@ -261,7 +261,7 @@ public partial class SettingsWindow : Window
                 Style = (Style)FindResource(found is null || !_speechFilter ? "AccentButton" : "SmallButton"),
                 Margin = new Thickness(0, 0, 8, 0),
                 IsEnabled = _ffmpegInstall is null,
-                ToolTip = "Сборка BtbN для Windows с GitHub; проверяется по контрольной сумме. Ставится в " +
+                ToolTip = "Сборка gyan.dev «full» (с распознаванием речи); проверяется по контрольной сумме. Ставится в " +
                           FfmpegInstaller.InstallFolder,
             };
             button.Click += async (_, _) => await InstallFfmpegAsync();

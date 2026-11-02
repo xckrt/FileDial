@@ -68,7 +68,7 @@ public partial class App : Application
         _tray = new TrayIcon(gesture.Format(), OpenSettings, OpenHistory, ShellActions.OpenReadme, ExitApp);
         // Первый запуск без ffmpeg: сразу подсказываем, что его можно поставить одной кнопкой.
         if (noFfmpeg)
-            _tray.Notify("FileDial: нужен ffmpeg", "Нажмите, чтобы установить его одной кнопкой (около 200 МБ, один раз).",
+            _tray.Notify("FileDial: нужен ffmpeg", "Нажмите, чтобы установить его одной кнопкой (около 170 МБ, один раз).",
                 OpenFfmpegSetup);
 
         if (error != 0)
