@@ -45,7 +45,7 @@ public partial class TrimWindow : Window
         if (tools is null)
         {
             DurationText.Text = "ffmpeg не найден";
-            StatusText.Text = "Не найдены ffmpeg.exe и ffprobe.exe. Инструкция — в README, раздел «Установка ffmpeg».";
+            StatusText.Text = "Нужен ffmpeg — установите его одной кнопкой: Трей → Настройки → ffmpeg.";
             return;
         }
 

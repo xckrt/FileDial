@@ -37,6 +37,19 @@ internal sealed class TrayIcon : IDisposable
         SetHotkey(hotkey);
     }
 
+    private Action? _balloonClick;
+
+    /// <summary>Всплывающее уведомление у значка; клик по нему выполняет действие.</summary>
+    public void Notify(string title, string text, Action onClick)
+    {
+        _balloonClick = onClick;
+        _icon.BalloonTipClicked -= OnBalloonClicked;
+        _icon.BalloonTipClicked += OnBalloonClicked;
+        _icon.ShowBalloonTip(10_000, title, text, Forms.ToolTipIcon.Info);
+    }
+
+    private void OnBalloonClicked(object? sender, EventArgs e) => _balloonClick?.Invoke();
+
     /// <summary>Обновить подписи после смены горячей клавиши (null — клавиша не назначена).</summary>
     public void SetHotkey(string? hotkey)
     {

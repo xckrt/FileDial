@@ -1,7 +1,7 @@
 ﻿<Window x:Class="FileDial.App.UI.SettingsWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="FileDial — настройки" Width="520" Height="930"
+        Title="FileDial — настройки" Width="520" Height="980"
         WindowStyle="None" ResizeMode="NoResize" AllowsTransparency="True" Background="Transparent"
         ShowInTaskbar="True" UseLayoutRounding="True">
     <Border Background="{StaticResource BackgroundBrush}" BorderBrush="{StaticResource SectorBrush}"
@@ -57,7 +57,7 @@
                     <TextBlock Text="Сжатие картинок — цель" Style="{StaticResource SectionTitle}" />
                     <WrapPanel x:Name="ImageTargets" />
 
-                    <TextBlock Text="ffmpeg" Style="{StaticResource SectionTitle}" />
+                    <TextBlock x:Name="FfmpegSection" Text="ffmpeg" Style="{StaticResource SectionTitle}" />
                     <DockPanel>
                         <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
                             <Button Content="Выбрать…" Style="{StaticResource FlatButton}" Click="OnPickFfmpegFolder" />
@@ -68,6 +68,17 @@
                     </DockPanel>
                     <TextBlock x:Name="FfmpegStatus" Foreground="{StaticResource MutedBrush}" FontSize="12"
                                TextWrapping="Wrap" Margin="0,6,0,0" />
+                    <WrapPanel x:Name="FfmpegInstallButtons" Margin="0,8,0,0" />
+                    <StackPanel x:Name="FfmpegPanel" Visibility="Collapsed" Margin="0,8,0,0">
+                        <DockPanel>
+                            <Button DockPanel.Dock="Right" Content="Отмена" Style="{StaticResource SmallButton}"
+                                    Margin="8,0,0,0" Click="OnCancelFfmpegInstall" />
+                            <TextBlock x:Name="FfmpegInstallText" Foreground="{StaticResource TextBrush}" FontSize="12"
+                                       VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                        </DockPanel>
+                        <ProgressBar x:Name="FfmpegProgress" Style="{StaticResource FlatProgress}" Minimum="0"
+                                     Maximum="1" Margin="0,6,0,0" />
+                    </StackPanel>
 
                     <TextBlock x:Name="SpeechSection" Text="Распознавание речи (субтитры, текст)"
                                Style="{StaticResource SectionTitle}" />

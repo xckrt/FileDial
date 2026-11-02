@@ -81,7 +81,7 @@ public partial class JobWindow : Window
         if (tools is null)
         {
             ShowFinished(
-                "Не найдены ffmpeg.exe и ffprobe.exe. Положите их рядом с FileDial.exe, добавьте в PATH или укажите папку в настройках.",
+                "Для этого действия нужен ffmpeg — его ещё нет на компьютере.",
                 HistoryStatus.Failed, showHelp: true);
             return;
         }
@@ -304,7 +304,11 @@ public partial class JobWindow : Window
             ShellActions.ShowInFolder(_resultPath);
     }
 
-    private void OnOpenReadme(object sender, RoutedEventArgs e) => ShellActions.OpenReadme();
+    private void OnOpenReadme(object sender, RoutedEventArgs e)
+    {
+        ((App)Application.Current).OpenFfmpegSetup();
+        Close();
+    }
 
     private void OnDragArea(object sender, MouseButtonEventArgs e)
     {

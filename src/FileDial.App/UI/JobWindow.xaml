@@ -36,7 +36,7 @@
                            TextTrimming="CharacterEllipsis" />
                 <TextBlock x:Name="HelpLinkText" Margin="0,6,0,0" FontSize="13" Visibility="Collapsed">
                     <Hyperlink Foreground="{StaticResource AccentBrush}" Click="OnOpenReadme">
-                        Инструкция: README.md, раздел «Установка ffmpeg»
+                        Установить ffmpeg одной кнопкой
                     </Hyperlink>
                 </TextBlock>
             </StackPanel>

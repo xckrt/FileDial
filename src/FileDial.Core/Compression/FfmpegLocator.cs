@@ -34,11 +34,16 @@ public static class FfmpegLocator
         return null;
     }
 
+    /// <summary>
+    /// Порядок поиска: папка из настроек → рядом с программой → установленный программой
+    /// (%LOCALAPPDATA%\FileDial\ffmpeg) → PATH.
+    /// </summary>
     /// <param name="preferredFolder">Папка из настроек — проверяется первой.</param>
     public static FfmpegTools? LocateDefault(string? preferredFolder = null)
     {
         if (!string.IsNullOrWhiteSpace(preferredFolder) && Locate(preferredFolder, null) is { } preferred)
             return preferred;
-        return Locate(AppContext.BaseDirectory, Environment.GetEnvironmentVariable("PATH"));
+        var path = FfmpegInstaller.InstallFolder + Path.PathSeparator + Environment.GetEnvironmentVariable("PATH");
+        return Locate(AppContext.BaseDirectory, path);
     }
 }

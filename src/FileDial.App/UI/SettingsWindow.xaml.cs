@@ -10,6 +10,14 @@ using FileDial.Core.Text;
 
 namespace FileDial.App.UI;
 
+/// <summary>Раздел, который показать сразу при открытии.</summary>
+internal enum SettingsSection
+{
+    None,
+    Speech,
+    Ffmpeg,
+}
+
 /// <summary>
 /// Окно настроек. Изменения применяются только по «Сохранить»; если применить не удалось
 /// (например, сочетание занято), окно остаётся открытым с понятной причиной.
@@ -22,14 +30,22 @@ public partial class SettingsWindow : Window
     private string? _ffmpegFolder;
     private string? _whisperModel;
     private CancellationTokenSource? _download;
+    private CancellationTokenSource? _ffmpegInstall;
+    private readonly Action? _onFfmpegInstalled;
+    private readonly bool _speechFilter;
     private static readonly HttpClient Http = new() { Timeout = Timeout.InfiniteTimeSpan };
 
     /// <param name="apply">Применяет настройки и автозапуск; возвращает текст ошибки или null.</param>
-    /// <param name="focusSpeech">Сразу показать раздел распознавания речи (пришли из круга за моделью).</param>
+    /// <param name="focus">Какой раздел показать сразу (пришли из круга за моделью или из окна без ffmpeg).</param>
+    /// <param name="speechFilter">Есть ли whisper в текущем ffmpeg — чтобы предложить сборку с ним.</param>
+    /// <param name="onFfmpegInstalled">Сообщить программе, что ffmpeg поставлен (перепроверить возможности).</param>
     internal SettingsWindow(AppSettings settings, bool autostart, NativeMethods.POINT cursor,
-        Func<AppSettings, bool, string?> apply, bool focusSpeech = false)
+        Func<AppSettings, bool, string?> apply, SettingsSection focus = SettingsSection.None,
+        bool speechFilter = true, Action? onFfmpegInstalled = null)
     {
         InitializeComponent();
+        _speechFilter = speechFilter;
+        _onFfmpegInstalled = onFfmpegInstalled;
         _apply = apply;
         _initial = settings;
         _hotkey = settings.HotkeyGesture;
@@ -70,11 +86,17 @@ public partial class SettingsWindow : Window
         {
             placement.Apply();
             Motion.To(this, OpacityProperty, 1, Motion.Normal);
-            if (focusSpeech)
+            if (focus == SettingsSection.Speech)
                 SpeechSection.BringIntoView(new Rect(0, 0, 1, 300));
+            else if (focus == SettingsSection.Ffmpeg)
+                FfmpegSection.BringIntoView(new Rect(0, 0, 1, 300));
         };
         // Закрыли окно во время загрузки — останавливаем её, недокачанный файл удаляется.
-        Closed += (_, _) => _download?.Cancel();
+        Closed += (_, _) =>
+        {
+            _download?.Cancel();
+            _ffmpegInstall?.Cancel();
+        };
     }
 
     /// <summary>Пока идёт запись сочетания, горячую клавишу программы не обрабатываем.</summary>
@@ -221,9 +243,92 @@ public partial class SettingsWindow : Window
             (not null, null, not null) => $"В выбранной папке ffmpeg нет — будет использован {found.Ffmpeg}",
             (not null, null, null) => "В выбранной папке нет ffmpeg.exe и ffprobe.exe, в PATH тоже не найден.",
             (_, _, not null) => $"Найден: {found.Ffmpeg}",
-            _ => "ffmpeg не найден. Инструкция — в README, раздел «Установка ffmpeg».",
+            _ => "ffmpeg не найден — установите его кнопкой ниже, это нужно один раз.",
         };
+
+        // Кнопка установки: когда ffmpeg нет, когда в нём нет whisper или чтобы обновить уже поставленный нами.
+        FfmpegInstallButtons.Children.Clear();
+        var ours = File.Exists(Path.Combine(FfmpegInstaller.InstallFolder, "ffmpeg.exe"));
+        string? text = found is null ? "Установить ffmpeg (около 200 МБ)"
+            : !_speechFilter ? "Установить ffmpeg с распознаванием речи"
+            : ours ? "Обновить ffmpeg"
+            : null;
+        if (text is not null)
+        {
+            var button = new Button
+            {
+                Content = text,
+                Style = (Style)FindResource(found is null || !_speechFilter ? "AccentButton" : "SmallButton"),
+                Margin = new Thickness(0, 0, 8, 0),
+                IsEnabled = _ffmpegInstall is null,
+                ToolTip = "Сборка BtbN для Windows с GitHub; проверяется по контрольной сумме. Ставится в " +
+                          FfmpegInstaller.InstallFolder,
+            };
+            button.Click += async (_, _) => await InstallFfmpegAsync();
+            FfmpegInstallButtons.Children.Add(button);
+        }
     }
+
+    private async Task InstallFfmpegAsync()
+    {
+        _ffmpegInstall = new CancellationTokenSource();
+        FfmpegPanel.Visibility = Visibility.Visible;
+        FfmpegInstallText.Text = "Поиск последней версии…";
+        FfmpegProgress.Value = 0;
+        UpdateFfmpegStatus();
+
+        var stageText = "";
+        var stage = new Progress<string>(s =>
+        {
+            stageText = s;
+            FfmpegInstallText.Text = s;
+            if (s == "Распаковка") FfmpegProgress.IsIndeterminate = true;
+        });
+        var progress = new Progress<(long Done, long Total)>(p =>
+        {
+            FfmpegInstallText.Text = $"{stageText}: {SizeFormatter.Format(p.Done)} из {SizeFormatter.Format(p.Total)}";
+            FfmpegProgress.Value = p.Total > 0 ? (double)p.Done / p.Total : 0;
+        });
+
+        try
+        {
+            var token = _ffmpegInstall.Token;
+            var tools = await Task.Run(async () =>
+            {
+                var package = await FfmpegInstaller.FindLatestAsync(Http, token);
+                return await FfmpegInstaller.InstallAsync(Http, package, FfmpegInstaller.InstallFolder, progress, stage, token);
+            });
+            // Своя папка из настроек могла указывать на старую копию — переключаемся на установленную.
+            _ffmpegFolder = null;
+            ShowError($"ffmpeg установлен: {tools.Ffmpeg}");
+            _onFfmpegInstalled?.Invoke();
+        }
+        catch (OperationCanceledException)
+        {
+            ShowError("Установка ffmpeg отменена.");
+        }
+        catch (Exception ex) when (ex is HttpRequestException or IOException or InvalidDataException
+                                       or UnauthorizedAccessException or System.Text.Json.JsonException)
+        {
+            ErrorLog.Write("Установка ffmpeg", ex);
+            ShowError(ex is HttpRequestException
+                ? "Не удалось скачать ffmpeg: нет подключения к интернету или GitHub недоступен."
+                : ex.Message);
+        }
+        finally
+        {
+            _ffmpegInstall.Dispose();
+            _ffmpegInstall = null;
+            if (IsLoaded)
+            {
+                FfmpegProgress.IsIndeterminate = false;
+                FfmpegPanel.Visibility = Visibility.Collapsed;
+                UpdateFfmpegStatus();
+            }
+        }
+    }
+
+    private void OnCancelFfmpegInstall(object sender, RoutedEventArgs e) => _ffmpegInstall?.Cancel();
 
     private void OnPickWhisperModel(object sender, RoutedEventArgs e)
     {

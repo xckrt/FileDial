@@ -59,12 +59,17 @@ public partial class App : Application
         Motion.UserEnabled = _settings.Animations;
 
         _ = RefreshSpeechSupportAsync();
+        var noFfmpeg = FfmpegLocator.LocateDefault(_settings.FfmpegFolder) is null;
 
         _hotkey = new HotkeyManager();
         _hotkey.Pressed += OnHotkeyPressed;
         var gesture = _settings.HotkeyGesture;
         var error = _hotkey.Register(gesture);
         _tray = new TrayIcon(gesture.Format(), OpenSettings, OpenHistory, ShellActions.OpenReadme, ExitApp);
+        // Первый запуск без ffmpeg: сразу подсказываем, что его можно поставить одной кнопкой.
+        if (noFfmpeg)
+            _tray.Notify("FileDial: нужен ffmpeg", "Нажмите, чтобы установить его одной кнопкой (около 200 МБ, один раз).",
+                OpenFfmpegSetup);
 
         if (error != 0)
         {
@@ -131,9 +136,12 @@ public partial class App : Application
         _historyWindow?.Refresh();
     }
 
-    private void OpenSettings() => OpenSettings(focusSpeech: false);
+    private void OpenSettings() => OpenSettings(SettingsSection.None);
 
-    private void OpenSettings(bool focusSpeech)
+    /// <summary>Открыть настройки на разделе установки ffmpeg (из окна действия или уведомления).</summary>
+    internal void OpenFfmpegSetup() => OpenSettings(SettingsSection.Ffmpeg);
+
+    private void OpenSettings(SettingsSection focus)
     {
         if (_settingsWindow is not null)
         {
@@ -141,7 +149,7 @@ public partial class App : Application
             return;
         }
         _settingsWindow = new SettingsWindow(_settings, Autostart.IsEnabled(), WindowPlacement.CursorPosition(),
-            ApplySettings, focusSpeech);
+            ApplySettings, focus, _speechFilter, () => _ = RefreshSpeechSupportAsync());
         _settingsWindow.Closed += (_, _) => _settingsWindow = null;
         _settingsWindow.Show();
         _settingsWindow.Activate();
@@ -244,7 +252,7 @@ public partial class App : Application
             _radial = null;
             if (radial.Chosen is { Id: ActionIds.SetupSpeech })
             {
-                OpenSettings(focusSpeech: true);
+                OpenSettings(SettingsSection.Speech);
                 return;
             }
             if (radial.Chosen is not { } action || menu.SourcePaths.Count == 0 || !FileJobs.IsImplemented(action.Id))
