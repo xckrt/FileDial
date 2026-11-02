@@ -40,7 +40,8 @@ public class ImageActionTests
         Assert.True(actions[0].IsGroup);
         Assert.True(actions[0].IsEnabled);
         Assert.Equal("Файл уже меньше 1 МБ", actions[5].DisabledReason);
-        Assert.All(actions.Skip(6), a => Assert.Equal(ActionCatalog.NotInPrototype, a.DisabledReason));
+        Assert.Equal(ActionCatalog.NotInPrototype, actions[6].DisabledReason); // убрать фон
+        Assert.True(actions[7].IsEnabled); // В PDF
     }
 
     [Fact]

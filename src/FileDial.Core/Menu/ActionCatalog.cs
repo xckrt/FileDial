@@ -43,6 +43,40 @@ public static class ActionCatalog
             _ => [],
         };
 
+    /// <summary>
+    /// Действия для нескольких файлов одного типа: те же секторы, но выполняются для каждого файла.
+    /// Неактивно только то, что не нужно ни одному файлу; обрезка — только по одному файлу.
+    /// </summary>
+    public static IReadOnlyList<DialAction> ForBatch(FileKind kind, IReadOnlyList<string> paths, IReadOnlyList<long> sizes,
+        JobSettings? settings = null)
+    {
+        var extensions = paths.Select(p => NormalizeExtension(Path.GetExtension(p))).ToHashSet();
+        var single = ForFile(paths[0], sizes.Count > 0 ? sizes.Max() : 0, null, settings);
+        return single.Select(a => a switch
+        {
+            { IsGroup: true } => DialAction.Group(a.Id, a.Label, a.Children!.Select(c =>
+            {
+                var target = c.Caption is { } caption ? TargetOf(c.Id) : null;
+                var allThere = target is not null && extensions.Count == 1 && extensions.Contains(target);
+                return c with
+                {
+                    IsEnabled = !allThere,
+                    DisabledReason = allThere ? $"Все файлы уже в {c.Label}" : null,
+                };
+            }).ToList()),
+            { Id: ActionIds.Trim or ActionIds.AudioTrim } => a with { IsEnabled = false, DisabledReason = "Обрезка — по одному файлу" },
+            { Id: ActionIds.ImageToPdf } => a with { Label = "Собрать в PDF", Caption = "Собрать в PDF" },
+            { IsEnabled: false, DisabledReason: { } reason } when reason.StartsWith("Файл уже меньше", StringComparison.Ordinal) =>
+                a with { DisabledReason = "Все файлы" + reason["Файл".Length..] },
+            _ => a,
+        }).ToList();
+    }
+
+    private static string? TargetOf(string actionId) =>
+        ActionIds.TargetExtension(actionId, ActionIds.ImageToPrefix)
+        ?? ActionIds.TargetExtension(actionId, ActionIds.AudioToPrefix)
+        ?? ActionIds.TargetExtension(actionId, ActionIds.VideoToPrefix);
+
     /// <summary>Все запускаемые действия, включая вложенные в группы.</summary>
     public static IEnumerable<DialAction> Flatten(IEnumerable<DialAction> actions) =>
         actions.SelectMany(a => a.IsGroup ? a.Children! : [a]);
@@ -84,7 +118,7 @@ public static class ActionCatalog
             Action(ActionIds.ImageCompress1Mb, $"Сжать до {JobSettings.TargetLabel(settings.ImageTargetBytes)}",
                 sizeBytes <= settings.ImageTargetBytes ? CompressionCheck.AlreadySmallFor(settings.ImageTargetBytes) : null),
             Stub(ActionIds.RemoveBackground, "Убрать фон"),
-            Stub(ActionIds.ImageToPdf, "В PDF"),
+            Action(ActionIds.ImageToPdf, "В PDF", null),
         ];
     }
 

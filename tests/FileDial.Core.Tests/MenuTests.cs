@@ -108,18 +108,18 @@ public class SelectionInterpreterTests
     }
 
     [Fact]
-    public void SeveralFiles_ShowUnsupported_EvenIfAllVideos()
+    public void SeveralVideos_ShowBatchMenu()
     {
         var outcome = SelectionInterpreter.Interpret(
             SelectionResult.Success([@"C:\a\1.mp4", @"C:\a\2.mp4"]), File30Mb);
 
         var menu = Assert.IsType<HotkeyOutcome.ShowMenu>(outcome).Menu;
-        Assert.Equal(DialMenuKind.Unsupported, menu.Kind);
-        Assert.Equal("Выделено объектов: 2", menu.Title);
-        Assert.Equal("Пока не поддерживается", menu.Subtitle);
-        Assert.Null(menu.SourcePath);
+        Assert.Equal(DialMenuKind.Actions, menu.Kind);
+        Assert.Equal("2 видео", menu.Title);
+        Assert.Equal("60 МБ", menu.Subtitle);
+        Assert.True(menu.IsBatch);
+        Assert.Equal([@"C:\a\1.mp4", @"C:\a\2.mp4"], menu.SourcePaths);
     }
-
     [Fact]
     public void Folder_ShowsUnsupported()
     {

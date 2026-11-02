@@ -5,6 +5,7 @@ using FileDial.App.Interop;
 using FileDial.Core.Compression;
 using FileDial.Core.History;
 using FileDial.Core.Jobs;
+using FileDial.Core.Menu;
 using FileDial.Core.Settings;
 
 namespace FileDial.App.UI;
@@ -13,6 +14,7 @@ namespace FileDial.App.UI;
 public partial class JobWindow : Window
 {
     private readonly string _sourcePath;
+    private readonly IReadOnlyList<string> _sources;
     private readonly string _actionId;
     private readonly Func<FfmpegTools, IFileJob>? _jobFactory;
     private readonly AppSettings _settings;
@@ -24,17 +26,23 @@ public partial class JobWindow : Window
     private bool _closeWhenStopped;
 
     /// <param name="jobFactory">Готовая задача (например, обрезка с введёнными границами); иначе — по id действия.</param>
-    internal JobWindow(string actionId, string actionLabel, string sourcePath, NativeMethods.POINT cursor,
+    /// <param name="sourcePaths">Один файл или несколько файлов одного типа (действие выполнится для каждого).</param>
+    internal JobWindow(string actionId, string actionLabel, IReadOnlyList<string> sourcePaths, NativeMethods.POINT cursor,
         AppSettings? settings = null, Func<FfmpegTools, IFileJob>? jobFactory = null)
     {
         InitializeComponent();
         _settings = settings ?? new AppSettings();
         _jobFactory = jobFactory;
+        _sources = sourcePaths;
+        var sourcePath = sourcePaths[0];
         _sourcePath = sourcePath;
         _actionId = actionId;
         ActionText.Text = actionLabel.Replace(' ', ' ');
-        FileNameText.Text = Path.GetFileName(sourcePath);
-        FileNameText.ToolTip = sourcePath;
+        FileNameText.Text = IsBatch
+            ? SelectionInterpreter.KindCount(FileKinds.Of(sourcePath), sourcePaths.Count)
+            : Path.GetFileName(sourcePath);
+        FileNameText.ToolTip = string.Join(Environment.NewLine, sourcePaths.Take(20)) +
+                               (sourcePaths.Count > 20 ? Environment.NewLine + "…" : "");
         StageText.Text = "Подготовка";
         Opacity = 0;
 
@@ -61,6 +69,8 @@ public partial class JobWindow : Window
     public string SourcePath => _sourcePath;
 
     public string ActionId => _actionId;
+
+    private bool IsBatch => _sources.Count > 1;
 
     /// <summary>Работа ещё идёт (или вот-вот начнётся) — итог не показан.</summary>
     public bool IsBusy { get; private set; } = true;
@@ -93,22 +103,55 @@ public partial class JobWindow : Window
 
         try
         {
-            // Отдельный поток пула: чтение файла и ожидание процессов не трогают UI-поток.
-            var result = await Task.Run(() => job.RunAsync(_sourcePath, progress, _cts.Token));
+            // Отдельный поток пула: чтение файлов и ожидание процессов не трогают UI-поток.
+            JobResult result;
+            var perFileHistory = false;
+            if (job is ImagesToPdfJob pdf)
+            {
+                // Несколько картинок собираются в один документ — это одно действие, а не пакет.
+                result = await Task.Run(() => pdf.RunAsync(_sources, progress, _cts.Token));
+            }
+            else if (IsBatch)
+            {
+                perFileHistory = true;
+                var summary = await Task.Run(() => BatchRunner.RunAsync(
+                    _sources,
+                    _ => _jobFactory?.Invoke(tools) ?? FileJobs.Create(_actionId, tools, _settings.Jobs)!,
+                    BatchRunner.SkipWhenAlreadyInFormat(_actionId),
+                    progress,
+                    outcome => Dispatcher.BeginInvoke(() => RecordFile(outcome)),
+                    _cts.Token));
+                if (summary.Done == 0 && summary.Failed > 0)
+                {
+                    _running = false;
+                    StageText.Text = "Ошибка";
+                    ResetProgress();
+                    ShowFinished(summary.Message, HistoryStatus.Failed, record: false);
+                    return;
+                }
+                result = new JobResult(summary.Done > 0 ? JobStatus.Done : JobStatus.NothingToDo, summary.Message,
+                    summary.LastOutput);
+            }
+            else
+            {
+                result = await Task.Run(() => job.RunAsync(_sourcePath, progress, _cts.Token));
+            }
             _running = false;
 
             if (result.Status == JobStatus.NothingToDo)
             {
                 StageText.Text = "Ничего делать не нужно";
                 ResetProgress();
-                ShowFinished(result.Message, HistoryStatus.NothingToDo);
+                ShowFinished(result.Message, HistoryStatus.NothingToDo, record: !perFileHistory);
                 return;
             }
 
             _resultPath = result.OutputPath;
             StageText.Text = "Готово";
             SetProgress(1);
-            ShowFinished(result.Message, HistoryStatus.Done);
+            ShowFinished(result.Message, HistoryStatus.Done, record: !perFileHistory);
+            if (_resultPath is null)
+                RevealButton.Visibility = Visibility.Collapsed;
             RevealButton.Visibility = Visibility.Visible;
             RevealButton.Focus();
             if (_settings.OpenFolderWhenDone && _resultPath is not null)
@@ -193,10 +236,23 @@ public partial class JobWindow : Window
             Message = message,
         });
 
-    private void ShowFinished(string message, HistoryStatus status, bool showHelp = false)
+    private void RecordFile(FileOutcome outcome) =>
+        Finished?.Invoke(new HistoryEntry
+        {
+            Time = DateTimeOffset.Now,
+            Action = ActionText.Text,
+            SourcePath = outcome.SourcePath,
+            OutputPath = outcome.OutputPath,
+            Status = outcome.Status,
+            Message = outcome.Message,
+        });
+
+    /// <param name="record">false — итоги уже записаны по каждому файлу пакета.</param>
+    private void ShowFinished(string message, HistoryStatus status, bool showHelp = false, bool record = true)
     {
         IsBusy = false;
-        Record(status, message);
+        if (record)
+            Record(status, message);
         ProgressIndicator.IsIndeterminate = false;
         MessageText.Text = message;
         MessageText.ToolTip = message;

@@ -220,12 +220,12 @@ public partial class App : Application
         radial.Closed += (_, _) =>
         {
             _radial = null;
-            if (radial.Chosen is not { } action || menu.SourcePath is not { } path || !FileJobs.IsImplemented(action.Id))
+            if (radial.Chosen is not { } action || menu.SourcePaths.Count == 0 || !FileJobs.IsImplemented(action.Id))
                 return;
-            if (FileJobs.NeedsTrimInput(action.Id))
-                AskTrimRange(action, path);
+            if (FileJobs.NeedsTrimInput(action.Id) && !menu.IsBatch)
+                AskTrimRange(action, menu.SourcePaths[0]);
             else
-                StartJob(action, path);
+                StartJob(action, menu.SourcePaths);
         };
         _radial = radial;
         radial.Show();
@@ -237,13 +237,14 @@ public partial class App : Application
         var settings = _settings;
         var dialog = new TrimWindow(sourcePath, WindowPlacement.CursorPosition(), settings.FfmpegFolder);
         dialog.Confirmed += request =>
-            StartJob(action, sourcePath, tools => FileJobs.CreateTrim(tools, sourcePath, request, settings.Jobs));
+            StartJob(action, [sourcePath], tools => FileJobs.CreateTrim(tools, sourcePath, request, settings.Jobs));
         dialog.Show();
         dialog.Activate();
     }
 
-    private void StartJob(DialAction action, string sourcePath, Func<FfmpegTools, IFileJob>? jobFactory = null)
+    private void StartJob(DialAction action, IReadOnlyList<string> sourcePaths, Func<FfmpegTools, IFileJob>? jobFactory = null)
     {
+        var sourcePath = sourcePaths[0];
         // То же действие над тем же файлом параллельно бессмысленно — показываем уже идущее.
         var running = _jobs.FirstOrDefault(j => j.IsBusy && j.ActionId == action.Id &&
             string.Equals(j.SourcePath, sourcePath, StringComparison.OrdinalIgnoreCase));
@@ -254,7 +255,7 @@ public partial class App : Application
             return;
         }
 
-        var window = new JobWindow(action.Id, action.Title, sourcePath, WindowPlacement.CursorPosition(), _settings,
+        var window = new JobWindow(action.Id, action.Title, sourcePaths, WindowPlacement.CursorPosition(), _settings,
             jobFactory);
         window.Closed += (_, _) => _jobs.Remove(window);
         window.Finished += RecordHistory;

@@ -35,12 +35,13 @@ public static class FileJobs
             ActionIds.Compress25 => new CompressJob(tools,
                 new CompressionOptions { TargetBytes = settings.VideoTargetBytes, OutputDirectory = output }),
             ActionIds.ImageCompress1Mb => new ImageCompressJob(tools, settings.ImageTargetBytes, output),
+            ActionIds.ImageToPdf => new ImagesToPdfJob(tools, output),
             _ => ConversionSpecs.For(actionId) is { } spec ? new ConversionJob(tools, spec, output) : null,
         };
     }
 
     public static bool IsImplemented(string actionId) =>
-        actionId is ActionIds.Compress25 or ActionIds.ImageCompress1Mb || NeedsTrimInput(actionId) ||
+        actionId is ActionIds.Compress25 or ActionIds.ImageCompress1Mb or ActionIds.ImageToPdf || NeedsTrimInput(actionId) ||
         ConversionSpecs.For(actionId) is not null;
 
     /// <summary>Перед запуском нужно спросить у пользователя границы отрезка.</summary>
