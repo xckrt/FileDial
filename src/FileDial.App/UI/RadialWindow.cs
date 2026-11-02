@@ -75,6 +75,8 @@ internal sealed class RadialWindow : Window
             FontSize = 11,
             Foreground = Palette.TextMuted,
             TextAlignment = TextAlignment.Center,
+            TextWrapping = TextWrapping.Wrap,
+            MinHeight = 30, // место под две строки, чтобы центр не прыгал при смене подсказки
             Margin = new Thickness(0, 6, 0, 0),
         };
         canvas.Children.Add(BuildCenter());
@@ -194,12 +196,23 @@ internal sealed class RadialWindow : Window
         var current = _selected is { } s ? ActionAt(s) : null;
         _hint.Text = current switch
         {
-            null when _menu.Kind == DialMenuKind.Unsupported => "Esc — закрыть",
-            null => "1–8, Enter · Esc",
-            { IsEnabled: false } => "Недоступно в прототипе",
-            _ => "Enter или клик — запустить",
+            null => DefaultHint(),
+            { IsEnabled: false } => current.DisabledReason ?? ActionCatalog.NotInPrototype,
+            _ => "Enter — запустить",
         };
         _hint.Foreground = Palette.TextMuted;
+    }
+
+    /// <summary>Подсказка без выбранного сектора. Если запускать нечего, сразу объясняем почему.</summary>
+    private string DefaultHint()
+    {
+        if (_menu.Kind == DialMenuKind.Unsupported)
+            return "Esc — закрыть";
+        if (_menu.Actions.Any(a => a.IsEnabled))
+            return "1–8, Enter · Esc";
+        return _menu.Actions.FirstOrDefault(a => a.DisabledReason is not null and not ActionCatalog.NotInPrototype)
+                   ?.DisabledReason
+               ?? "Нет доступных действий";
     }
 
     private void Select(int? index)

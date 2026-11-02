@@ -54,7 +54,7 @@ public static class SelectionInterpreter
         }
 
         var name = Path.GetFileName(path);
-        var actions = ActionCatalog.ForFile(path);
+        var actions = ActionCatalog.ForFile(path, state.Size);
         if (actions.Count == 0)
             return Unsupported(name, path, SizeFormatter.Format(state.Size));
 

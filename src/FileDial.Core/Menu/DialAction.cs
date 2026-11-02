@@ -1,7 +1,7 @@
 namespace FileDial.Core.Menu;
 
-/// <summary>Один сектор круга.</summary>
-public sealed record DialAction(string Id, string Label, bool IsEnabled);
+/// <summary>Один сектор круга. Для неактивного сектора <see cref="DisabledReason"/> объясняет почему.</summary>
+public sealed record DialAction(string Id, string Label, bool IsEnabled, string? DisabledReason = null);
 
 public static class ActionIds
 {

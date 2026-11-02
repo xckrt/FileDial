@@ -12,15 +12,38 @@ public class ActionCatalogTests
     [InlineData(@"C:\v\a.WebM")]
     public void VideoFiles_GetEightActions_OnlyCompressEnabled(string path)
     {
-        var actions = ActionCatalog.ForFile(path);
+        var actions = ActionCatalog.ForFile(path, 80_000_000);
 
         Assert.Equal(8, actions.Count);
         Assert.Equal(
-            ["Сжать до 25 МБ", "Обрезать", "Сделать GIF", "Извлечь звук", "Кадр в картинку", "Субтитры", "Убрать звук", "Формат"],
+            ["Сжать до 25\u00A0МБ", "Обрезать", "Сделать GIF", "Извлечь звук", "Кадр в картинку", "Субтитры", "Убрать звук", "Формат"],
             actions.Select(a => a.Label));
         Assert.Equal(ActionIds.Compress25, actions[0].Id);
         Assert.True(actions[0].IsEnabled);
-        Assert.All(actions.Skip(1), a => Assert.False(a.IsEnabled));
+        Assert.Null(actions[0].DisabledReason);
+        Assert.All(actions.Skip(1), a =>
+        {
+            Assert.False(a.IsEnabled);
+            Assert.Equal(ActionCatalog.NotInPrototype, a.DisabledReason);
+        });
+    }
+
+    [Theory]
+    [InlineData(534_323)]       // 521,8 КБ — как на скриншоте
+    [InlineData(25_000_000)]    // ровно цель — сжимать нечего
+    [InlineData(0)]
+    public void SmallVideo_CompressIsDisabledWithReason(long size)
+    {
+        var compress = ActionCatalog.ForFile(@"C:\v\a.mp4", size)[0];
+
+        Assert.False(compress.IsEnabled);
+        Assert.Equal(ActionCatalog.AlreadySmall, compress.DisabledReason);
+    }
+
+    [Fact]
+    public void VideoJustAboveTarget_CanBeCompressed()
+    {
+        Assert.True(ActionCatalog.ForFile(@"C:\v\a.mp4", 25_000_001)[0].IsEnabled);
     }
 
     [Theory]
@@ -30,7 +53,7 @@ public class ActionCatalogTests
     [InlineData(@"C:\v\a.mp4.txt")]
     public void OtherFiles_GetNoActions(string path)
     {
-        Assert.Empty(ActionCatalog.ForFile(path));
+        Assert.Empty(ActionCatalog.ForFile(path, 80_000_000));
     }
 }
 
@@ -55,6 +78,19 @@ public class SelectionInterpreterTests
         Assert.Equal("30 МБ", menu.Subtitle);
         Assert.Equal(8, menu.Actions.Count);
         Assert.Equal(@"D:\Мои видео\отпуск 2024.mp4", menu.SourcePath);
+    }
+
+    [Fact]
+    public void SmallVideo_ShowsMenuWithCompressDisabled()
+    {
+        var outcome = SelectionInterpreter.Interpret(SelectionResult.Success([@"C:\a\clip.mp4"]),
+            new FakeProbe(new FileState(FileStateKind.File, 521_800)));
+
+        var menu = Assert.IsType<HotkeyOutcome.ShowMenu>(outcome).Menu;
+        Assert.Equal(DialMenuKind.Actions, menu.Kind);
+        Assert.Equal("521,8 КБ", menu.Subtitle);
+        Assert.DoesNotContain(menu.Actions, a => a.IsEnabled);
+        Assert.Equal(ActionCatalog.AlreadySmall, menu.Actions[0].DisabledReason);
     }
 
     [Fact]
