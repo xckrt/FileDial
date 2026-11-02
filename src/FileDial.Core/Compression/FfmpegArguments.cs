@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 
 namespace FileDial.Core.Compression;
 
@@ -15,12 +15,18 @@ public static class FfmpegArguments
         return args;
     }
 
-    public static IReadOnlyList<string> SecondPass(string input, CompressionPlan plan, string passLogPrefix, string output)
+    /// <param name="downmixToStereo">Свести 5.1/7.1 в стерео: 128 кбит/с на шесть каналов звучат плохо.</param>
+    public static IReadOnlyList<string> SecondPass(string input, CompressionPlan plan, string passLogPrefix, string output,
+        bool downmixToStereo = false)
     {
         var args = new List<string>(Common) { "-i", input, "-map", "0:v:0" };
         AddVideo(args, plan, passLogPrefix, pass: 2);
         if (plan.AudioKbps > 0)
+        {
             args.AddRange(["-map", "0:a:0", "-c:a", "aac", "-b:a", Kbps(plan.AudioKbps)]);
+            if (downmixToStereo)
+                args.AddRange(["-ac", "2"]);
+        }
         else
             args.Add("-an");
         args.AddRange(["-map_metadata", "-1", "-movflags", "+faststart", "-f", "mp4", output]);

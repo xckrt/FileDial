@@ -1,4 +1,4 @@
-using FileDial.Core.Compression;
+﻿using FileDial.Core.Compression;
 
 namespace FileDial.Core.Tests;
 
@@ -31,14 +31,14 @@ public class VideoCompressorIntegrationTests : IDisposable
 
     private static FfmpegTools Tools => FfmpegLocator.LocateDefault()!;
 
-    private async Task<string> MakeSourceAsync(string name)
+    private async Task<string> MakeSourceAsync(string name, string audio = "sine=frequency=440:sample_rate=48000")
     {
         var path = Path.Combine(_videoDir, name);
         var result = await ProcessRunner.RunAsync(Tools.Ffmpeg,
         [
             "-hide_banner", "-nostdin", "-y", "-loglevel", "error",
             "-f", "lavfi", "-i", "testsrc2=size=1280x720:rate=30",
-            "-f", "lavfi", "-i", "sine=frequency=440:sample_rate=48000",
+            "-f", "lavfi", "-i", audio,
             "-t", "8", "-c:v", "libx264", "-preset", "ultrafast", "-b:v", "4M",
             "-c:a", "aac", "-b:a", "128k", "-shortest", path,
         ], null, captureOutput: false, CancellationToken.None);
@@ -95,6 +95,18 @@ public class VideoCompressorIntegrationTests : IDisposable
         var info = ProbeInfo.Parse(probe.StandardOutput);
         Assert.Equal(854, info.Width);
         Assert.Equal(480, info.Height);
+    }
+
+    [FfmpegFact]
+    public async Task SurroundAudio_IsDownmixedToStereo()
+    {
+        var source = await MakeSourceAsync("5.1.mp4", "anullsrc=channel_layout=5.1:sample_rate=48000");
+        var result = await new VideoCompressor(Tools, Options(1_000_000))
+            .CompressAsync(source, null, CancellationToken.None);
+
+        var probe = await ProcessRunner.RunAsync(Tools.Ffprobe, ProbeInfo.Arguments(result.OutputPath!), null,
+            captureOutput: true, CancellationToken.None);
+        Assert.Equal(2, ProbeInfo.Parse(probe.StandardOutput).AudioChannels);
     }
 
     [FfmpegFact]

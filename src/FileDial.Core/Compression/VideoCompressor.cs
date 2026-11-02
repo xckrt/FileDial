@@ -1,4 +1,4 @@
-namespace FileDial.Core.Compression;
+﻿namespace FileDial.Core.Compression;
 
 public sealed record CompressionProgress(string Stage, double Fraction);
 
@@ -38,6 +38,10 @@ public sealed class VideoCompressor(FfmpegTools tools, CompressionOptions? optio
         if (sourceSize <= _options.TargetBytes)
             return new CompressionResult(CompressionStatus.AlreadySmall, sourceSize, null, sourceSize);
 
+        var directory = Path.GetDirectoryName(sourcePath)!;
+        if (OutputFolderCheck.WhyNot(directory, _options.TargetBytes) is { } folderProblem)
+            throw new CompressionException(folderProblem);
+
         progress?.Report(new CompressionProgress("Анализ файла", 0));
         var info = await ProbeAsync(sourcePath, cancellationToken).ConfigureAwait(false);
 
@@ -51,7 +55,7 @@ public sealed class VideoCompressor(FfmpegTools tools, CompressionOptions? optio
                 $"{BitrateCalculator.MinVideoKbps} кбит/с.");
         }
 
-        var directory = Path.GetDirectoryName(sourcePath)!;
+        var downmix = info.AudioChannels > 2;
         var workDir = Path.Combine(_options.TempRoot, "FileDial", Guid.NewGuid().ToString("N"));
         var passLog = Path.Combine(workDir, "pass");
         var tempOutput = Path.Combine(directory, $".filedial-{Guid.NewGuid():N}.tmp");
@@ -62,7 +66,7 @@ public sealed class VideoCompressor(FfmpegTools tools, CompressionOptions? optio
 
             await RunPassAsync(1, FfmpegArguments.FirstPass(sourcePath, plan, passLog), info.DurationSeconds,
                 progress, cancellationToken).ConfigureAwait(false);
-            await RunPassAsync(2, FfmpegArguments.SecondPass(sourcePath, plan, passLog, tempOutput),
+            await RunPassAsync(2, FfmpegArguments.SecondPass(sourcePath, plan, passLog, tempOutput, downmix),
                 info.DurationSeconds, progress, cancellationToken).ConfigureAwait(false);
 
             // Кодер иногда промахивается вверх (короткие ролики, тяжёлые сцены). Один раз повторяем второй проход
@@ -75,7 +79,7 @@ public sealed class VideoCompressor(FfmpegTools tools, CompressionOptions? optio
                 if (corrected >= BitrateCalculator.MinVideoKbps && corrected < plan.VideoKbps)
                 {
                     var retryPlan = plan with { VideoKbps = corrected, TotalKbps = corrected + plan.AudioKbps };
-                    await RunPassAsync(2, FfmpegArguments.SecondPass(sourcePath, retryPlan, passLog, tempOutput),
+                    await RunPassAsync(2, FfmpegArguments.SecondPass(sourcePath, retryPlan, passLog, tempOutput, downmix),
                         info.DurationSeconds, progress, cancellationToken, "Проход 2 из 2, уточнение")
                         .ConfigureAwait(false);
                 }

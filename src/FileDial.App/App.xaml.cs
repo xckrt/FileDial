@@ -1,4 +1,4 @@
-using System.Windows;
+﻿using System.Windows;
 using System.Windows.Threading;
 using FileDial.App.Hotkey;
 using FileDial.App.Interop;
@@ -129,6 +129,16 @@ public partial class App : Application
 
     private void StartCompression(string sourcePath)
     {
+        // Второе сжатие того же файла параллельно бессмысленно — показываем уже идущее.
+        var running = _jobs.FirstOrDefault(j => j.IsBusy &&
+            string.Equals(j.SourcePath, sourcePath, StringComparison.OrdinalIgnoreCase));
+        if (running is not null)
+        {
+            running.Activate();
+            ToastWindow.ShowAt("Этот файл уже сжимается", WindowPlacement.CursorPosition());
+            return;
+        }
+
         var window = new CompressionWindow(sourcePath, WindowPlacement.CursorPosition());
         window.Closed += (_, _) => _jobs.Remove(window);
         _jobs.Add(window);

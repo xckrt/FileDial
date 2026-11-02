@@ -41,6 +41,11 @@ public partial class CompressionWindow : Window
         Closed += (_, _) => _cts.Dispose();
     }
 
+    public string SourcePath => _sourcePath;
+
+    /// <summary>Работа ещё идёт (или вот-вот начнётся) — итог не показан.</summary>
+    public bool IsBusy { get; private set; } = true;
+
     /// <summary>Закрыть окно после отмены (например, при выходе из программы).</summary>
     private bool _closeWhenStopped;
 
@@ -122,6 +127,7 @@ public partial class CompressionWindow : Window
 
     private void ShowFinished(string message, bool showHelp = false)
     {
+        IsBusy = false;
         MessageText.Text = message;
         MessageText.ToolTip = message;
         MessageText.Visibility = Visibility.Visible;

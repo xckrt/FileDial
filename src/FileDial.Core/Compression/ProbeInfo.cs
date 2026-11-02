@@ -1,15 +1,16 @@
-using System.Globalization;
+﻿using System.Globalization;
 using System.Text.Json;
 
 namespace FileDial.Core.Compression;
 
 /// <summary>Нужные для расчёта сведения из ffprobe.</summary>
-public sealed record ProbeInfo(double DurationSeconds, bool HasVideo, bool HasAudio, int Width, int Height)
+public sealed record ProbeInfo(double DurationSeconds, bool HasVideo, bool HasAudio, int Width, int Height,
+    int AudioChannels = 0)
 {
     public static IReadOnlyList<string> Arguments(string input) =>
     [
         "-v", "error",
-        "-show_entries", "stream=codec_type,width,height:format=duration",
+        "-show_entries", "stream=codec_type,width,height,channels:format=duration",
         "-of", "json",
         input,
     ];
@@ -28,7 +29,7 @@ public sealed record ProbeInfo(double DurationSeconds, bool HasVideo, bool HasAu
         }
 
         bool hasVideo = false, hasAudio = false;
-        int width = 0, height = 0;
+        int width = 0, height = 0, channels = 0;
         if (root.TryGetProperty("streams", out var streams) && streams.ValueKind == JsonValueKind.Array)
         {
             foreach (var s in streams.EnumerateArray())
@@ -36,6 +37,9 @@ public sealed record ProbeInfo(double DurationSeconds, bool HasVideo, bool HasAu
                 var type = s.TryGetProperty("codec_type", out var t) ? t.GetString() : null;
                 if (type == "audio")
                 {
+                    // Сжимаем первую звуковую дорожку (-map 0:a:0) — её каналы и важны.
+                    if (!hasAudio)
+                        channels = s.TryGetProperty("channels", out var ch) && ch.TryGetInt32(out var cv) ? cv : 0;
                     hasAudio = true;
                 }
                 else if (type == "video" && !hasVideo)
@@ -47,6 +51,6 @@ public sealed record ProbeInfo(double DurationSeconds, bool HasVideo, bool HasAu
             }
         }
 
-        return new ProbeInfo(duration, hasVideo, hasAudio, width, height);
+        return new ProbeInfo(duration, hasVideo, hasAudio, width, height, channels);
     }
 }
