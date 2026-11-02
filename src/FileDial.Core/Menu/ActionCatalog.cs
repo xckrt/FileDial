@@ -14,6 +14,16 @@ public static class ActionCatalog
     public const string AlreadySmall = CompressionCheck.AlreadySmall;
     public const int ResizeLongSide = 1920;
 
+    /// <summary>Форматы для конвертации: подпись и расширение. Порядок = порядок во внешнем кольце.</summary>
+    public static readonly IReadOnlyList<(string Label, string Extension)> VideoFormats =
+        [("MP4", ".mp4"), ("MKV", ".mkv"), ("WebM", ".webm"), ("MOV", ".mov")];
+
+    public static readonly IReadOnlyList<(string Label, string Extension)> ImageFormats =
+        [("JPG", ".jpg"), ("PNG", ".png"), ("WebP", ".webp"), ("BMP", ".bmp"), ("TIFF", ".tiff"), ("GIF", ".gif")];
+
+    public static readonly IReadOnlyList<(string Label, string Extension)> AudioFormats =
+        [("MP3", ".mp3"), ("M4A", ".m4a"), ("WAV", ".wav"), ("FLAC", ".flac"), ("OGG", ".ogg"), ("Opus", ".opus")];
+
     public static bool IsVideo(string path) => FileKinds.Of(path) == FileKind.Video;
 
     /// <summary>
@@ -26,45 +36,47 @@ public static class ActionCatalog
         {
             FileKind.Video => ForVideo(path, sizeBytes, media),
             FileKind.Image => ForImage(path, sizeBytes, media),
-            FileKind.Audio => ForAudio(path),
+            FileKind.Audio => ForAudio(path, media),
             _ => [],
         };
+
+    /// <summary>Все запускаемые действия, включая вложенные в группы.</summary>
+    public static IEnumerable<DialAction> Flatten(IEnumerable<DialAction> actions) =>
+        actions.SelectMany(a => a.IsGroup ? a.Children! : [a]);
 
     private static IReadOnlyList<DialAction> ForVideo(string path, long sizeBytes, ProbeInfo? media)
     {
         // Без сведений ffprobe звук и длительность неизвестны — тогда не запрещаем, окно действия объяснит ошибку.
         var noSound = media is { HasAudio: false };
         var tooLongForGif = media is { DurationSeconds: > ConversionSpecs.GifMaxSeconds };
-        var isMp4 = Path.GetExtension(path).Equals(".mp4", StringComparison.OrdinalIgnoreCase);
 
         return
         [
             Action(ActionIds.Compress25, "Сжать до 25 МБ", CompressionCheck.WhyNot(sizeBytes, media)),
-            Stub(ActionIds.Trim, "Обрезать"),
+            Action(ActionIds.Trim, "Обрезать", null),
             Action(ActionIds.Gif, "Сделать GIF",
                 tooLongForGif ? $"GIF — только для роликов до {ConversionSpecs.GifMaxSeconds} с" : null),
             Action(ActionIds.ExtractAudio, "Извлечь звук", noSound ? "В видео нет звука" : null),
             Action(ActionIds.Frame, "Кадр в картинку", null),
             Stub(ActionIds.Subtitles, "Субтитры"),
             Action(ActionIds.Mute, "Убрать звук", noSound ? "В видео и так нет звука" : null),
-            Action(ActionIds.Convert, "Формат", isMp4 ? "Файл уже в MP4" : null),
+            DialAction.Group(ActionIds.Convert, "Формат", Formats(path, VideoFormats, ActionIds.VideoTo)),
         ];
     }
 
     private static IReadOnlyList<DialAction> ForImage(string path, long sizeBytes, ProbeInfo? media)
     {
-        var ext = Path.GetExtension(path).ToLowerInvariant();
         string? resizeWhyNot = null;
         if (media is { Width: > 0, Height: > 0 } && Math.Max(media.Width, media.Height) <= ResizeLongSide)
             resizeWhyNot = $"Уже не больше {ResizeLongSide} px ({media.Width}×{media.Height})";
 
         return
         [
-            Action(ActionIds.ToJpg, "В JPG", ext is ".jpg" or ".jpeg" ? "Файл уже в JPG" : null),
-            Action(ActionIds.ToPng, "В PNG", ext == ".png" ? "Файл уже в PNG" : null),
-            Action(ActionIds.ToWebp, "В WebP", ext == ".webp" ? "Файл уже в WebP" : null),
+            DialAction.Group(ActionIds.ImageConvert, "Формат", Formats(path, ImageFormats, ActionIds.ImageTo)),
             Action(ActionIds.Resize1920, $"Уменьшить до {ResizeLongSide} px", resizeWhyNot),
             Action(ActionIds.RotateRight, "Повернуть вправо", null),
+            Action(ActionIds.RotateLeft, "Повернуть влево", null),
+            Action(ActionIds.Mirror, "Отразить", null),
             Action(ActionIds.ImageCompress1Mb, "Сжать до 1 МБ",
                 sizeBytes <= ImageCompressJob.DefaultTargetBytes ? "Файл уже меньше 1 МБ" : null),
             Stub(ActionIds.RemoveBackground, "Убрать фон"),
@@ -72,21 +84,36 @@ public static class ActionCatalog
         ];
     }
 
-    private static IReadOnlyList<DialAction> ForAudio(string path)
+    private static IReadOnlyList<DialAction> ForAudio(string path, ProbeInfo? media) =>
+    [
+        DialAction.Group(ActionIds.AudioConvert, "Формат", Formats(path, AudioFormats, ActionIds.AudioTo)),
+        Action(ActionIds.Normalize, "Выровнять громкость", null),
+        Action(ActionIds.Denoise, "Убрать шум", null),
+        Action(ActionIds.SpeedUp, "Ускорить ×1,5", null),
+        Action(ActionIds.SlowDown, "Замедлить ×0,75", null),
+        Action(ActionIds.ToMono, "В моно", media is { AudioChannels: 1 } ? "Звук уже моно" : null),
+        Action(ActionIds.AudioTrim, "Обрезать", null),
+        Stub(ActionIds.SpeechToText, "В текст"),
+    ];
+
+    /// <summary>Вложенные секторы форматов; свой же формат неактивен.</summary>
+    private static IReadOnlyList<DialAction> Formats(string path, IReadOnlyList<(string Label, string Extension)> formats,
+        Func<string, string> id)
     {
-        var ext = Path.GetExtension(path).ToLowerInvariant();
-        return
-        [
-            Action(ActionIds.ToMp3, "В MP3", ext == ".mp3" ? "Файл уже в MP3" : null),
-            Action(ActionIds.ToM4a, "В M4A", ext == ".m4a" ? "Файл уже в M4A" : null),
-            Action(ActionIds.ToWav, "В WAV", ext == ".wav" ? "Файл уже в WAV" : null),
-            Action(ActionIds.Normalize, "Выровнять громкость", null),
-            Stub(ActionIds.AudioTrim, "Обрезать"),
-            Action(ActionIds.Denoise, "Убрать шум", null),
-            Action(ActionIds.SpeedUp, "Ускорить ×1,5", null),
-            Stub(ActionIds.SpeechToText, "В текст"),
-        ];
+        var own = NormalizeExtension(Path.GetExtension(path));
+        return formats
+            .Select(f => new DialAction(id(f.Extension), f.Label, own != f.Extension,
+                own == f.Extension ? $"Файл уже в {f.Label}" : null) { Caption = $"В {f.Label}" })
+            .ToList();
     }
+
+    /// <summary>Синонимы расширений: .jpeg = .jpg, .tif = .tiff.</summary>
+    public static string NormalizeExtension(string extension) => extension.ToLowerInvariant() switch
+    {
+        ".jpeg" => ".jpg",
+        ".tif" => ".tiff",
+        var e => e,
+    };
 
     private static DialAction Action(string id, string label, string? whyNot) => new(id, label, whyNot is null, whyNot);
 

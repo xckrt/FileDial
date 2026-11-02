@@ -13,83 +13,104 @@ public static class ConversionSpecs
     public const int GifFps = 12;
     public const int GifLongSide = 480;
 
-    public static ConversionSpec? For(string actionId) => actionId switch
+    /// <summary>Несжатый звук: до 48 кГц × 2 канала × 2 байта.</summary>
+    private const int PcmBytesPerSecond = 192_000;
+
+    public static ConversionSpec? For(string actionId)
     {
-        // --- Видео ---
-        ActionIds.ExtractAudio => new()
-        {
-            Suffix = "",
-            Needs = MediaNeeds.Sound,
-            OutputExtension = (_, info) => ExtractedAudioExtension(info),
-            Arguments = (_, info) => ["-map", "0:a:0", "-vn", .. ExtractAudioCodec(info)],
-            EstimateBytes = (size, _) => size + Slack,
-            Timed = true,
-        },
-        ActionIds.Mute => new()
-        {
-            Suffix = "_без_звука",
-            Needs = MediaNeeds.Picture,
-            OutputExtension = (src, _) => Path.GetExtension(src).ToLowerInvariant(),
-            // Видео копируется без перекодирования — быстро и без потерь.
-            Arguments = (src, _) => ["-map", "0:v:0", "-c:v", "copy", "-an", .. VideoMuxer(Path.GetExtension(src))],
-            EstimateBytes = (size, _) => size + Slack,
-            Timed = true,
-        },
-        ActionIds.Frame => new()
-        {
-            Suffix = "_кадр",
-            Needs = MediaNeeds.Picture,
-            OutputExtension = (_, _) => ".png",
-            // Первый кадр часто чёрный (затемнение), берём кадр на трети длительности.
-            InputArguments = (_, info) => info.DurationSeconds > 0 ? ["-ss", Seconds(info.DurationSeconds / 3)] : [],
-            Arguments = (_, _) => ["-map", "0:v:0", "-frames:v", "1", "-map_metadata", "-1", .. ImageEncoder(".png")],
-            EstimateBytes = (_, info) => (long)Math.Max(info.Width, 1) * Math.Max(info.Height, 1) * 4 + Slack,
-        },
-        ActionIds.Gif => new()
-        {
-            Suffix = "",
-            Needs = MediaNeeds.Picture,
-            OutputExtension = (_, _) => ".gif",
-            Arguments = (_, info) => ["-filter_complex", GifFilter(info), "-map", "[out]", "-loop", "0", "-f", "gif"],
-            EstimateBytes = (_, info) => (long)(Math.Max(info.DurationSeconds, 1) * 2_000_000) + Slack,
-            Timed = true,
-        },
-        ActionIds.Convert => new()
-        {
-            Suffix = "",
-            Needs = MediaNeeds.Picture,
-            OutputExtension = (_, _) => ".mp4",
-            Arguments = (_, info) => ToMp4(info),
-            EstimateBytes = (size, _) => size * 2 + Slack,
-            Timed = true,
-        },
+        if (ActionIds.TargetExtension(actionId, ActionIds.ImageToPrefix) is { } image)
+            return ImageTo(image);
+        if (ActionIds.TargetExtension(actionId, ActionIds.AudioToPrefix) is { } audio)
+            return AudioTo(audio);
+        if (ActionIds.TargetExtension(actionId, ActionIds.VideoToPrefix) is { } video)
+            return VideoTo(video);
 
-        // --- Изображения ---
-        ActionIds.ToJpg => Image("", (_, _) => ".jpg", (_, info) => [.. FlattenOnWhite(info, null), .. ImageEncoder(".jpg")]),
-        ActionIds.ToPng => Image("", (_, _) => ".png", (_, _) => ImageEncoder(".png")),
-        ActionIds.ToWebp => Image("", (_, _) => ".webp", (_, _) => ImageEncoder(".webp")),
-        ActionIds.Resize1920 => Image($"_{ActionCatalog.ResizeLongSide}px", (src, _) => SameImageFormat(src), (src, _) =>
-            [.. Filter(ResizeFilter(ActionCatalog.ResizeLongSide)), .. ImageEncoder(SameImageFormat(src))]),
-        ActionIds.RotateRight => Image("_повернуто", (src, _) => SameImageFormat(src), (src, _) =>
-            [.. Filter("transpose=clock"), .. ImageEncoder(SameImageFormat(src))]),
+        return actionId switch
+        {
+            // --- Видео ---
+            ActionIds.ExtractAudio => new()
+            {
+                Suffix = "",
+                Needs = MediaNeeds.Sound,
+                OutputExtension = (_, info) => ExtractedAudioExtension(info),
+                Arguments = (_, info) => ["-map", "0:a:0", "-vn", .. ExtractAudioCodec(info)],
+                EstimateBytes = (size, _) => size + Slack,
+                Timed = true,
+            },
+            ActionIds.Mute => new()
+            {
+                Suffix = "_без_звука",
+                Needs = MediaNeeds.Picture,
+                OutputExtension = (src, _) => Path.GetExtension(src).ToLowerInvariant(),
+                // Видео копируется без перекодирования — быстро и без потерь.
+                Arguments = (src, _) => ["-map", "0:v:0", "-c:v", "copy", "-an", .. VideoMuxer(Path.GetExtension(src))],
+                EstimateBytes = (size, _) => size + Slack,
+                Timed = true,
+            },
+            ActionIds.Frame => new()
+            {
+                Suffix = "_кадр",
+                Needs = MediaNeeds.Picture,
+                OutputExtension = (_, _) => ".png",
+                // Первый кадр часто чёрный (затемнение), берём кадр на трети длительности.
+                InputArguments = (_, info) => info.DurationSeconds > 0 ? ["-ss", Seconds(info.DurationSeconds / 3)] : [],
+                Arguments = (_, _) => ["-map", "0:v:0", "-frames:v", "1", "-map_metadata", "-1", .. ImageEncoder(".png")],
+                EstimateBytes = (_, info) => (long)Math.Max(info.Width, 1) * Math.Max(info.Height, 1) * 4 + Slack,
+            },
+            ActionIds.Gif => new()
+            {
+                Suffix = "",
+                Needs = MediaNeeds.Picture,
+                OutputExtension = (_, _) => ".gif",
+                Arguments = (_, info) => ["-filter_complex", GifFilter(info), "-map", "[out]", "-loop", "0", "-f", "gif"],
+                EstimateBytes = (_, info) => (long)(Math.Max(info.DurationSeconds, 1) * 2_000_000) + Slack,
+                Timed = true,
+            },
 
-        // --- Звук ---
-        ActionIds.ToMp3 => Audio("", _ => ".mp3", (_, info) => AudioEncoder(".mp3", info), (size, _) => size * 3 + Slack),
-        ActionIds.ToM4a => Audio("", _ => ".m4a", (_, info) => AudioEncoder(".m4a", info), (size, _) => size * 3 + Slack),
-        // Несжатый WAV: до 48 кГц × 2 канала × 2 байта = 192 000 байт/с.
-        ActionIds.ToWav => Audio("", _ => ".wav", (_, info) => AudioEncoder(".wav", info),
-            (_, info) => (long)(Math.Max(info.DurationSeconds, 1) * 192_000) + Slack),
-        ActionIds.Normalize => SameFormatAudio("_выровнено",
+            // --- Изображения ---
+            ActionIds.Resize1920 => ImageFilter($"_{ActionCatalog.ResizeLongSide}px", ResizeFilter(ActionCatalog.ResizeLongSide)),
+            ActionIds.RotateRight => ImageFilter("_повернуто", "transpose=clock"),
+            ActionIds.RotateLeft => ImageFilter("_повернуто_влево", "transpose=cclock"),
+            ActionIds.Mirror => ImageFilter("_отражено", "hflip"),
+
+            // --- Звук ---
             // loudnorm внутри работает на 192 кГц, поэтому частоту возвращаем к исходной (см. AudioEncoder).
-            "loudnorm=I=-16:TP=-1.5:LRA=11"),
-        ActionIds.SpeedUp => SameFormatAudio("_x1,5", "atempo=1.5"),
-        ActionIds.Denoise => SameFormatAudio("_без_шума", "afftdn=nf=-25"),
-        _ => null,
-    };
+            ActionIds.Normalize => SameFormatAudio("_выровнено", "loudnorm=I=-16:TP=-1.5:LRA=11"),
+            ActionIds.SpeedUp => SameFormatAudio("_x1,5", "atempo=1.5"),
+            ActionIds.SlowDown => SameFormatAudio("_x0,75", "atempo=0.75"),
+            ActionIds.Denoise => SameFormatAudio("_без_шума", "afftdn=nf=-25"),
+            ActionIds.ToMono => SameFormatAudio("_моно", "aformat=channel_layouts=mono"),
+            _ => null,
+        };
+    }
 
     private static string Seconds(double value) => value.ToString("0.###", CultureInfo.InvariantCulture);
 
     // --- Видео ---
+
+    private static ConversionSpec? VideoTo(string extension)
+    {
+        Func<ProbeInfo, IReadOnlyList<string>>? args = extension switch
+        {
+            ".mp4" => ToMp4,
+            ".mov" => ToMov,
+            ".webm" => ToWebm,
+            ".mkv" => ToMkv,
+            _ => null,
+        };
+        if (args is null)
+            return null;
+
+        return new()
+        {
+            Suffix = "",
+            Needs = MediaNeeds.Picture,
+            OutputExtension = (_, _) => extension,
+            Arguments = (_, info) => args(info),
+            EstimateBytes = (size, _) => size * 2 + Slack,
+            Timed = true,
+        };
+    }
 
     /// <summary>Если звук уже в «обычном» кодеке — копируем без потерь, иначе кодируем в AAC.</summary>
     public static string ExtractedAudioExtension(ProbeInfo info) => info.AudioCodec switch
@@ -129,22 +150,56 @@ public static class ConversionSpecs
                "[b][p]paletteuse=dither=bayer:bayer_scale=4[out]";
     }
 
+    private static readonly string[] X264 = ["-c:v", "libx264", "-preset", "medium", "-crf", "20", "-pix_fmt", "yuv420p"];
+    private static readonly string[] Aac192 = ["-c:a", "aac", "-b:a", "192k"];
+    private static readonly string[] Vp9 = ["-c:v", "libvpx-vp9", "-crf", "32", "-b:v", "0", "-row-mt", "1",
+        "-deadline", "good", "-cpu-used", "4", "-pix_fmt", "yuv420p"];
+    private static readonly string[] Opus128 = ["-c:a", "libopus", "-b:a", "128k", "-ar", "48000"];
+
     /// <summary>В MP4: H.264 + AAC уже подходят — копируем без перекодирования; иначе H.264 CRF 20 + AAC 192 кбит/с.</summary>
-    public static IReadOnlyList<string> ToMp4(ProbeInfo info)
+    public static IReadOnlyList<string> ToMp4(ProbeInfo info) =>
+        Remux(info, ["h264"], ["aac"], X264, Aac192, VideoMuxer(".mp4"));
+
+    /// <summary>В MOV: H.264/HEVC + AAC копируются, остальное — в H.264 + AAC.</summary>
+    public static IReadOnlyList<string> ToMov(ProbeInfo info) =>
+        Remux(info, ["h264", "hevc"], ["aac"], X264, Aac192, VideoMuxer(".mov"));
+
+    /// <summary>В WebM: VP8/VP9/AV1 + Opus/Vorbis копируются, остальное — в VP9 + Opus.</summary>
+    public static IReadOnlyList<string> ToWebm(ProbeInfo info) =>
+        Remux(info, ["vp8", "vp9", "av1"], ["opus", "vorbis"], Vp9, Opus128, VideoMuxer(".webm"));
+
+    /// <summary>MKV принимает почти любые кодеки — всегда перепаковка без потерь.</summary>
+    public static IReadOnlyList<string> ToMkv(ProbeInfo info) =>
+        ["-map", "0:v:0", "-map", "0:a:0?", "-c", "copy", .. VideoMuxer(".mkv")];
+
+    private static IReadOnlyList<string> Remux(ProbeInfo info, string[] okVideo, string[] okAudio,
+        string[] videoEncoder, string[] audioEncoder, IReadOnlyList<string> muxer)
     {
         string[] maps = ["-map", "0:v:0", "-map", "0:a:0?"];
-        var videoOk = info.VideoCodec == "h264";
-        var audioOk = !info.HasAudio || info.AudioCodec == "aac";
+        var videoOk = info.VideoCodec is { } v && okVideo.Contains(v);
+        var audioOk = !info.HasAudio || info.AudioCodec is { } a && okAudio.Contains(a);
         if (videoOk && audioOk)
-            return [.. maps, "-c", "copy", "-movflags", "+faststart", "-f", "mp4"];
+            return [.. maps, "-c", "copy", .. muxer];
 
         return [.. maps,
-            .. videoOk ? ["-c:v", "copy"] : new[] { "-c:v", "libx264", "-preset", "medium", "-crf", "20", "-pix_fmt", "yuv420p" },
-            .. audioOk ? ["-c:a", "copy"] : new[] { "-c:a", "aac", "-b:a", "192k" },
-            "-movflags", "+faststart", "-f", "mp4"];
+            .. videoOk ? ["-c:v", "copy"] : videoEncoder,
+            .. audioOk ? ["-c:a", "copy"] : audioEncoder,
+            .. muxer];
     }
 
     // --- Изображения ---
+
+    private static ConversionSpec? ImageTo(string extension) => extension switch
+    {
+        // В JPG и BMP без прозрачности подкладываем белый фон, иначе прозрачное станет чёрным.
+        ".jpg" or ".bmp" => Image("", (_, _) => extension, (_, info) => [.. FlattenOnWhite(info, null), .. ImageEncoder(extension)]),
+        ".png" or ".webp" or ".tiff" => Image("", (_, _) => extension, (_, _) => ImageEncoder(extension)),
+        // GIF — 256 цветов: своя палитра под картинку, а не стандартная.
+        ".gif" => Image("", (_, _) => ".gif", (_, _) =>
+            ["-filter_complex", "[0:v:0]split[a][b];[a]palettegen=reserve_transparent=1[p];[b][p]paletteuse[out]",
+                "-map", "[out]", "-f", "gif"]),
+        _ => null,
+    };
 
     private static ConversionSpec Image(string suffix, Func<string, ProbeInfo, string> extension,
         Func<string, ProbeInfo, IReadOnlyList<string>> args) => new()
@@ -161,9 +216,13 @@ public static class ConversionSpecs
             IReadOnlyList<string> map = specific.Contains("-filter_complex") ? [] : ["-map", "0:v:0"];
             return [.. map, "-frames:v", "1", "-map_metadata", "-1", .. specific];
         },
-        // PNG из JPG бывает в разы больше исходника.
-        EstimateBytes = (size, _) => size * 6 + Slack,
+        // PNG и BMP из JPG бывают в разы больше исходника.
+        EstimateBytes = (size, info) => Math.Max(size * 6, (long)info.Width * info.Height * 4) + Slack,
     };
+
+    /// <summary>Фильтр с сохранением формата (поворот, отражение, уменьшение).</summary>
+    private static ConversionSpec ImageFilter(string suffix, string filter) =>
+        Image(suffix, (src, _) => SameImageFormat(src), (src, _) => [.. Filter(filter), .. ImageEncoder(SameImageFormat(src))]);
 
     /// <summary>Формат результата для поворота и уменьшения: тот же, если умеем в него писать, иначе PNG.</summary>
     public static string SameImageFormat(string sourcePath) =>
@@ -185,12 +244,14 @@ public static class ConversionSpecs
             "-pix_fmt", "yuvj444p", "-f", "image2", "-update", "1"],
         ".webp" => ["-c:v", "libwebp", "-quality", "90", "-f", "webp"],
         ".png" => ["-c:v", "png", "-f", "image2", "-update", "1"],
+        ".bmp" => ["-c:v", "bmp", "-pix_fmt", "bgr24", "-f", "image2", "-update", "1"],
+        ".tiff" => ["-c:v", "tiff", "-compression_algo", "lzw", "-f", "image2", "-update", "1"],
         _ => throw new ArgumentOutOfRangeException(nameof(extension), extension, "Неподдерживаемый формат изображения"),
     };
 
     /// <summary>
-    /// В JPG нет прозрачности: прозрачные места иначе становятся чёрными. Подкладываем белый фон
-    /// размером с картинку (размер знаем из ffprobe; без него оставляем как есть).
+    /// Подкладываем белый фон размером с картинку для форматов без прозрачности
+    /// (размер знаем из ffprobe; без него оставляем как есть).
     /// </summary>
     public static IReadOnlyList<string> FlattenOnWhite(ProbeInfo info, string? extraFilter)
     {
@@ -207,6 +268,17 @@ public static class ConversionSpecs
     private static IReadOnlyList<string> Filter(string filter) => ["-vf", filter];
 
     // --- Звук ---
+
+    private static ConversionSpec? AudioTo(string extension)
+    {
+        if (extension is not (".mp3" or ".m4a" or ".wav" or ".flac" or ".ogg" or ".opus"))
+            return null;
+        // Несжатый и сжатый без потерь звук считаем по длительности; остальное — от размера исходника.
+        Func<long, ProbeInfo, long> estimate = extension is ".wav" or ".flac"
+            ? (_, info) => (long)(Math.Max(info.DurationSeconds, 1) * PcmBytesPerSecond) + Slack
+            : (size, _) => size * 3 + Slack;
+        return Audio("", _ => extension, (_, info) => AudioEncoder(extension, info), estimate);
+    }
 
     private static ConversionSpec Audio(string suffix, Func<string, string> extension,
         Func<string, ProbeInfo, IReadOnlyList<string>> args, Func<long, ProbeInfo, long> estimate) => new()

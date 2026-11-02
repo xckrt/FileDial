@@ -1,7 +1,28 @@
 namespace FileDial.Core.Menu;
 
-/// <summary>Один сектор круга. Для неактивного сектора <see cref="DisabledReason"/> объясняет почему.</summary>
-public sealed record DialAction(string Id, string Label, bool IsEnabled, string? DisabledReason = null);
+/// <summary>
+/// Один сектор круга. Для неактивного сектора <see cref="DisabledReason"/> объясняет почему.
+/// Если есть <see cref="Children"/>, это группа: при наведении снаружи круга раскрываются вложенные секторы.
+/// </summary>
+public sealed record DialAction(string Id, string Label, bool IsEnabled, string? DisabledReason = null)
+{
+    public IReadOnlyList<DialAction>? Children { get; init; }
+
+    /// <summary>Заголовок окна действия; по умолчанию — подпись сектора.</summary>
+    public string? Caption { get; init; }
+
+    public bool IsGroup => Children is { Count: > 0 };
+
+    public string Title => Caption ?? Label;
+
+    /// <summary>Группа активна, если активен хотя бы один вложенный сектор.</summary>
+    public static DialAction Group(string id, string label, IReadOnlyList<DialAction> children) =>
+        new(id, label, children.Any(c => c.IsEnabled),
+            children.Any(c => c.IsEnabled) ? null : children.FirstOrDefault()?.DisabledReason)
+        {
+            Children = children,
+        };
+}
 
 public static class ActionIds
 {
@@ -13,25 +34,47 @@ public static class ActionIds
     public const string Frame = "frame";
     public const string Subtitles = "subtitles";
     public const string Mute = "mute";
+    /// <summary>Группа «Формат» у видео.</summary>
     public const string Convert = "convert";
 
     // Изображения
-    public const string ToJpg = "image-to-jpg";
-    public const string ToPng = "image-to-png";
-    public const string ToWebp = "image-to-webp";
+    public const string ImageConvert = "image-convert";
     public const string Resize1920 = "image-resize-1920";
     public const string RotateRight = "image-rotate-right";
+    public const string RotateLeft = "image-rotate-left";
+    public const string Mirror = "image-mirror";
     public const string ImageCompress1Mb = "image-compress-1mb";
     public const string RemoveBackground = "image-remove-background";
     public const string ImageToPdf = "image-to-pdf";
 
     // Звук
-    public const string ToMp3 = "audio-to-mp3";
-    public const string ToM4a = "audio-to-m4a";
-    public const string ToWav = "audio-to-wav";
+    public const string AudioConvert = "audio-convert";
     public const string Normalize = "audio-normalize";
-    public const string AudioTrim = "audio-trim";
     public const string Denoise = "audio-denoise";
     public const string SpeedUp = "audio-speed-up";
+    public const string SlowDown = "audio-slow-down";
+    public const string ToMono = "audio-to-mono";
+    public const string AudioTrim = "audio-trim";
     public const string SpeechToText = "audio-to-text";
+
+    // Конвертация: id вида «image-to:.png». Расширение после двоеточия — целевой формат.
+    public const string ImageToPrefix = "image-to:";
+    public const string AudioToPrefix = "audio-to:";
+    public const string VideoToPrefix = "video-to:";
+
+    public static string ImageTo(string extension) => ImageToPrefix + extension;
+    public static string AudioTo(string extension) => AudioToPrefix + extension;
+    public static string VideoTo(string extension) => VideoToPrefix + extension;
+
+    public static readonly string ToJpg = ImageTo(".jpg");
+    public static readonly string ToPng = ImageTo(".png");
+    public static readonly string ToWebp = ImageTo(".webp");
+    public static readonly string ToMp3 = AudioTo(".mp3");
+    public static readonly string ToM4a = AudioTo(".m4a");
+    public static readonly string ToWav = AudioTo(".wav");
+    public static readonly string ToMp4 = VideoTo(".mp4");
+
+    /// <summary>Целевое расширение из id конвертации или null.</summary>
+    public static string? TargetExtension(string actionId, string prefix) =>
+        actionId.StartsWith(prefix, StringComparison.Ordinal) ? actionId[prefix.Length..] : null;
 }

@@ -121,14 +121,28 @@ public partial class App : Application
         radial.Closed += (_, _) =>
         {
             _radial = null;
-            if (radial.Chosen is { } action && menu.SourcePath is not null && FileJobs.IsImplemented(action.Id))
-                StartJob(action, menu.SourcePath);
+            if (radial.Chosen is not { } action || menu.SourcePath is not { } path || !FileJobs.IsImplemented(action.Id))
+                return;
+            if (FileJobs.NeedsTrimInput(action.Id))
+                AskTrimRange(action, path);
+            else
+                StartJob(action, path);
         };
         _radial = radial;
         radial.Show();
     }
 
-    private void StartJob(DialAction action, string sourcePath)
+    /// <summary>Обрезка: сначала окно с границами, потом обычное окно выполнения.</summary>
+    private void AskTrimRange(DialAction action, string sourcePath)
+    {
+        var dialog = new TrimWindow(sourcePath, WindowPlacement.CursorPosition());
+        dialog.Confirmed += request =>
+            StartJob(action, sourcePath, tools => FileJobs.CreateTrim(tools, sourcePath, request));
+        dialog.Show();
+        dialog.Activate();
+    }
+
+    private void StartJob(DialAction action, string sourcePath, Func<FfmpegTools, IFileJob>? jobFactory = null)
     {
         // То же действие над тем же файлом параллельно бессмысленно — показываем уже идущее.
         var running = _jobs.FirstOrDefault(j => j.IsBusy && j.ActionId == action.Id &&
@@ -140,7 +154,7 @@ public partial class App : Application
             return;
         }
 
-        var window = new JobWindow(action.Id, action.Label, sourcePath, WindowPlacement.CursorPosition());
+        var window = new JobWindow(action.Id, action.Title, sourcePath, WindowPlacement.CursorPosition(), jobFactory);
         window.Closed += (_, _) => _jobs.Remove(window);
         _jobs.Add(window);
         window.Show();

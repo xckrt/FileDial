@@ -36,6 +36,9 @@ public sealed record ConversionSpec
 
     /// <summary>Показывать проценты по длительности (для однокадровых операций — нет).</summary>
     public bool Timed { get; init; }
+
+    /// <summary>Длительность результата для процентов, если она не равна длительности исходника (обрезка).</summary>
+    public Func<ProbeInfo, double>? OutputDuration { get; init; }
 }
 
 /// <summary>Преобразование файла в новый файл рядом с исходником.</summary>
@@ -71,13 +74,14 @@ public sealed class ConversionJob(FfmpegTools tools, ConversionSpec spec) : IFil
             args.AddRange(spec.Arguments(sourcePath, info));
             args.Add(tempOutput);
 
-            var timed = spec.Timed && info.DurationSeconds > 0;
+            var duration = spec.OutputDuration?.Invoke(info) ?? info.DurationSeconds;
+            var timed = spec.Timed && duration > 0;
             progress?.Report(new JobProgress("Обработка", timed ? 0 : null));
 
             var result = await ProcessRunner.RunAsync(tools.Ffmpeg, args, line =>
             {
                 if (timed && FfmpegProgressParser.TryParseOutTime(line, out var t))
-                    progress?.Report(new JobProgress("Обработка", Math.Clamp(t.TotalSeconds / info.DurationSeconds, 0, 1)));
+                    progress?.Report(new JobProgress("Обработка", Math.Clamp(t.TotalSeconds / duration, 0, 1)));
             }, captureOutput: false, ct).ConfigureAwait(false);
 
             if (result.ExitCode != 0 || !File.Exists(tempOutput))

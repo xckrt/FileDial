@@ -1,4 +1,4 @@
-using FileDial.Core.Compression;
+﻿using FileDial.Core.Compression;
 using FileDial.Core.Jobs;
 using FileDial.Core.Menu;
 
@@ -104,7 +104,7 @@ public class MoreActionsIntegrationTests : IDisposable
     public async Task Convert_MkvH264_IsRemuxedToMp4()
     {
         var clip = await ClipAsync("запись.mkv");
-        var output = await RunAsync(ActionIds.Convert, clip);
+        var output = await RunAsync(ActionIds.ToMp4, clip);
 
         Assert.Equal(Path.Combine(_dir, "запись.mp4"), output);
         var info = await ProbeAsync(output);
@@ -115,7 +115,7 @@ public class MoreActionsIntegrationTests : IDisposable
     public async Task Convert_OtherCodecs_AreReencoded()
     {
         var clip = await ClipAsync("старое.mkv", videoCodec: "mpeg4", audioCodec: "libmp3lame");
-        var output = await RunAsync(ActionIds.Convert, clip);
+        var output = await RunAsync(ActionIds.ToMp4, clip);
 
         var info = await ProbeAsync(output);
         Assert.Equal(("h264", "aac"), (info.VideoCodec, info.AudioCodec));

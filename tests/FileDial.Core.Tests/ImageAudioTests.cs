@@ -26,36 +26,50 @@ public class ImageActionTests
 {
     private static ProbeInfo Picture(int w, int h) => new(0, true, false, w, h);
 
+    private static DialAction Resize(string path, ProbeInfo? media) =>
+        ActionCatalog.ForFile(path, 1, media).Single(a => a.Id == ActionIds.Resize1920);
+
     [Fact]
-    public void Png_HasEightSectors_ConversionsEnabled_ExceptOwnFormat()
+    public void Png_HasConvertGroupFirst_AndOtherSectors()
     {
         var actions = ActionCatalog.ForFile(@"C:\p\скрин.png", 500_000, Picture(3000, 2000));
 
         Assert.Equal(8, actions.Count);
-        Assert.Equal(["В JPG", "В PNG", "В WebP", "Уменьшить до 1920\u00A0px", "Повернуть вправо",
+        Assert.Equal(["Формат", "Уменьшить до 1920\u00A0px", "Повернуть вправо", "Повернуть влево", "Отразить",
             "Сжать до 1\u00A0МБ", "Убрать фон", "В PDF"], actions.Select(a => a.Label));
+        Assert.True(actions[0].IsGroup);
         Assert.True(actions[0].IsEnabled);
-        Assert.False(actions[1].IsEnabled);
-        Assert.Equal("Файл уже в PNG", actions[1].DisabledReason);
-        Assert.True(actions[2].IsEnabled);
-        Assert.True(actions[3].IsEnabled);
-        Assert.True(actions[4].IsEnabled);
         Assert.Equal("Файл уже меньше 1 МБ", actions[5].DisabledReason);
         Assert.All(actions.Skip(6), a => Assert.Equal(ActionCatalog.NotInPrototype, a.DisabledReason));
     }
 
-    [Theory]
-    [InlineData(@"C:\p\a.jpg")]
-    [InlineData(@"C:\p\a.JPEG")]
-    public void Jpg_CannotBeConvertedToJpg(string path)
+    [Fact]
+    public void ConvertGroup_ListsSixFormats_OwnFormatDisabled()
     {
-        Assert.Equal("Файл уже в JPG", ActionCatalog.ForFile(path, 1, null)[0].DisabledReason);
+        var group = ActionCatalog.ForFile(@"C:\p\скрин.png", 1)[0];
+
+        Assert.Equal(["JPG", "PNG", "WebP", "BMP", "TIFF", "GIF"], group.Children!.Select(c => c.Label));
+        var png = group.Children!.Single(c => c.Label == "PNG");
+        Assert.False(png.IsEnabled);
+        Assert.Equal("Файл уже в PNG", png.DisabledReason);
+        Assert.Equal("В JPG", group.Children![0].Title);
+        Assert.Equal(ActionIds.ToJpg, group.Children![0].Id);
+    }
+
+    [Theory]
+    [InlineData(@"C:\p\a.jpg", "JPG")]
+    [InlineData(@"C:\p\a.JPEG", "JPG")]
+    [InlineData(@"C:\p\a.tif", "TIFF")]
+    public void FormatSynonyms_DisableOwnFormat(string path, string label)
+    {
+        var child = ActionCatalog.ForFile(path, 1)[0].Children!.Single(c => c.Label == label);
+        Assert.Equal($"Файл уже в {label}", child.DisabledReason);
     }
 
     [Fact]
     public void SmallImage_ResizeDisabledWithSize()
     {
-        var resize = ActionCatalog.ForFile(@"C:\p\a.png", 1, Picture(1200, 800))[3];
+        var resize = Resize(@"C:\p\a.png", Picture(1200, 800));
         Assert.False(resize.IsEnabled);
         Assert.Equal("Уже не больше 1920 px (1200×800)", resize.DisabledReason);
     }
@@ -63,45 +77,49 @@ public class ImageActionTests
     [Fact]
     public void ExactlyLimit_ResizeDisabled_OneMore_Enabled()
     {
-        Assert.False(ActionCatalog.ForFile(@"C:\p\a.png", 1, Picture(1920, 1080))[3].IsEnabled);
-        Assert.True(ActionCatalog.ForFile(@"C:\p\a.png", 1, Picture(1080, 1921))[3].IsEnabled);
+        Assert.False(Resize(@"C:\p\a.png", Picture(1920, 1080)).IsEnabled);
+        Assert.True(Resize(@"C:\p\a.png", Picture(1080, 1921)).IsEnabled);
     }
 
     [Fact]
     public void UnknownSize_ResizeStaysEnabled()
     {
-        Assert.True(ActionCatalog.ForFile(@"C:\p\a.png", 1, null)[3].IsEnabled);
+        Assert.True(Resize(@"C:\p\a.png", null).IsEnabled);
     }
 }
 
 public class AudioActionTests
 {
     [Fact]
-    public void Mp3_HasConversions_ExceptOwnFormat()
+    public void Mp3_HasConvertGroup_AndProcessingSectors()
     {
         var actions = ActionCatalog.ForFile(@"C:\m\песня.mp3", 5_000_000);
 
-        Assert.Equal(["В MP3", "В M4A", "В WAV", "Выровнять громкость", "Обрезать", "Убрать шум", "Ускорить ×1,5", "В текст"],
-            actions.Select(a => a.Label));
-        Assert.Equal("Файл уже в MP3", actions[0].DisabledReason);
-        Assert.True(actions[1].IsEnabled);
-        Assert.True(actions[2].IsEnabled);
-        Assert.True(actions[3].IsEnabled);
-        Assert.Equal([ActionIds.AudioTrim, ActionIds.SpeechToText],
-            actions.Where(a => !a.IsEnabled && a.DisabledReason == ActionCatalog.NotInPrototype).Select(a => a.Id));
-        Assert.True(actions[5].IsEnabled);
-        Assert.True(actions[6].IsEnabled);
+        Assert.Equal(["Формат", "Выровнять громкость", "Убрать шум", "Ускорить ×1,5", "Замедлить ×0,75",
+            "В моно", "Обрезать", "В текст"], actions.Select(a => a.Label));
+        Assert.Equal(["MP3", "M4A", "WAV", "FLAC", "OGG", "Opus"], actions[0].Children!.Select(c => c.Label));
+        Assert.Equal("Файл уже в MP3", actions[0].Children![0].DisabledReason);
+        Assert.Equal([ActionIds.SpeechToText],
+            actions.Where(a => a.DisabledReason == ActionCatalog.NotInPrototype).Select(a => a.Id));
     }
 
     [Fact]
-    public void Wav_CannotBeConvertedToWav()
+    public void MonoSource_ToMonoDisabled()
     {
-        var actions = ActionCatalog.ForFile(@"C:\m\a.WAV", 1);
-        Assert.True(actions[0].IsEnabled);
-        Assert.False(actions[2].IsEnabled);
+        var mono = new ProbeInfo(10, false, true, 0, 0, AudioChannels: 1);
+        Assert.Equal("Звук уже моно",
+            ActionCatalog.ForFile(@"C:\m\a.wav", 1, mono).Single(a => a.Id == ActionIds.ToMono).DisabledReason);
+        Assert.True(ActionCatalog.ForFile(@"C:\m\a.wav", 1).Single(a => a.Id == ActionIds.ToMono).IsEnabled);
+    }
+
+    [Fact]
+    public void GroupWithEveryChildDisabled_IsDisabledWithReason()
+    {
+        var group = DialAction.Group("g", "Г", [new DialAction("a", "A", false, "причина")]);
+        Assert.False(group.IsEnabled);
+        Assert.Equal("причина", group.DisabledReason);
     }
 }
-
 public class InterpreterForImagesAndAudioTests
 {
     private sealed class FakeFile(long size) : IFileProbe
@@ -145,7 +163,7 @@ public class ConversionSpecTests
     {
         foreach (var path in new[] { @"C:\a.mp4", @"C:\a.bmp", @"C:\a.flac" })
         {
-            foreach (var action in ActionCatalog.ForFile(path, 80_000_000))
+            foreach (var action in ActionCatalog.Flatten(ActionCatalog.ForFile(path, 80_000_000)))
             {
                 if (action.DisabledReason == ActionCatalog.NotInPrototype)
                     Assert.False(FileJobs.IsImplemented(action.Id), action.Id);

@@ -12,19 +12,31 @@ using Path = System.Windows.Shapes.Path;
 
 namespace FileDial.App.UI;
 
-/// <summary>Круговое меню: прозрачное окно без рамки поверх всех окон, не в панели задач.</summary>
+/// <summary>
+/// Круговое меню: прозрачное окно без рамки поверх всех окон, не в панели задач.
+/// Сектор-группа (например, «Конвертировать») при наведении раскрывает снаружи круга веер вложенных секторов.
+/// </summary>
 internal sealed class RadialWindow : Window
 {
-    private const double FullDiameter = 380;
+    private const double MainDiameter = 380;
     // Для неподдерживаемых файлов — небольшой круг без секторов: пустые секторы выглядят как сломанное меню.
     private const double CompactDiameter = 220;
     private const double LabelWidth = 92;
+    private const double ChildLabelWidth = 64;
     /// <summary>На сколько выбранный сектор выдвигается наружу.</summary>
     private const double PopDistance = 5;
 
+    // Внешнее кольцо с вложенными секторами.
+    private const double ChildInner = 196;
+    private const double ChildOuter = 264;
+    private const double ChildSweep = 30;
+    private const double ChildGap = 1.5;
+    /// <summary>Окно с запасом под внешнее кольцо и выдвижение сектора.</summary>
+    private const double WithSubmenuSize = 2 * (ChildOuter + PopDistance + 6);
+
     private readonly SectorGeometry _geometry = new(ActionCatalog.SectorCount, innerRadius: 72, outerRadius: 182, gapDegrees: 1.5);
     private readonly DialMenu _menu;
-    private readonly double _diameter;
+    private readonly double _size;
     private readonly WindowPlacement _placement;
     private readonly Path[] _sectors = new Path[ActionCatalog.SectorCount];
     private readonly TextBlock[] _labels = new TextBlock[ActionCatalog.SectorCount];
@@ -35,13 +47,24 @@ internal sealed class RadialWindow : Window
     private readonly Canvas _canvas;
     private readonly ScaleTransform _scale = new(1, 1);
     private readonly TextBlock _hint;
+
+    // Внешнее кольцо: строится при раскрытии группы.
+    private readonly Canvas _subLayer;
+    private readonly ScaleTransform _subScale = new(1, 1);
+    private SubmenuGeometry? _sub;
+    private readonly List<(Path Sector, SolidColorBrush Fill, SolidColorBrush Text, TranslateTransform Shift)> _children = [];
+
     private int? _selected;
+    private int? _expanded;
+    private int? _selectedChild;
     private bool _closing;
+    private bool _isClosed;
 
     public RadialWindow(DialMenu menu, NativeMethods.POINT cursor)
     {
         _menu = menu;
-        _diameter = HasSectors ? FullDiameter : CompactDiameter;
+        _size = !HasSectors ? CompactDiameter : menu.Actions.Any(a => a.IsGroup) ? WithSubmenuSize : MainDiameter;
+        var circle = HasSectors ? MainDiameter : CompactDiameter;
 
         WindowStyle = WindowStyle.None;
         AllowsTransparency = true;
@@ -50,46 +73,56 @@ internal sealed class RadialWindow : Window
         ShowInTaskbar = false;
         ResizeMode = ResizeMode.NoResize;
         ShowActivated = true;
-        Width = Height = _diameter;
+        Width = Height = _size;
         Title = "FileDial";
         UseLayoutRounding = true;
 
         var canvas = _canvas = new Canvas
         {
-            Width = _diameter,
-            Height = _diameter,
+            Width = _size,
+            Height = _size,
             RenderTransform = _scale,
             RenderTransformOrigin = new Point(0.5, 0.5),
         };
-        canvas.Children.Add(new Ellipse { Width = _diameter, Height = _diameter, Fill = Palette.Background });
+
+        // Слой веера — под основным кругом, чтобы выдвинутый сектор группы рисовался поверх.
+        _subLayer = new Canvas
+        {
+            Width = _size,
+            Height = _size,
+            RenderTransform = _subScale,
+            RenderTransformOrigin = new Point(0.5, 0.5),
+            Visibility = Visibility.Collapsed,
+        };
+        canvas.Children.Add(_subLayer);
+
+        var background = new Ellipse { Width = circle, Height = circle, Fill = Palette.Background };
+        Canvas.SetLeft(background, Center - circle / 2);
+        Canvas.SetTop(background, Center - circle / 2);
+        canvas.Children.Add(background);
 
         for (var i = 0; i < (HasSectors ? ActionCatalog.SectorCount : 0); i++)
         {
             _fills[i] = new SolidColorBrush(Palette.Sector.Color);
             _labelBrushes[i] = new SolidColorBrush(Palette.Text.Color);
             _shifts[i] = new TranslateTransform();
-            _sectors[i] = new Path { Data = BuildSectorGeometry(i), Fill = _fills[i], RenderTransform = _shifts[i] };
+            var (start, end) = _geometry.DrawnAngles(i);
+            _sectors[i] = new Path
+            {
+                Data = RingSector(start, end, _geometry.InnerRadius, _geometry.OuterRadius),
+                Fill = _fills[i],
+                RenderTransform = _shifts[i],
+            };
             canvas.Children.Add(_sectors[i]);
 
             var action = ActionAt(i);
-            var label = new TextBlock
-            {
-                Width = LabelWidth,
-                TextAlignment = TextAlignment.Center,
-                TextWrapping = TextWrapping.Wrap,
-                FontSize = 13,
-                IsHitTestVisible = false,
-                Foreground = _labelBrushes[i],
-                RenderTransform = _shifts[i], // подпись едет вместе со своим сектором
-            };
-            if (action is not null)
-            {
-                label.Inlines.Add(new System.Windows.Documents.Run($"{i + 1}\n") { FontSize = 11 });
-                label.Inlines.Add(new System.Windows.Documents.Run(action.Label));
-            }
-            _labels[i] = label;
-            canvas.Children.Add(label);
-            PlaceLabel(i);
+            _labels[i] = Label(action is null ? null : $"{i + 1}", action?.Label, LabelWidth, 13, _labelBrushes[i], _shifts[i]);
+            canvas.Children.Add(_labels[i]);
+            Place(_labels[i], _geometry.LabelPoint(i), LabelWidth);
+
+            // Группа отмечена маленьким треугольником у внешнего края: там раскроется веер.
+            if (action?.IsGroup == true)
+                canvas.Children.Add(GroupMarker(i));
         }
 
         _hint = new TextBlock
@@ -106,7 +139,7 @@ internal sealed class RadialWindow : Window
 
         UpdateVisuals();
 
-        _placement = new WindowPlacement(this, cursor, PlacementMode.CenterOnCursor, _diameter, _diameter);
+        _placement = new WindowPlacement(this, cursor, PlacementMode.CenterOnCursor, _size, _size);
         SourceInitialized += (_, _) =>
         {
             WindowPlacement.MakeToolWindow(this, noActivate: false);
@@ -148,46 +181,86 @@ internal sealed class RadialWindow : Window
 
     private bool HasSectors => _menu.Kind == DialMenuKind.Actions;
 
-    private double Center => _diameter / 2;
-
-    private int? HitSector(Point p) => HasSectors ? _geometry.HitTest(p.X - Center, p.Y - Center) : null;
+    private double Center => _size / 2;
 
     private DialAction? ActionAt(int index) =>
         index < _menu.Actions.Count ? _menu.Actions[index] : null;
 
-    private Geometry BuildSectorGeometry(int index)
-    {
-        var (start, end) = _geometry.DrawnAngles(index);
-        Point P(double angle, double radius)
-        {
-            var p = SectorGeometry.PointAt(angle, radius);
-            return new Point(Center + p.X, Center + p.Y);
-        }
+    private IReadOnlyList<DialAction> ExpandedChildren =>
+        _expanded is { } g && ActionAt(g)?.Children is { } children ? children : [];
 
-        var outer = _geometry.OuterRadius;
-        var inner = _geometry.InnerRadius;
+    private DialAction? ChildAt(int index) =>
+        index < ExpandedChildren.Count ? ExpandedChildren[index] : null;
+
+    // --- Построение ---
+
+    private Point ToCanvas(PointD p) => new(Center + p.X, Center + p.Y);
+
+    private Geometry RingSector(double start, double end, double inner, double outer)
+    {
+        Point P(double angle, double radius) => ToCanvas(SectorGeometry.PointAt(angle, radius));
+
+        var large = end - start > 180;
         var figure = new PathFigure { StartPoint = P(start, inner), IsClosed = true };
         figure.Segments.Add(new LineSegment(P(start, outer), true));
-        figure.Segments.Add(new ArcSegment(P(end, outer), new Size(outer, outer), 0, false, SweepDirection.Clockwise, true));
+        figure.Segments.Add(new ArcSegment(P(end, outer), new Size(outer, outer), 0, large, SweepDirection.Clockwise, true));
         figure.Segments.Add(new LineSegment(P(end, inner), true));
-        figure.Segments.Add(new ArcSegment(P(start, inner), new Size(inner, inner), 0, false, SweepDirection.Counterclockwise, true));
+        figure.Segments.Add(new ArcSegment(P(start, inner), new Size(inner, inner), 0, large, SweepDirection.Counterclockwise, true));
         var geometry = new PathGeometry([figure]);
         geometry.Freeze();
         return geometry;
     }
 
-    private void PlaceLabel(int index)
+    private static TextBlock Label(string? number, string? text, double width, double fontSize, Brush foreground,
+        Transform shift)
     {
-        var label = _labels[index];
-        label.Measure(new Size(LabelWidth, double.PositiveInfinity));
-        var p = _geometry.LabelPoint(index);
-        Canvas.SetLeft(label, Center + p.X - LabelWidth / 2);
-        Canvas.SetTop(label, Center + p.Y - label.DesiredSize.Height / 2);
+        var label = new TextBlock
+        {
+            Width = width,
+            TextAlignment = TextAlignment.Center,
+            TextWrapping = TextWrapping.Wrap,
+            FontSize = fontSize,
+            IsHitTestVisible = false,
+            Foreground = foreground,
+            RenderTransform = shift, // подпись едет вместе со своим сектором
+        };
+        if (text is not null)
+        {
+            if (number is not null)
+                label.Inlines.Add(new System.Windows.Documents.Run(number + "\n") { FontSize = 11 });
+            label.Inlines.Add(new System.Windows.Documents.Run(text));
+        }
+        return label;
+    }
+
+    private void Place(FrameworkElement element, PointD point, double width)
+    {
+        element.Measure(new Size(width, double.PositiveInfinity));
+        Canvas.SetLeft(element, Center + point.X - width / 2);
+        Canvas.SetTop(element, Center + point.Y - element.DesiredSize.Height / 2);
+    }
+
+    private Path GroupMarker(int index)
+    {
+        var angle = _geometry.CenterAngle(index);
+        var tip = ToCanvas(SectorGeometry.PointAt(angle, _geometry.OuterRadius - 5));
+        var left = ToCanvas(SectorGeometry.PointAt(angle - 2.6, _geometry.OuterRadius - 12));
+        var right = ToCanvas(SectorGeometry.PointAt(angle + 2.6, _geometry.OuterRadius - 12));
+        var figure = new PathFigure { StartPoint = tip, IsClosed = true };
+        figure.Segments.Add(new LineSegment(left, false));
+        figure.Segments.Add(new LineSegment(right, false));
+        return new Path
+        {
+            Data = new PathGeometry([figure]),
+            Fill = _labelBrushes[index],
+            RenderTransform = _shifts[index],
+            IsHitTestVisible = false,
+        };
     }
 
     private FrameworkElement BuildCenter()
     {
-        var size = HasSectors ? _geometry.InnerRadius * 2 - 16 : _diameter - 48;
+        var size = HasSectors ? _geometry.InnerRadius * 2 - 16 : CompactDiameter - 48;
         var title = new TextBlock
         {
             Text = _menu.Title,
@@ -219,6 +292,76 @@ internal sealed class RadialWindow : Window
         return panel;
     }
 
+    // --- Внешнее кольцо ---
+
+    private void Expand(int group)
+    {
+        if (_expanded == group)
+            return;
+
+        _expanded = group;
+        _selectedChild = null;
+        _subLayer.Children.Clear();
+        _children.Clear();
+
+        var children = ExpandedChildren;
+        _sub = new SubmenuGeometry(_geometry.CenterAngle(group), children.Count, ChildInner, ChildOuter, ChildSweep, ChildGap);
+
+        // Подложка веера сливается с фоном основного круга — без «дыры» между ними.
+        _subLayer.Children.Add(new Path
+        {
+            Data = RingSector(_sub.FanStart - 1, _sub.FanEnd + 1, _geometry.OuterRadius, ChildOuter + 4),
+            Fill = Palette.Background,
+        });
+
+        for (var i = 0; i < children.Count; i++)
+        {
+            var fill = new SolidColorBrush(Palette.Sector.Color);
+            var text = new SolidColorBrush((children[i].IsEnabled ? Palette.Text : Palette.TextMuted).Color);
+            var shift = new TranslateTransform();
+            var (start, end) = _sub.DrawnAngles(i);
+            var sector = new Path { Data = RingSector(start, end, ChildInner, ChildOuter), Fill = fill, RenderTransform = shift };
+            _subLayer.Children.Add(sector);
+
+            var label = Label($"{i + 1}", children[i].Label, ChildLabelWidth, 12.5, text, shift);
+            _subLayer.Children.Add(label);
+            Place(label, _sub.LabelPoint(i), ChildLabelWidth);
+            _children.Add((sector, fill, text, shift));
+        }
+
+        // Веер «вырастает» из круга.
+        _subLayer.Visibility = Visibility.Visible;
+        if (Motion.Enabled)
+        {
+            _subLayer.Opacity = 0;
+            _subScale.ScaleX = _subScale.ScaleY = 0.92;
+        }
+        Motion.To(_subLayer, OpacityProperty, 1, Motion.Normal);
+        Motion.To(_subScale, ScaleTransform.ScaleXProperty, 1, Motion.Normal);
+        Motion.To(_subScale, ScaleTransform.ScaleYProperty, 1, Motion.Normal);
+    }
+
+    private void Collapse()
+    {
+        if (_expanded is null)
+            return;
+        _expanded = null;
+        _selectedChild = null;
+        _sub = null;
+        _children.Clear();
+        Motion.To(_subLayer, OpacityProperty, 0, Motion.Fast, () =>
+        {
+            // За время исчезновения могла раскрыться другая группа — тогда слой уже новый.
+            if (_expanded is null)
+            {
+                _subLayer.Children.Clear();
+                _subLayer.Visibility = Visibility.Collapsed;
+            }
+        });
+    }
+
+    // --- Состояние и отрисовка ---
+
     private void UpdateVisuals()
     {
         for (var i = 0; i < _sectors.Length; i++)
@@ -228,9 +371,13 @@ internal sealed class RadialWindow : Window
             var action = ActionAt(i);
             var enabled = action?.IsEnabled == true;
             var selected = _selected == i && action is not null;
+            // Пока выбран формат во внешнем кольце, группа подсвечена приглушённо — акцент у формата.
+            var groupBehindChild = selected && _selectedChild is not null;
 
-            var fill = selected ? (enabled ? Palette.Accent : Palette.SectorDisabledHover) : Palette.Sector;
-            var text = selected && enabled ? Palette.AccentText : enabled ? Palette.Text : Palette.TextMuted;
+            var fill = !selected ? Palette.Sector
+                : groupBehindChild || !enabled ? Palette.SectorDisabledHover
+                : Palette.Accent;
+            var text = selected && enabled && !groupBehindChild ? Palette.AccentText : enabled ? Palette.Text : Palette.TextMuted;
             Motion.ColorTo(_fills[i], fill.Color, Motion.Fast);
             Motion.ColorTo(_labelBrushes[i], text.Color, Motion.Fast);
 
@@ -240,15 +387,42 @@ internal sealed class RadialWindow : Window
             Motion.To(_shifts[i], TranslateTransform.YProperty, push.Y, 120);
         }
 
+        for (var i = 0; i < _children.Count; i++)
+        {
+            var child = ChildAt(i)!;
+            var selected = _selectedChild == i;
+            var fill = !selected ? Palette.Sector : child.IsEnabled ? Palette.Accent : Palette.SectorDisabledHover;
+            var text = selected && child.IsEnabled ? Palette.AccentText : child.IsEnabled ? Palette.Text : Palette.TextMuted;
+            Motion.ColorTo(_children[i].Fill, fill.Color, Motion.Fast);
+            Motion.ColorTo(_children[i].Text, text.Color, Motion.Fast);
+
+            var push = selected && child.IsEnabled ? SectorGeometry.PointAt(_sub!.CenterAngle(i), PopDistance - 1) : default;
+            Motion.To(_children[i].Shift, TranslateTransform.XProperty, push.X, 120);
+            Motion.To(_children[i].Shift, TranslateTransform.YProperty, push.Y, 120);
+        }
+
+        _hint.Text = HintText();
+        _hint.Foreground = Palette.TextMuted;
+    }
+
+    private string HintText()
+    {
+        if (_selectedChild is { } c && ChildAt(c) is { } child)
+            return child.IsEnabled ? $"Enter — {LowerFirst(child.Title)}" : child.DisabledReason ?? ActionCatalog.NotInPrototype;
+
         var current = _selected is { } s ? ActionAt(s) : null;
-        _hint.Text = current switch
+        return current switch
         {
             null => DefaultHint(),
+            { IsGroup: true } => "Выберите формат снаружи или Enter",
             { IsEnabled: false } => current.DisabledReason ?? ActionCatalog.NotInPrototype,
             _ => "Enter — запустить",
         };
-        _hint.Foreground = Palette.TextMuted;
     }
+
+    /// <summary>«В WebP» → «в WebP»: регистр самого формата сохраняем.</summary>
+    private static string LowerFirst(string text) =>
+        text.Length == 0 ? text : char.ToLowerInvariant(text[0]) + text[1..];
 
     /// <summary>Подсказка без выбранного сектора. Если запускать нечего, сразу объясняем почему.</summary>
     private string DefaultHint()
@@ -262,39 +436,71 @@ internal sealed class RadialWindow : Window
                ?? "Нет доступных действий";
     }
 
-    private void Select(int? index)
+    /// <summary>Выбор сектора основного круга. Группа раскрывает веер, любой другой сектор его сворачивает.</summary>
+    private void SelectMain(int? index)
     {
-        if (_selected == index)
+        if (_selected == index && _selectedChild is null)
             return;
         _selected = index;
+        _selectedChild = null;
+        if (index is { } i && ActionAt(i)?.IsGroup == true)
+            Expand(i);
+        else
+            Collapse();
         UpdateVisuals();
     }
 
-    private void Invoke(int index)
+    private void SelectChild(int? index)
     {
-        if (_closing)
+        if (_selectedChild == index)
             return;
-        var action = ActionAt(index);
-        if (action is not { IsEnabled: true })
-            return; // неактивный сектор: ничего не делаем, круг остаётся открытым
+        _selectedChild = index;
+        UpdateVisuals();
+    }
+
+    private void Run(DialAction? action)
+    {
+        if (_closing || action is not { IsEnabled: true } || action.IsGroup)
+            return; // неактивный сектор или группа: ничего не запускаем, круг остаётся открытым
         Chosen = action;
         SafeClose();
+    }
+
+    // --- Ввод ---
+
+    private (int? Main, int? Child, double Distance) Hit(Point p)
+    {
+        if (!HasSectors)
+            return (null, null, 0);
+        var dx = p.X - Center;
+        var dy = p.Y - Center;
+        var child = _sub?.HitTest(dx, dy, bridgeRadius: _geometry.OuterRadius);
+        return (_geometry.HitTest(dx, dy), child, Math.Sqrt(dx * dx + dy * dy));
     }
 
     protected override void OnMouseMove(MouseEventArgs e)
     {
         base.OnMouseMove(e);
-        Select(HitSector(e.GetPosition(this)));
+        var (main, child, distance) = Hit(e.GetPosition(this));
+        if (child is not null)
+            SelectChild(child);
+        else if (main is not null)
+            SelectMain(main);
+        else if (distance < _geometry.InnerRadius)
+            SelectMain(null); // вернулись в центр — веер сворачивается
+        // Иначе мышь в зазоре или на подложке веера — состояние не меняем, чтобы веер не мигал.
     }
 
     protected override void OnMouseLeftButtonUp(MouseButtonEventArgs e)
     {
         base.OnMouseLeftButtonUp(e);
-        var index = HitSector(e.GetPosition(this));
-        if (index is { } i)
-            Invoke(i);
+        var (main, child, _) = Hit(e.GetPosition(this));
+        if (child is { } c)
+            Run(ChildAt(c));
+        else if (main is { } m)
+            Run(ActionAt(m));
         else
-            SafeClose(); // клик в центре — вне секторов
+            SafeClose(); // клик в центре или мимо секторов
     }
 
     protected override void OnMouseRightButtonUp(MouseButtonEventArgs e)
@@ -309,17 +515,28 @@ internal sealed class RadialWindow : Window
         // Пока зажаты Ctrl+Alt от горячей клавиши, WPF присылает Key.System.
         var key = e.Key == Key.System ? e.SystemKey : e.Key;
         e.Handled = true;
+        var inSubmenu = _selectedChild is not null;
 
-        if (key == Key.Escape)
+        switch (key)
         {
-            SafeClose();
-            return;
-        }
-        if (key is Key.Enter or Key.Space)
-        {
-            if (_selected is { } s)
-                Invoke(s);
-            return;
+            case Key.Escape when inSubmenu:
+            case Key.Back when inSubmenu:
+                SelectChild(null); // назад к основному кругу, веер остаётся открытым
+                return;
+            case Key.Escape:
+                SafeClose();
+                return;
+            case Key.Enter or Key.Space:
+                if (_selectedChild is { } c)
+                    Run(ChildAt(c));
+                else if (_selected is { } s && ActionAt(s) is { IsGroup: true } group)
+                    SelectChild(IndexOfFirstEnabled(group.Children!)); // вход во внешнее кольцо
+                else if (_selected is { } s2)
+                    Run(ActionAt(s2));
+                return;
+            case Key.Right or Key.Left or Key.Up or Key.Down:
+                Step(key is Key.Right or Key.Down ? 1 : -1);
+                return;
         }
 
         int? digit = key switch
@@ -328,10 +545,45 @@ internal sealed class RadialWindow : Window
             >= Key.NumPad1 and <= Key.NumPad9 => key - Key.NumPad0,
             _ => null,
         };
-        if (HasSectors && digit is { } d && _geometry.IndexForDigit(d) is { } index)
-            Select(index);
-        else
+        if (digit is not { } d || !HasSectors)
+        {
             e.Handled = false;
+            return;
+        }
+
+        // Во внешнем кольце цифры выбирают формат, иначе — сектор основного круга.
+        if (inSubmenu)
+        {
+            if (d <= ExpandedChildren.Count)
+                SelectChild(d - 1);
+        }
+        else if (_geometry.IndexForDigit(d) is { } index)
+        {
+            SelectMain(index);
+        }
+    }
+
+    /// <summary>Стрелки: по кругу внутри внешнего кольца или основного круга.</summary>
+    private void Step(int delta)
+    {
+        if (!HasSectors)
+            return;
+        if (_selectedChild is { } c)
+        {
+            var count = ExpandedChildren.Count;
+            SelectChild(((c + delta) % count + count) % count);
+            return;
+        }
+        var current = _selected ?? (delta > 0 ? -1 : 0);
+        SelectMain(((current + delta) % ActionCatalog.SectorCount + ActionCatalog.SectorCount) % ActionCatalog.SectorCount);
+    }
+
+    private static int IndexOfFirstEnabled(IReadOnlyList<DialAction> actions)
+    {
+        for (var i = 0; i < actions.Count; i++)
+            if (actions[i].IsEnabled)
+                return i;
+        return 0;
     }
 
     private void TakeFocus(bool forceAttach = false)
@@ -361,8 +613,6 @@ internal sealed class RadialWindow : Window
 
     /// <summary>Закрыть без действия (повторное нажатие горячей клавиши).</summary>
     public void Dismiss() => SafeClose();
-
-    private bool _isClosed;
 
     private void CloseIfOpen()
     {

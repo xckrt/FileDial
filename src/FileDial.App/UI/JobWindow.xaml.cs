@@ -12,6 +12,7 @@ public partial class JobWindow : Window
 {
     private readonly string _sourcePath;
     private readonly string _actionId;
+    private readonly Func<FfmpegTools, IFileJob>? _jobFactory;
     private readonly CancellationTokenSource _cts = new();
     private string? _resultPath;
     private bool _running;
@@ -19,9 +20,12 @@ public partial class JobWindow : Window
     /// <summary>Закрыть окно после отмены (например, при выходе из программы).</summary>
     private bool _closeWhenStopped;
 
-    internal JobWindow(string actionId, string actionLabel, string sourcePath, NativeMethods.POINT cursor)
+    /// <param name="jobFactory">Готовая задача (например, обрезка с введёнными границами); иначе — по id действия.</param>
+    internal JobWindow(string actionId, string actionLabel, string sourcePath, NativeMethods.POINT cursor,
+        Func<FfmpegTools, IFileJob>? jobFactory = null)
     {
         InitializeComponent();
+        _jobFactory = jobFactory;
         _sourcePath = sourcePath;
         _actionId = actionId;
         ActionText.Text = actionLabel.Replace(' ', ' ');
@@ -68,7 +72,7 @@ public partial class JobWindow : Window
             return;
         }
 
-        var job = FileJobs.Create(_actionId, tools);
+        var job = _jobFactory?.Invoke(tools) ?? FileJobs.Create(_actionId, tools);
         if (job is null)
         {
             ShowFinished("Это действие пока не реализовано.");

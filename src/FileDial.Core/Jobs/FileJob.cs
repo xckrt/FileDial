@@ -33,7 +33,14 @@ public static class FileJobs
     };
 
     public static bool IsImplemented(string actionId) =>
-        actionId is ActionIds.Compress25 or ActionIds.ImageCompress1Mb || ConversionSpecs.For(actionId) is not null;
+        actionId is ActionIds.Compress25 or ActionIds.ImageCompress1Mb || NeedsTrimInput(actionId) ||
+        ConversionSpecs.For(actionId) is not null;
+
+    /// <summary>Перед запуском нужно спросить у пользователя границы отрезка.</summary>
+    public static bool NeedsTrimInput(string actionId) => actionId is ActionIds.Trim or ActionIds.AudioTrim;
+
+    public static IFileJob CreateTrim(FfmpegTools tools, string sourcePath, TrimRequest request) =>
+        new ConversionJob(tools, TrimSpecs.For(sourcePath, request));
 
     internal static string DoneMessage(long sourceSize, string outputPath) =>
         $"{SizeFormatter.Format(sourceSize)} → {SizeFormatter.Format(new FileInfo(outputPath).Length)}. " +

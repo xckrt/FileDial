@@ -30,9 +30,12 @@ public class VideoActionRulesTests
     [InlineData(@"C:\v.MP4", false)]
     [InlineData(@"C:\v.mkv", true)]
     [InlineData(@"C:\v.webm", true)]
-    public void Convert_DisabledForMp4(string path, bool enabled)
+    public void Convert_ToMp4DisabledForMp4(string path, bool enabled)
     {
-        Assert.Equal(enabled, Get(path, null, ActionIds.Convert).IsEnabled);
+        var group = Get(path, null, ActionIds.Convert);
+        Assert.True(group.IsGroup);
+        Assert.Equal(["MP4", "MKV", "WebM", "MOV"], group.Children!.Select(c => c.Label));
+        Assert.Equal(enabled, group.Children!.Single(c => c.Id == ActionIds.ToMp4).IsEnabled);
     }
 
     [Fact]

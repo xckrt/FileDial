@@ -21,7 +21,7 @@ public class ActionCatalogTests
         Assert.Equal(ActionIds.Compress25, actions[0].Id);
         Assert.True(actions[0].IsEnabled);
         Assert.Null(actions[0].DisabledReason);
-        Assert.Equal([ActionIds.Trim, ActionIds.Subtitles],
+        Assert.Equal([ActionIds.Subtitles],
             actions.Where(a => a.DisabledReason == ActionCatalog.NotInPrototype).Select(a => a.Id));
         // Без сведений ffprobe звук и длительность неизвестны — эти действия не запрещаем.
         Assert.True(actions.Single(a => a.Id == ActionIds.Gif).IsEnabled);
