@@ -7,6 +7,7 @@ using FileDial.App.Settings;
 using FileDial.App.Tray;
 using FileDial.App.UI;
 using FileDial.Core.Compression;
+using FileDial.Core.History;
 using FileDial.Core.Jobs;
 using FileDial.Core.Menu;
 using FileDial.Core.Selection;
@@ -25,6 +26,7 @@ public partial class App : Application
     private TrayIcon? _tray;
     private RadialWindow? _radial;
     private SettingsWindow? _settingsWindow;
+    private HistoryWindow? _historyWindow;
     private AppSettings _settings = new();
     private bool _readingSelection;
     private readonly List<JobWindow> _jobs = [];
@@ -58,7 +60,7 @@ public partial class App : Application
         _hotkey.Pressed += OnHotkeyPressed;
         var gesture = _settings.HotkeyGesture;
         var error = _hotkey.Register(gesture);
-        _tray = new TrayIcon(gesture.Format(), () => OpenSettings(), ShellActions.OpenReadme, ExitApp);
+        _tray = new TrayIcon(gesture.Format(), OpenSettings, OpenHistory, ShellActions.OpenReadme, ExitApp);
 
         if (error != 0)
         {
@@ -70,6 +72,52 @@ public partial class App : Application
                 "FileDial", MessageBoxButton.OK, MessageBoxImage.Warning);
             OpenSettings();
         }
+    }
+
+    private void OpenHistory()
+    {
+        if (_historyWindow is not null)
+        {
+            _historyWindow.Refresh();
+            _historyWindow.Activate();
+            return;
+        }
+        _historyWindow = new HistoryWindow(
+            () => HistoryStore.Load(HistoryStore.DefaultPath),
+            ClearHistory,
+            () => _settings.KeepHistory,
+            WindowPlacement.CursorPosition());
+        _historyWindow.Closed += (_, _) => _historyWindow = null;
+        _historyWindow.Show();
+        _historyWindow.Activate();
+    }
+
+    private static void ClearHistory()
+    {
+        try
+        {
+            HistoryStore.Clear(HistoryStore.DefaultPath);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            ErrorLog.Write("Очистка истории", ex);
+        }
+    }
+
+    /// <summary>Итог действия — в историю (если она включена). Сбой записи истории не мешает работе.</summary>
+    private void RecordHistory(HistoryEntry entry)
+    {
+        if (!_settings.KeepHistory)
+            return;
+        try
+        {
+            HistoryStore.Append(HistoryStore.DefaultPath, entry);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            ErrorLog.Write("Запись истории", ex);
+        }
+        _historyWindow?.Refresh();
     }
 
     private void OpenSettings()
@@ -209,6 +257,7 @@ public partial class App : Application
         var window = new JobWindow(action.Id, action.Title, sourcePath, WindowPlacement.CursorPosition(), _settings,
             jobFactory);
         window.Closed += (_, _) => _jobs.Remove(window);
+        window.Finished += RecordHistory;
         _jobs.Add(window);
         window.Show();
         window.Activate();

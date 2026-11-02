@@ -3,6 +3,7 @@ using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using FileDial.App.Interop;
 using FileDial.Core.Compression;
+using FileDial.Core.History;
 using FileDial.Core.Jobs;
 using FileDial.Core.Settings;
 
@@ -71,14 +72,14 @@ public partial class JobWindow : Window
         {
             ShowFinished(
                 "Не найдены ffmpeg.exe и ffprobe.exe. Положите их рядом с FileDial.exe, добавьте в PATH или укажите папку в настройках.",
-                showHelp: true);
+                HistoryStatus.Failed, showHelp: true);
             return;
         }
 
         var job = _jobFactory?.Invoke(tools) ?? FileJobs.Create(_actionId, tools, _settings.Jobs);
         if (job is null)
         {
-            ShowFinished("Это действие пока не реализовано.");
+            ShowFinished("Это действие пока не реализовано.", HistoryStatus.Failed);
             return;
         }
 
@@ -100,14 +101,14 @@ public partial class JobWindow : Window
             {
                 StageText.Text = "Ничего делать не нужно";
                 ResetProgress();
-                ShowFinished(result.Message);
+                ShowFinished(result.Message, HistoryStatus.NothingToDo);
                 return;
             }
 
             _resultPath = result.OutputPath;
             StageText.Text = "Готово";
             SetProgress(1);
-            ShowFinished(result.Message);
+            ShowFinished(result.Message, HistoryStatus.Done);
             RevealButton.Visibility = Visibility.Visible;
             RevealButton.Focus();
             if (_settings.OpenFolderWhenDone && _resultPath is not null)
@@ -118,19 +119,20 @@ public partial class JobWindow : Window
             _running = false;
             if (_closeWhenStopped)
             {
+                Record(HistoryStatus.Cancelled, "Отменено при выходе из программы.");
                 Close();
                 return;
             }
             StageText.Text = "Отменено";
             ResetProgress();
-            ShowFinished("Отменено. Исходный файл не изменён, временные файлы удалены.");
+            ShowFinished("Отменено. Исходный файл не изменён, временные файлы удалены.", HistoryStatus.Cancelled);
         }
         catch (CompressionException ex)
         {
             _running = false;
             StageText.Text = "Ошибка";
             ResetProgress();
-            ShowFinished(ex.Details is { Length: > 0 } d ? $"{ex.Message}\n{LastLine(d)}" : ex.Message);
+            ShowFinished(ex.Details is { Length: > 0 } d ? $"{ex.Message}\n{LastLine(d)}" : ex.Message, HistoryStatus.Failed);
             if (ex.Details is not null)
                 ErrorLog.Write("ffmpeg", ex);
         }
@@ -139,14 +141,14 @@ public partial class JobWindow : Window
             _running = false;
             StageText.Text = "Ошибка";
             ResetProgress();
-            ShowFinished("Исходный файл не найден: его переместили, переименовали или удалили.");
+            ShowFinished("Исходный файл не найден: его переместили, переименовали или удалили.", HistoryStatus.Failed);
         }
         catch (UnauthorizedAccessException)
         {
             _running = false;
             StageText.Text = "Ошибка";
             ResetProgress();
-            ShowFinished("Нет доступа к исходному файлу.");
+            ShowFinished("Нет доступа к исходному файлу.", HistoryStatus.Failed);
         }
         catch (Exception ex)
         {
@@ -154,7 +156,7 @@ public partial class JobWindow : Window
             ErrorLog.Write("Действие над файлом", ex);
             StageText.Text = "Ошибка";
             ResetProgress();
-            ShowFinished($"Не удалось обработать файл: {ex.Message}");
+            ShowFinished($"Не удалось обработать файл: {ex.Message}", HistoryStatus.Failed);
         }
     }
 
@@ -177,9 +179,24 @@ public partial class JobWindow : Window
     private static string LastLine(string text) =>
         text.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).LastOrDefault() ?? text;
 
-    private void ShowFinished(string message, bool showHelp = false)
+    /// <summary>Итог действия — для истории.</summary>
+    public event Action<HistoryEntry>? Finished;
+
+    private void Record(HistoryStatus status, string message) =>
+        Finished?.Invoke(new HistoryEntry
+        {
+            Time = DateTimeOffset.Now,
+            Action = ActionText.Text,
+            SourcePath = _sourcePath,
+            OutputPath = status == HistoryStatus.Done ? _resultPath : null,
+            Status = status,
+            Message = message,
+        });
+
+    private void ShowFinished(string message, HistoryStatus status, bool showHelp = false)
     {
         IsBusy = false;
+        Record(status, message);
         ProgressIndicator.IsIndeterminate = false;
         MessageText.Text = message;
         MessageText.ToolTip = message;

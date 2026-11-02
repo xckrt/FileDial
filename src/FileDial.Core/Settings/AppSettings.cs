@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using System.Text.Json.Serialization;
 
 namespace FileDial.Core.Settings;
@@ -15,6 +15,9 @@ public sealed record AppSettings
     public bool Animations { get; init; } = true;
 
     public bool OpenFolderWhenDone { get; init; }
+
+    /// <summary>Записывать выполненные действия в историю (хранится только на этом компьютере).</summary>
+    public bool KeepHistory { get; init; } = true;
 
     /// <summary>Папка с ffmpeg.exe и ffprobe.exe; пусто — искать рядом с программой и в PATH.</summary>
     public string? FfmpegFolder { get; init; }

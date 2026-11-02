@@ -1,7 +1,7 @@
 ﻿<Window x:Class="FileDial.App.UI.SettingsWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="FileDial — настройки" Width="520" Height="760"
+        Title="FileDial — настройки" Width="520" Height="790"
         WindowStyle="None" ResizeMode="NoResize" AllowsTransparency="True" Background="Transparent"
         ShowInTaskbar="True" UseLayoutRounding="True">
     <Border Background="{StaticResource BackgroundBrush}" BorderBrush="{StaticResource SectorBrush}"
@@ -35,6 +35,8 @@
                     <CheckBox x:Name="AutostartBox" Style="{StaticResource FlatCheckBox}"
                               Content="Запускать вместе с Windows" />
                     <CheckBox x:Name="AnimationsBox" Style="{StaticResource FlatCheckBox}" Content="Анимации" />
+                    <CheckBox x:Name="HistoryBox" Style="{StaticResource FlatCheckBox}"
+                              Content="Вести историю действий (хранится только на этом компьютере)" />
 
                     <TextBlock Text="Куда сохранять результаты" Style="{StaticResource SectionTitle}" />
                     <RadioButton x:Name="NextToSourceRadio" GroupName="Output" Style="{StaticResource FlatRadio}"

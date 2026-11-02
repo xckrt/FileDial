@@ -32,6 +32,7 @@ public partial class SettingsWindow : Window
         HotkeyBox.Text = _hotkey.Format();
         AutostartBox.IsChecked = autostart;
         AnimationsBox.IsChecked = settings.Animations;
+        HistoryBox.IsChecked = settings.KeepHistory;
         OpenFolderBox.IsChecked = settings.OpenFolderWhenDone;
         OutputFolderBox.Text = settings.OutputFolder ?? "";
         (settings.OutputFolder is null ? NextToSourceRadio : FolderRadio).IsChecked = true;
@@ -41,6 +42,8 @@ public partial class SettingsWindow : Window
         FillTargets(ImageTargets, "Image", AppSettings.ImageTargets, settings.ImageTargetBytes);
         UpdateFfmpegStatus();
 
+        // На маленьких экранах окно ниже рабочей области — остальное прокручивается.
+        Height = Math.Min(Height, SystemParameters.WorkArea.Height - 16);
         var placement = new WindowPlacement(this, cursor, PlacementMode.CenterOnCursor, Width, Height);
         SourceInitialized += (_, _) => placement.Apply();
         Opacity = 0;
@@ -214,6 +217,7 @@ public partial class SettingsWindow : Window
         {
             Hotkey = _hotkey.Format(),
             Animations = AnimationsBox.IsChecked == true,
+            KeepHistory = HistoryBox.IsChecked == true,
             OpenFolderWhenDone = OpenFolderBox.IsChecked == true,
             OutputFolder = string.IsNullOrEmpty(folder) ? null : folder,
             FfmpegFolder = _ffmpegFolder,

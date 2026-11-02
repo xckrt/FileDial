@@ -5,14 +5,14 @@ using Forms = System.Windows.Forms;
 
 namespace FileDial.App.Tray;
 
-/// <summary>Значок в области уведомлений: меню «Настройки», «Справка», «Выход»; двойной клик — настройки.</summary>
+/// <summary>Значок в области уведомлений: меню «Настройки», «История», «Справка», «Выход»; двойной клик — настройки.</summary>
 internal sealed class TrayIcon : IDisposable
 {
     private readonly Forms.NotifyIcon _icon;
     private readonly Icon _image;
     private readonly Forms.ToolStripMenuItem _header;
 
-    public TrayIcon(string hotkey, Action openSettings, Action openHelp, Action exit)
+    public TrayIcon(string hotkey, Action openSettings, Action openHistory, Action openHelp, Action exit)
     {
         _image = CreateIcon();
         var menu = new Forms.ContextMenuStrip();
@@ -23,6 +23,7 @@ internal sealed class TrayIcon : IDisposable
         {
             Font = new Font(menu.Font, FontStyle.Bold), // действие по двойному клику
         });
+        menu.Items.Add("История…", null, (_, _) => openHistory());
         menu.Items.Add("Справка (README)", null, (_, _) => openHelp());
         menu.Items.Add("Выход", null, (_, _) => exit());
 
