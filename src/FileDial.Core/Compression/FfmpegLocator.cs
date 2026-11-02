@@ -1,4 +1,4 @@
-namespace FileDial.Core.Compression;
+﻿namespace FileDial.Core.Compression;
 
 public sealed record FfmpegTools(string Ffmpeg, string Ffprobe);
 
@@ -34,6 +34,11 @@ public static class FfmpegLocator
         return null;
     }
 
-    public static FfmpegTools? LocateDefault() =>
-        Locate(AppContext.BaseDirectory, Environment.GetEnvironmentVariable("PATH"));
+    /// <param name="preferredFolder">Папка из настроек — проверяется первой.</param>
+    public static FfmpegTools? LocateDefault(string? preferredFolder = null)
+    {
+        if (!string.IsNullOrWhiteSpace(preferredFolder) && Locate(preferredFolder, null) is { } preferred)
+            return preferred;
+        return Locate(AppContext.BaseDirectory, Environment.GetEnvironmentVariable("PATH"));
+    }
 }

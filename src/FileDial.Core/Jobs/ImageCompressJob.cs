@@ -1,4 +1,4 @@
-using FileDial.Core.Compression;
+﻿using FileDial.Core.Compression;
 using FileDial.Core.Text;
 
 namespace FileDial.Core.Jobs;
@@ -7,10 +7,11 @@ namespace FileDial.Core.Jobs;
 /// «Сжать до 1 МБ»: JPG с наилучшим качеством, которое укладывается в цель. Сначала подбираем качество
 /// двоичным поиском; если даже худшее не помещается — уменьшаем картинку и пробуем снова.
 /// </summary>
-public sealed class ImageCompressJob(FfmpegTools tools, long targetBytes = ImageCompressJob.DefaultTargetBytes) : IFileJob
+public sealed class ImageCompressJob(FfmpegTools tools, long targetBytes = ImageCompressJob.DefaultTargetBytes,
+    string? outputDirectory = null) : IFileJob
 {
     public const long DefaultTargetBytes = 1_000_000;
-    public const string Suffix = "_1мб";
+
 
     /// <summary>Шкала качества mjpeg: 2 — лучшее, 31 — худшее.</summary>
     public const int BestQuality = 2;
@@ -31,7 +32,7 @@ public sealed class ImageCompressJob(FfmpegTools tools, long targetBytes = Image
         if (!info.HasVideo)
             throw new CompressionException("Не удалось прочитать изображение.");
 
-        var directory = Path.GetDirectoryName(sourcePath)!;
+        var directory = outputDirectory ?? Path.GetDirectoryName(sourcePath)!;
         if (OutputFolderCheck.WhyNot(directory, targetBytes) is { } folderProblem)
             throw new CompressionException(folderProblem);
 
@@ -60,7 +61,8 @@ public sealed class ImageCompressJob(FfmpegTools tools, long targetBytes = Image
             }
 
             var finalPath = OutputFiles.MoveToFreeName(tempOutput,
-                () => OutputNameGenerator.Generate(sourcePath, Suffix, ".jpg", OutputNameGenerator.PathTaken));
+                () => OutputNameGenerator.Generate(sourcePath, Settings.JobSettings.TargetSuffix(targetBytes), ".jpg",
+                    OutputNameGenerator.PathTaken, directory));
             progress?.Report(new JobProgress("Готово", 1));
             return new JobResult(JobStatus.Done, FileJobs.DoneMessage(sourceSize, finalPath), finalPath);
         }

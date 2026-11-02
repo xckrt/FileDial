@@ -1,4 +1,4 @@
-using System.ComponentModel;
+﻿using System.ComponentModel;
 using System.Text.Json;
 
 namespace FileDial.Core.Compression;
@@ -32,12 +32,14 @@ public sealed class FfprobeMediaProbe(FfmpegTools tools, TimeSpan timeout) : IMe
 public static class CompressionCheck
 {
     public const string AlreadySmall = "Файл уже меньше 25 МБ";
+
+    public static string AlreadySmallFor(long targetBytes) => $"Файл уже меньше {Text.SizeFormatter.Format(targetBytes)}";
     public const string NoVideo = "В файле нет видеодорожки";
 
     public static string? WhyNot(long sizeBytes, ProbeInfo? info, long targetBytes = BitrateCalculator.DefaultTargetBytes)
     {
         if (sizeBytes <= targetBytes)
-            return AlreadySmall;
+            return AlreadySmallFor(targetBytes);
         if (info is null)
             return null; // не знаем — пусть решит окно сжатия, оно объяснит подробно
         if (!info.HasVideo)
@@ -50,6 +52,6 @@ public static class CompressionCheck
             return null;
 
         var minutes = (int)Math.Floor(BitrateCalculator.MaxDurationSeconds(info.HasAudio, targetBytes) / 60);
-        return $"Видео длиннее {minutes} мин в 25 МБ не уместить";
+        return $"Видео длиннее {minutes} мин в {Text.SizeFormatter.Format(targetBytes)} не уместить";
     }
 }

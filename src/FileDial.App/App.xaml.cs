@@ -3,12 +3,14 @@ using System.Windows.Threading;
 using FileDial.App.Hotkey;
 using FileDial.App.Interop;
 using FileDial.App.Selection;
+using FileDial.App.Settings;
 using FileDial.App.Tray;
 using FileDial.App.UI;
 using FileDial.Core.Compression;
 using FileDial.Core.Jobs;
 using FileDial.Core.Menu;
 using FileDial.Core.Selection;
+using FileDial.Core.Settings;
 
 namespace FileDial.App;
 
@@ -22,6 +24,8 @@ public partial class App : Application
     private HotkeyManager? _hotkey;
     private TrayIcon? _tray;
     private RadialWindow? _radial;
+    private SettingsWindow? _settingsWindow;
+    private AppSettings _settings = new();
     private bool _readingSelection;
     private readonly List<JobWindow> _jobs = [];
 
@@ -47,26 +51,72 @@ public partial class App : Application
             return;
         }
 
+        _settings = SettingsStore.Load(SettingsStore.DefaultPath);
+        Motion.UserEnabled = _settings.Animations;
+
         _hotkey = new HotkeyManager();
-        var error = _hotkey.Register();
+        _hotkey.Pressed += OnHotkeyPressed;
+        var gesture = _settings.HotkeyGesture;
+        var error = _hotkey.Register(gesture);
+        _tray = new TrayIcon(gesture.Format(), () => OpenSettings(), ShellActions.OpenReadme, ExitApp);
+
         if (error != 0)
         {
-            var reason = error == NativeMethods.ERROR_HOTKEY_ALREADY_REGISTERED
-                ? $"Сочетание {HotkeyManager.DisplayName} уже занято другой программой."
-                : $"Не удалось зарегистрировать {HotkeyManager.DisplayName} (код ошибки {error}).";
+            // Без клавиши программа бесполезна, но выходить не нужно: даём сразу выбрать другое сочетание.
+            _tray.SetHotkey(null);
             MessageBox.Show(
-                $"{reason}\n\nЗакройте программу, которая использует это сочетание, и запустите FileDial снова.",
+                $"{HotkeyManager.Describe(error, gesture)}\n\nВыберите другое сочетание в настройках " +
+                "или закройте программу, которая его использует.",
                 "FileDial", MessageBoxButton.OK, MessageBoxImage.Warning);
-            Shutdown();
+            OpenSettings();
+        }
+    }
+
+    private void OpenSettings()
+    {
+        if (_settingsWindow is not null)
+        {
+            _settingsWindow.Activate();
             return;
         }
+        _settingsWindow = new SettingsWindow(_settings, Autostart.IsEnabled(), WindowPlacement.CursorPosition(), ApplySettings);
+        _settingsWindow.Closed += (_, _) => _settingsWindow = null;
+        _settingsWindow.Show();
+        _settingsWindow.Activate();
+    }
 
-        _hotkey.Pressed += OnHotkeyPressed;
-        _tray = new TrayIcon(HotkeyManager.DisplayName, ShellActions.OpenReadme, ExitApp);
+    /// <summary>Применяет настройки из окна. Сначала то, что может не получиться (клавиша, реестр), потом сохранение.</summary>
+    private string? ApplySettings(AppSettings settings, bool autostart)
+    {
+        var gesture = settings.HotkeyGesture;
+        var error = _hotkey!.Register(gesture);
+        if (error != 0)
+            return HotkeyManager.Describe(error, gesture) + " Выберите другое.";
+
+        if (autostart != Autostart.IsEnabled() && Autostart.Set(autostart) is { } autostartError)
+            return autostartError;
+
+        try
+        {
+            SettingsStore.Save(SettingsStore.DefaultPath, settings);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            ErrorLog.Write("Сохранение настроек", ex);
+            return "Не удалось сохранить настройки: нет доступа к папке настроек.";
+        }
+
+        _settings = settings.Normalized();
+        Motion.UserEnabled = _settings.Animations;
+        _tray?.SetHotkey(_hotkey.Current?.Format());
+        return null;
     }
 
     private async void OnHotkeyPressed(object? sender, EventArgs e)
     {
+        // Пока в настройках записывается новое сочетание, нажатия — это ввод, а не вызов круга.
+        if (_settingsWindow?.IsCapturingHotkey == true)
+            return;
         // Повторное нажатие при открытом круге закрывает его.
         if (_radial is not null)
         {
@@ -87,11 +137,12 @@ public partial class App : Application
                 () => SelectionResult.Fail("Проводник не отвечает"));
 
             // Проверка файла и ffprobe могут занять время (сетевой диск, процесс) — не в UI-потоке.
+            var settings = _settings;
             var outcome = await Task.Run(() =>
             {
-                var tools = FfmpegLocator.LocateDefault();
+                var tools = FfmpegLocator.LocateDefault(settings.FfmpegFolder);
                 var media = tools is null ? null : new FfprobeMediaProbe(tools, MediaProbeTimeout);
-                return SelectionInterpreter.Interpret(selection, new FileSystemProbe(), media);
+                return SelectionInterpreter.Interpret(selection, new FileSystemProbe(), media, settings.Jobs);
             });
 
             switch (outcome)
@@ -135,9 +186,10 @@ public partial class App : Application
     /// <summary>Обрезка: сначала окно с границами, потом обычное окно выполнения.</summary>
     private void AskTrimRange(DialAction action, string sourcePath)
     {
-        var dialog = new TrimWindow(sourcePath, WindowPlacement.CursorPosition());
+        var settings = _settings;
+        var dialog = new TrimWindow(sourcePath, WindowPlacement.CursorPosition(), settings.FfmpegFolder);
         dialog.Confirmed += request =>
-            StartJob(action, sourcePath, tools => FileJobs.CreateTrim(tools, sourcePath, request));
+            StartJob(action, sourcePath, tools => FileJobs.CreateTrim(tools, sourcePath, request, settings.Jobs));
         dialog.Show();
         dialog.Activate();
     }
@@ -154,7 +206,8 @@ public partial class App : Application
             return;
         }
 
-        var window = new JobWindow(action.Id, action.Title, sourcePath, WindowPlacement.CursorPosition(), jobFactory);
+        var window = new JobWindow(action.Id, action.Title, sourcePath, WindowPlacement.CursorPosition(), _settings,
+            jobFactory);
         window.Closed += (_, _) => _jobs.Remove(window);
         _jobs.Add(window);
         window.Show();

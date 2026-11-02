@@ -15,7 +15,10 @@ internal static class Motion
 
     private static readonly IEasingFunction EaseOut = Freeze(new CubicEase { EasingMode = EasingMode.EaseOut });
 
-    public static bool Enabled => SystemParameters.ClientAreaAnimation;
+    /// <summary>Переключатель «Анимации» из настроек FileDial.</summary>
+    public static bool UserEnabled { get; set; } = true;
+
+    public static bool Enabled => UserEnabled && SystemParameters.ClientAreaAnimation;
 
     /// <summary>Плавно меняет числовое свойство элемента или анимируемого объекта.</summary>
     public static void To(IAnimatable target, DependencyProperty property, double to, int milliseconds,

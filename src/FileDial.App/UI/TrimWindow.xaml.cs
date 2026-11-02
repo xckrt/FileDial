@@ -12,11 +12,13 @@ public partial class TrimWindow : Window
 {
     private readonly string _sourcePath;
     private readonly bool _isVideo;
+    private readonly string? _ffmpegFolder;
     private double _duration;
 
-    internal TrimWindow(string sourcePath, NativeMethods.POINT cursor)
+    internal TrimWindow(string sourcePath, NativeMethods.POINT cursor, string? ffmpegFolder = null)
     {
         InitializeComponent();
+        _ffmpegFolder = ffmpegFolder;
         _sourcePath = sourcePath;
         _isVideo = FileKinds.Of(sourcePath) == FileKind.Video;
         FileNameText.Text = Path.GetFileName(sourcePath);
@@ -39,7 +41,7 @@ public partial class TrimWindow : Window
 
     private async Task LoadDurationAsync()
     {
-        var tools = FfmpegLocator.LocateDefault();
+        var tools = FfmpegLocator.LocateDefault(_ffmpegFolder);
         if (tools is null)
         {
             DurationText.Text = "ffmpeg не найден";

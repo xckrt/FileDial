@@ -1,6 +1,7 @@
 using System.Runtime.InteropServices;
 using System.Windows.Interop;
 using FileDial.App.Interop;
+using FileDial.Core.Settings;
 
 namespace FileDial.App.Hotkey;
 
@@ -8,11 +9,9 @@ namespace FileDial.App.Hotkey;
 internal sealed class HotkeyManager : IDisposable
 {
     private const int HotkeyId = 0x4644; // "FD"
-    private const uint VkK = 0x4B;
     private static readonly IntPtr HwndMessage = new(-3);
 
     private readonly HwndSource _source;
-    private bool _registered;
 
     public HotkeyManager()
     {
@@ -26,23 +25,55 @@ internal sealed class HotkeyManager : IDisposable
         _source.AddHook(WndProc);
     }
 
-    public const string DisplayName = "Ctrl+Alt+K";
-
     public event EventHandler? Pressed;
 
-    /// <summary>Регистрирует Ctrl+Alt+K. Возвращает код ошибки Win32 или 0.</summary>
-    public int Register()
+    /// <summary>Текущее зарегистрированное сочетание или null.</summary>
+    public HotkeyGesture? Current { get; private set; }
+
+    /// <summary>Регистрирует сочетание вместо текущего. Возвращает код ошибки Win32 или 0.
+    /// При ошибке прежнее сочетание восстанавливается, чтобы программа не осталась без клавиши.</summary>
+    public int Register(HotkeyGesture gesture)
     {
-        if (_registered)
+        if (Current == gesture)
             return 0;
-        if (NativeMethods.RegisterHotKey(_source.Handle, HotkeyId,
-                NativeMethods.MOD_CONTROL | NativeMethods.MOD_ALT | NativeMethods.MOD_NOREPEAT, VkK))
+
+        var previous = Current;
+        Unregister();
+        if (TryRegister(gesture, out var error))
         {
-            _registered = true;
+            Current = gesture;
             return 0;
         }
-        return Marshal.GetLastWin32Error();
+
+        if (previous is not null && TryRegister(previous, out _))
+            Current = previous;
+        return error;
     }
+
+    private bool TryRegister(HotkeyGesture gesture, out int error)
+    {
+        var modifiers = (uint)gesture.Modifiers | NativeMethods.MOD_NOREPEAT;
+        if (NativeMethods.RegisterHotKey(_source.Handle, HotkeyId, modifiers, (uint)gesture.VirtualKey))
+        {
+            error = 0;
+            return true;
+        }
+        error = Marshal.GetLastWin32Error();
+        return false;
+    }
+
+    private void Unregister()
+    {
+        if (Current is null)
+            return;
+        NativeMethods.UnregisterHotKey(_source.Handle, HotkeyId);
+        Current = null;
+    }
+
+    public static string Describe(int error, HotkeyGesture gesture) =>
+        error == NativeMethods.ERROR_HOTKEY_ALREADY_REGISTERED
+            ? $"Сочетание {gesture} уже занято другой программой."
+            : $"Не удалось зарегистрировать {gesture} (код ошибки {error}).";
 
     private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
     {
@@ -56,9 +87,7 @@ internal sealed class HotkeyManager : IDisposable
 
     public void Dispose()
     {
-        if (_registered)
-            NativeMethods.UnregisterHotKey(_source.Handle, HotkeyId);
-        _registered = false;
+        Unregister();
         _source.RemoveHook(WndProc);
         _source.Dispose();
     }

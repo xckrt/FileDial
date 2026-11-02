@@ -20,6 +20,9 @@ public sealed record CompressionOptions
 {
     public long TargetBytes { get; init; } = BitrateCalculator.DefaultTargetBytes;
 
+    /// <summary>Папка для результата; null — рядом с исходником.</summary>
+    public string? OutputDirectory { get; init; }
+
     /// <summary>Папка для журналов двухпроходного кодирования.</summary>
     public string TempRoot { get; init; } = Path.GetTempPath();
 }
@@ -38,7 +41,7 @@ public sealed class VideoCompressor(FfmpegTools tools, CompressionOptions? optio
         if (sourceSize <= _options.TargetBytes)
             return new CompressionResult(CompressionStatus.AlreadySmall, sourceSize, null, sourceSize);
 
-        var directory = Path.GetDirectoryName(sourcePath)!;
+        var directory = _options.OutputDirectory ?? Path.GetDirectoryName(sourcePath)!;
         if (OutputFolderCheck.WhyNot(directory, _options.TargetBytes) is { } folderProblem)
             throw new CompressionException(folderProblem);
 
@@ -50,7 +53,7 @@ public sealed class VideoCompressor(FfmpegTools tools, CompressionOptions? optio
         if (!plan.IsFeasible)
         {
             throw new CompressionException(
-                $"Видео слишком длинное: в {_options.TargetBytes / 1_000_000} МБ на изображение остаётся " +
+                $"Видео слишком длинное: в {Text.SizeFormatter.Format(_options.TargetBytes)} на изображение остаётся " +
                 $"{Math.Max(plan.VideoKbps, 0)} кбит/с, это меньше разумного минимума " +
                 $"{BitrateCalculator.MinVideoKbps} кбит/с.");
         }
@@ -86,7 +89,8 @@ public sealed class VideoCompressor(FfmpegTools tools, CompressionOptions? optio
             }
 
             var finalPath = OutputFiles.MoveToFreeName(tempOutput,
-                () => OutputNameGenerator.Generate(sourcePath, OutputNameGenerator.PathTaken));
+                () => OutputNameGenerator.Generate(sourcePath, Settings.JobSettings.TargetSuffix(_options.TargetBytes), ".mp4",
+                    OutputNameGenerator.PathTaken, directory));
             progress?.Report(new CompressionProgress("Готово", 1));
             return new CompressionResult(CompressionStatus.Done, sourceSize, finalPath, new FileInfo(finalPath).Length);
         }

@@ -67,7 +67,7 @@ public class VideoCompressorIntegrationTests : IDisposable
             .CompressAsync(source, new SyncProgress(reports.Add), CancellationToken.None);
 
         Assert.Equal(CompressionStatus.Done, result.Status);
-        Assert.Equal(Path.Combine(_videoDir, "тестовый ролик_25мб.mp4"), result.OutputPath);
+        Assert.Equal(Path.Combine(_videoDir, "тестовый ролик_1мб.mp4"), result.OutputPath);
         Assert.True(File.Exists(result.OutputPath));
         Assert.True(result.OutputSize <= target, $"Размер {result.OutputSize} больше цели {target}");
         Assert.True(result.OutputSize > target / 2, $"Размер {result.OutputSize} подозрительно мал");
@@ -82,13 +82,13 @@ public class VideoCompressorIntegrationTests : IDisposable
     public async Task SecondRun_DoesNotOverwrite_AndLowBitrateDownscales()
     {
         var source = await MakeSourceAsync("clip.mp4");
-        File.WriteAllText(Path.Combine(_videoDir, "clip_25мб.mp4"), "занято");
+        File.WriteAllText(Path.Combine(_videoDir, "clip_380кб.mp4"), "занято");
         // 8 с при цели 500 КБ → видео ~357 кбит/с; цель 380 КБ → ниже 300 кбит/с, кадр уменьшается.
         var result = await new VideoCompressor(Tools, Options(380_000))
             .CompressAsync(source, null, CancellationToken.None);
 
-        Assert.Equal(Path.Combine(_videoDir, "clip_25мб_2.mp4"), result.OutputPath);
-        Assert.Equal("занято", File.ReadAllText(Path.Combine(_videoDir, "clip_25мб.mp4")));
+        Assert.Equal(Path.Combine(_videoDir, "clip_380кб_2.mp4"), result.OutputPath);
+        Assert.Equal("занято", File.ReadAllText(Path.Combine(_videoDir, "clip_380кб.mp4")));
 
         var probe = await ProcessRunner.RunAsync(Tools.Ffprobe, ProbeInfo.Arguments(result.OutputPath!), null,
             captureOutput: true, CancellationToken.None);

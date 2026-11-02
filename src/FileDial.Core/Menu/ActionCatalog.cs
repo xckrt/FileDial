@@ -1,5 +1,6 @@
 ﻿using FileDial.Core.Compression;
 using FileDial.Core.Jobs;
+using FileDial.Core.Settings;
 
 namespace FileDial.Core.Menu;
 
@@ -31,11 +32,13 @@ public static class ActionCatalog
     /// Порядок = порядок секторов по часовой стрелке, начиная сверху (клавиши 1–8).
     /// </summary>
     /// <param name="media">Сведения ffprobe, если удалось получить; без них проверяем только то, что знаем.</param>
-    public static IReadOnlyList<DialAction> ForFile(string path, long sizeBytes, ProbeInfo? media = null) =>
+    /// <param name="settings">Цели сжатия из настроек; по умолчанию 25 МБ и 1 МБ.</param>
+    public static IReadOnlyList<DialAction> ForFile(string path, long sizeBytes, ProbeInfo? media = null,
+        JobSettings? settings = null) =>
         FileKinds.Of(path) switch
         {
-            FileKind.Video => ForVideo(path, sizeBytes, media),
-            FileKind.Image => ForImage(path, sizeBytes, media),
+            FileKind.Video => ForVideo(path, sizeBytes, media, settings ?? JobSettings.Default),
+            FileKind.Image => ForImage(path, sizeBytes, media, settings ?? JobSettings.Default),
             FileKind.Audio => ForAudio(path, media),
             _ => [],
         };
@@ -44,7 +47,7 @@ public static class ActionCatalog
     public static IEnumerable<DialAction> Flatten(IEnumerable<DialAction> actions) =>
         actions.SelectMany(a => a.IsGroup ? a.Children! : [a]);
 
-    private static IReadOnlyList<DialAction> ForVideo(string path, long sizeBytes, ProbeInfo? media)
+    private static IReadOnlyList<DialAction> ForVideo(string path, long sizeBytes, ProbeInfo? media, JobSettings settings)
     {
         // Без сведений ffprobe звук и длительность неизвестны — тогда не запрещаем, окно действия объяснит ошибку.
         var noSound = media is { HasAudio: false };
@@ -52,7 +55,8 @@ public static class ActionCatalog
 
         return
         [
-            Action(ActionIds.Compress25, "Сжать до 25 МБ", CompressionCheck.WhyNot(sizeBytes, media)),
+            Action(ActionIds.Compress25, $"Сжать до {JobSettings.TargetLabel(settings.VideoTargetBytes)}",
+                CompressionCheck.WhyNot(sizeBytes, media, settings.VideoTargetBytes)),
             Action(ActionIds.Trim, "Обрезать", null),
             Action(ActionIds.Gif, "Сделать GIF",
                 tooLongForGif ? $"GIF — только для роликов до {ConversionSpecs.GifMaxSeconds} с" : null),
@@ -64,7 +68,7 @@ public static class ActionCatalog
         ];
     }
 
-    private static IReadOnlyList<DialAction> ForImage(string path, long sizeBytes, ProbeInfo? media)
+    private static IReadOnlyList<DialAction> ForImage(string path, long sizeBytes, ProbeInfo? media, JobSettings settings)
     {
         string? resizeWhyNot = null;
         if (media is { Width: > 0, Height: > 0 } && Math.Max(media.Width, media.Height) <= ResizeLongSide)
@@ -77,8 +81,8 @@ public static class ActionCatalog
             Action(ActionIds.RotateRight, "Повернуть вправо", null),
             Action(ActionIds.RotateLeft, "Повернуть влево", null),
             Action(ActionIds.Mirror, "Отразить", null),
-            Action(ActionIds.ImageCompress1Mb, "Сжать до 1 МБ",
-                sizeBytes <= ImageCompressJob.DefaultTargetBytes ? "Файл уже меньше 1 МБ" : null),
+            Action(ActionIds.ImageCompress1Mb, $"Сжать до {JobSettings.TargetLabel(settings.ImageTargetBytes)}",
+                sizeBytes <= settings.ImageTargetBytes ? CompressionCheck.AlreadySmallFor(settings.ImageTargetBytes) : null),
             Stub(ActionIds.RemoveBackground, "Убрать фон"),
             Stub(ActionIds.ImageToPdf, "В PDF"),
         ];

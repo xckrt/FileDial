@@ -33,7 +33,8 @@ public static class SelectionInterpreter
     /// <summary>Длина имени в центре круга: две строки текста.</summary>
     public const int MaxTitleLength = 34;
 
-    public static HotkeyOutcome Interpret(SelectionResult selection, IFileProbe probe, IMediaProbe? media = null)
+    public static HotkeyOutcome Interpret(SelectionResult selection, IFileProbe probe, IMediaProbe? media = null,
+        Settings.JobSettings? settings = null)
     {
         if (!selection.IsSuccess)
             return new HotkeyOutcome.ShowToast(selection.Error!);
@@ -66,7 +67,7 @@ public static class SelectionInterpreter
         // Длительность и размер кадра нужны, чтобы не предлагать заведомо ненужное или невозможное;
         // без ffprobe обходимся тем, что знаем по имени и размеру файла.
         var info = media?.TryProbe(path);
-        var actions = ActionCatalog.ForFile(path, state.Size, info);
+        var actions = ActionCatalog.ForFile(path, state.Size, info, settings);
         var details = kind switch
         {
             FileKind.Image when info is { Width: > 0, Height: > 0 } => $"{info.Width}×{info.Height}",

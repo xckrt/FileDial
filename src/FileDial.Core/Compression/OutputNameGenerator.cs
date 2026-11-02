@@ -1,4 +1,4 @@
-namespace FileDial.Core.Compression;
+﻿namespace FileDial.Core.Compression;
 
 /// <summary>Имя результата рядом с исходником: имя_25мб.mp4, имя.png, имя_2.png, ...</summary>
 public static class OutputNameGenerator
@@ -11,10 +11,12 @@ public static class OutputNameGenerator
 
     /// <param name="suffix">Добавка к имени (может быть пустой — например, при смене формата).</param>
     /// <param name="extension">Расширение результата с точкой.</param>
-    public static string Generate(string sourcePath, string suffix, string extension, Func<string, bool> exists)
+    /// <param name="directory">Папка результата; по умолчанию — папка исходника.</param>
+    public static string Generate(string sourcePath, string suffix, string extension, Func<string, bool> exists,
+        string? directory = null)
     {
-        var directory = Path.GetDirectoryName(sourcePath)
-                        ?? throw new ArgumentException("У файла нет папки.", nameof(sourcePath));
+        directory ??= Path.GetDirectoryName(sourcePath)
+                      ?? throw new ArgumentException("У файла нет папки.", nameof(sourcePath));
         var stem = Path.GetFileNameWithoutExtension(sourcePath) + suffix;
 
         var candidate = Path.Combine(directory, stem + extension);

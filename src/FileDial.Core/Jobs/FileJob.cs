@@ -1,5 +1,6 @@
-using FileDial.Core.Compression;
+﻿using FileDial.Core.Compression;
 using FileDial.Core.Menu;
+using FileDial.Core.Settings;
 using FileDial.Core.Text;
 
 namespace FileDial.Core.Jobs;
@@ -25,12 +26,18 @@ public interface IFileJob
 public static class FileJobs
 {
     /// <summary>Задача для действия или null, если действие не реализовано.</summary>
-    public static IFileJob? Create(string actionId, FfmpegTools tools) => actionId switch
+    public static IFileJob? Create(string actionId, FfmpegTools tools, JobSettings? settings = null)
     {
-        ActionIds.Compress25 => new CompressJob(tools),
-        ActionIds.ImageCompress1Mb => new ImageCompressJob(tools),
-        _ => ConversionSpecs.For(actionId) is { } spec ? new ConversionJob(tools, spec) : null,
-    };
+        settings ??= JobSettings.Default;
+        var output = settings.OutputFolder;
+        return actionId switch
+        {
+            ActionIds.Compress25 => new CompressJob(tools,
+                new CompressionOptions { TargetBytes = settings.VideoTargetBytes, OutputDirectory = output }),
+            ActionIds.ImageCompress1Mb => new ImageCompressJob(tools, settings.ImageTargetBytes, output),
+            _ => ConversionSpecs.For(actionId) is { } spec ? new ConversionJob(tools, spec, output) : null,
+        };
+    }
 
     public static bool IsImplemented(string actionId) =>
         actionId is ActionIds.Compress25 or ActionIds.ImageCompress1Mb || NeedsTrimInput(actionId) ||
@@ -39,8 +46,9 @@ public static class FileJobs
     /// <summary>Перед запуском нужно спросить у пользователя границы отрезка.</summary>
     public static bool NeedsTrimInput(string actionId) => actionId is ActionIds.Trim or ActionIds.AudioTrim;
 
-    public static IFileJob CreateTrim(FfmpegTools tools, string sourcePath, TrimRequest request) =>
-        new ConversionJob(tools, TrimSpecs.For(sourcePath, request));
+    public static IFileJob CreateTrim(FfmpegTools tools, string sourcePath, TrimRequest request,
+        JobSettings? settings = null) =>
+        new ConversionJob(tools, TrimSpecs.For(sourcePath, request), settings?.OutputFolder);
 
     internal static string DoneMessage(long sourceSize, string outputPath) =>
         $"{SizeFormatter.Format(sourceSize)} → {SizeFormatter.Format(new FileInfo(outputPath).Length)}. " +
@@ -57,7 +65,8 @@ public sealed class CompressJob(FfmpegTools tools, CompressionOptions? options =
 
         if (result.Status == CompressionStatus.AlreadySmall)
             return new JobResult(JobStatus.NothingToDo,
-                $"Файл уже меньше 25 МБ ({SizeFormatter.Format(result.SourceSize)}), сжимать не нужно.");
+                $"Файл уже меньше {SizeFormatter.Format(options?.TargetBytes ?? BitrateCalculator.DefaultTargetBytes)} " +
+                $"({SizeFormatter.Format(result.SourceSize)}), сжимать не нужно.");
 
         var target = options?.TargetBytes ?? BitrateCalculator.DefaultTargetBytes;
         var over = result.OutputSize > target ? " Чуть больше цели: кодер не попал точно." : string.Empty;

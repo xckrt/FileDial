@@ -4,6 +4,7 @@ using System.Windows.Input;
 using FileDial.App.Interop;
 using FileDial.Core.Compression;
 using FileDial.Core.Jobs;
+using FileDial.Core.Settings;
 
 namespace FileDial.App.UI;
 
@@ -13,6 +14,7 @@ public partial class JobWindow : Window
     private readonly string _sourcePath;
     private readonly string _actionId;
     private readonly Func<FfmpegTools, IFileJob>? _jobFactory;
+    private readonly AppSettings _settings;
     private readonly CancellationTokenSource _cts = new();
     private string? _resultPath;
     private bool _running;
@@ -22,9 +24,10 @@ public partial class JobWindow : Window
 
     /// <param name="jobFactory">Готовая задача (например, обрезка с введёнными границами); иначе — по id действия.</param>
     internal JobWindow(string actionId, string actionLabel, string sourcePath, NativeMethods.POINT cursor,
-        Func<FfmpegTools, IFileJob>? jobFactory = null)
+        AppSettings? settings = null, Func<FfmpegTools, IFileJob>? jobFactory = null)
     {
         InitializeComponent();
+        _settings = settings ?? new AppSettings();
         _jobFactory = jobFactory;
         _sourcePath = sourcePath;
         _actionId = actionId;
@@ -63,16 +66,16 @@ public partial class JobWindow : Window
 
     private async Task RunAsync()
     {
-        var tools = FfmpegLocator.LocateDefault();
+        var tools = FfmpegLocator.LocateDefault(_settings.FfmpegFolder);
         if (tools is null)
         {
             ShowFinished(
-                "Не найдены ffmpeg.exe и ffprobe.exe. Положите их рядом с FileDial.exe или добавьте папку с ними в PATH.",
+                "Не найдены ffmpeg.exe и ffprobe.exe. Положите их рядом с FileDial.exe, добавьте в PATH или укажите папку в настройках.",
                 showHelp: true);
             return;
         }
 
-        var job = _jobFactory?.Invoke(tools) ?? FileJobs.Create(_actionId, tools);
+        var job = _jobFactory?.Invoke(tools) ?? FileJobs.Create(_actionId, tools, _settings.Jobs);
         if (job is null)
         {
             ShowFinished("Это действие пока не реализовано.");
@@ -107,6 +110,8 @@ public partial class JobWindow : Window
             ShowFinished(result.Message);
             RevealButton.Visibility = Visibility.Visible;
             RevealButton.Focus();
+            if (_settings.OpenFolderWhenDone && _resultPath is not null)
+                ShellActions.ShowInFolder(_resultPath);
         }
         catch (OperationCanceledException)
         {

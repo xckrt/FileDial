@@ -1,32 +1,48 @@
-using System.Drawing;
+﻿using System.Drawing;
 using System.Drawing.Drawing2D;
 using FileDial.App.Interop;
 using Forms = System.Windows.Forms;
 
 namespace FileDial.App.Tray;
 
-/// <summary>Значок в области уведомлений с меню «Справка» и «Выход».</summary>
+/// <summary>Значок в области уведомлений: меню «Настройки», «Справка», «Выход»; двойной клик — настройки.</summary>
 internal sealed class TrayIcon : IDisposable
 {
     private readonly Forms.NotifyIcon _icon;
     private readonly Icon _image;
+    private readonly Forms.ToolStripMenuItem _header;
 
-    public TrayIcon(string hotkey, Action openHelp, Action exit)
+    public TrayIcon(string hotkey, Action openSettings, Action openHelp, Action exit)
     {
         _image = CreateIcon();
         var menu = new Forms.ContextMenuStrip();
-        menu.Items.Add(new Forms.ToolStripMenuItem($"FileDial — {hotkey}") { Enabled = false });
+        _header = new Forms.ToolStripMenuItem { Enabled = false };
+        menu.Items.Add(_header);
         menu.Items.Add(new Forms.ToolStripSeparator());
+        menu.Items.Add(new Forms.ToolStripMenuItem("Настройки…", null, (_, _) => openSettings())
+        {
+            Font = new Font(menu.Font, FontStyle.Bold), // действие по двойному клику
+        });
         menu.Items.Add("Справка (README)", null, (_, _) => openHelp());
         menu.Items.Add("Выход", null, (_, _) => exit());
 
         _icon = new Forms.NotifyIcon
         {
             Icon = _image,
-            Text = $"FileDial — выделите видео и нажмите {hotkey}",
             ContextMenuStrip = menu,
             Visible = true,
         };
+        _icon.DoubleClick += (_, _) => openSettings();
+        SetHotkey(hotkey);
+    }
+
+    /// <summary>Обновить подписи после смены горячей клавиши (null — клавиша не назначена).</summary>
+    public void SetHotkey(string? hotkey)
+    {
+        _header.Text = hotkey is null ? "FileDial — клавиша не назначена" : $"FileDial — {hotkey}";
+        _icon.Text = hotkey is null
+            ? "FileDial — назначьте горячую клавишу в настройках"
+            : $"FileDial — выделите файл и нажмите {hotkey}";
     }
 
     /// <summary>Рисуем значок кодом, чтобы не возить с собой .ico: кольцо с выделенным сектором.</summary>

@@ -1,4 +1,4 @@
-using FileDial.Core.Compression;
+﻿using FileDial.Core.Compression;
 
 namespace FileDial.Core.Jobs;
 
@@ -42,7 +42,8 @@ public sealed record ConversionSpec
 }
 
 /// <summary>Преобразование файла в новый файл рядом с исходником.</summary>
-public sealed class ConversionJob(FfmpegTools tools, ConversionSpec spec) : IFileJob
+/// <param name="outputDirectory">Папка для результата; null — рядом с исходником.</param>
+public sealed class ConversionJob(FfmpegTools tools, ConversionSpec spec, string? outputDirectory = null) : IFileJob
 {
     public ConversionSpec Spec => spec;
 
@@ -57,7 +58,7 @@ public sealed class ConversionJob(FfmpegTools tools, ConversionSpec spec) : IFil
         if (spec.Needs.HasFlag(MediaNeeds.Sound) && !info.HasAudio)
             throw new CompressionException("В файле нет звуковой дорожки.");
 
-        var directory = Path.GetDirectoryName(sourcePath)!;
+        var directory = outputDirectory ?? Path.GetDirectoryName(sourcePath)!;
         if (OutputFolderCheck.WhyNot(directory, spec.EstimateBytes(sourceSize, info)) is { } folderProblem)
             throw new CompressionException(folderProblem);
 
@@ -88,7 +89,7 @@ public sealed class ConversionJob(FfmpegTools tools, ConversionSpec spec) : IFil
                 throw new CompressionException($"ffmpeg не смог обработать файл (код {result.ExitCode}).", result.ErrorTail);
 
             var finalPath = OutputFiles.MoveToFreeName(tempOutput,
-                () => OutputNameGenerator.Generate(sourcePath, spec.Suffix, extension, OutputNameGenerator.PathTaken));
+                () => OutputNameGenerator.Generate(sourcePath, spec.Suffix, extension, OutputNameGenerator.PathTaken, directory));
             progress?.Report(new JobProgress("Готово", 1));
             return new JobResult(JobStatus.Done, FileJobs.DoneMessage(sourceSize, finalPath), finalPath);
         }
