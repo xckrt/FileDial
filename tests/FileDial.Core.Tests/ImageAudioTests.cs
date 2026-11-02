@@ -100,8 +100,8 @@ public class AudioActionTests
             "В моно", "Обрезать", "В текст"], actions.Select(a => a.Label));
         Assert.Equal(["MP3", "M4A", "WAV", "FLAC", "OGG", "Opus"], actions[0].Children!.Select(c => c.Label));
         Assert.Equal("Файл уже в MP3", actions[0].Children![0].DisabledReason);
-        Assert.Equal([ActionIds.SpeechToText],
-            actions.Where(a => a.DisabledReason == ActionCatalog.NotInPrototype).Select(a => a.Id));
+        Assert.DoesNotContain(actions, a => a.DisabledReason == ActionCatalog.NotInPrototype);
+        Assert.Equal("Укажите модель whisper в настройках", actions.Single(a => a.Id == ActionIds.SpeechToText).DisabledReason);
     }
 
     [Fact]

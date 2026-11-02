@@ -1,7 +1,7 @@
 ﻿<Window x:Class="FileDial.App.UI.SettingsWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="FileDial — настройки" Width="520" Height="790"
+        Title="FileDial — настройки" Width="520" Height="930"
         WindowStyle="None" ResizeMode="NoResize" AllowsTransparency="True" Background="Transparent"
         ShowInTaskbar="True" UseLayoutRounding="True">
     <Border Background="{StaticResource BackgroundBrush}" BorderBrush="{StaticResource SectorBrush}"
@@ -68,6 +68,19 @@
                     </DockPanel>
                     <TextBlock x:Name="FfmpegStatus" Foreground="{StaticResource MutedBrush}" FontSize="12"
                                TextWrapping="Wrap" Margin="0,6,0,0" />
+
+                    <TextBlock Text="Распознавание речи (субтитры, текст)" Style="{StaticResource SectionTitle}" />
+                    <DockPanel>
+                        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                            <Button Content="Выбрать…" Style="{StaticResource FlatButton}" Click="OnPickWhisperModel" />
+                            <Button Content="Сбросить" Style="{StaticResource FlatButton}" Click="OnResetWhisperModel" />
+                        </StackPanel>
+                        <TextBox x:Name="WhisperModelBox" Style="{StaticResource FlatTextBox}" IsReadOnly="True"
+                                 FontSize="13" />
+                    </DockPanel>
+                    <TextBlock x:Name="WhisperStatus" Foreground="{StaticResource MutedBrush}" FontSize="12"
+                               TextWrapping="Wrap" Margin="0,6,0,8" />
+                    <WrapPanel x:Name="WhisperLanguages" />
                 </StackPanel>
             </ScrollViewer>
         </DockPanel>

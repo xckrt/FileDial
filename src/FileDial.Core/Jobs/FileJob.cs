@@ -36,12 +36,15 @@ public static class FileJobs
                 new CompressionOptions { TargetBytes = settings.VideoTargetBytes, OutputDirectory = output }),
             ActionIds.ImageCompress1Mb => new ImageCompressJob(tools, settings.ImageTargetBytes, output),
             ActionIds.ImageToPdf => new ImagesToPdfJob(tools, output),
+            ActionIds.Subtitles or ActionIds.SpeechToText =>
+                Speech.For(actionId, settings) is { } speech ? new ConversionJob(tools, speech, output) : null,
             _ => ConversionSpecs.For(actionId) is { } spec ? new ConversionJob(tools, spec, output) : null,
         };
     }
 
     public static bool IsImplemented(string actionId) =>
-        actionId is ActionIds.Compress25 or ActionIds.ImageCompress1Mb or ActionIds.ImageToPdf || NeedsTrimInput(actionId) ||
+        actionId is ActionIds.Compress25 or ActionIds.ImageCompress1Mb or ActionIds.ImageToPdf
+            or ActionIds.Subtitles or ActionIds.SpeechToText || NeedsTrimInput(actionId) ||
         ConversionSpecs.For(actionId) is not null;
 
     /// <summary>Перед запуском нужно спросить у пользователя границы отрезка.</summary>

@@ -28,6 +28,8 @@ public partial class App : Application
     private SettingsWindow? _settingsWindow;
     private HistoryWindow? _historyWindow;
     private AppSettings _settings = new();
+    /// <summary>Есть ли фильтр whisper в текущем ffmpeg (проверяется в фоне при запуске и после настроек).</summary>
+    private bool _speechFilter;
     private bool _readingSelection;
     private readonly List<JobWindow> _jobs = [];
 
@@ -56,6 +58,8 @@ public partial class App : Application
         _settings = SettingsStore.Load(SettingsStore.DefaultPath);
         Motion.UserEnabled = _settings.Animations;
 
+        _ = RefreshSpeechSupportAsync();
+
         _hotkey = new HotkeyManager();
         _hotkey.Pressed += OnHotkeyPressed;
         var gesture = _settings.HotkeyGesture;
@@ -72,6 +76,13 @@ public partial class App : Application
                 "FileDial", MessageBoxButton.OK, MessageBoxImage.Warning);
             OpenSettings();
         }
+    }
+
+    private async Task RefreshSpeechSupportAsync()
+    {
+        var folder = _settings.FfmpegFolder;
+        _speechFilter = await Task.Run(async () =>
+            FfmpegLocator.LocateDefault(folder) is { } tools && await Speech.FilterAvailableAsync(tools, CancellationToken.None));
     }
 
     private void OpenHistory()
@@ -157,6 +168,7 @@ public partial class App : Application
         _settings = settings.Normalized();
         Motion.UserEnabled = _settings.Animations;
         _tray?.SetHotkey(_hotkey.Current?.Format());
+        _ = RefreshSpeechSupportAsync(); // могла смениться папка ffmpeg
         return null;
     }
 
@@ -186,11 +198,13 @@ public partial class App : Application
 
             // Проверка файла и ffprobe могут занять время (сетевой диск, процесс) — не в UI-потоке.
             var settings = _settings;
+            var speechFilter = _speechFilter;
             var outcome = await Task.Run(() =>
             {
                 var tools = FfmpegLocator.LocateDefault(settings.FfmpegFolder);
                 var media = tools is null ? null : new FfprobeMediaProbe(tools, MediaProbeTimeout);
-                return SelectionInterpreter.Interpret(selection, new FileSystemProbe(), media, settings.Jobs);
+                return SelectionInterpreter.Interpret(selection, new FileSystemProbe(), media,
+                    settings.Jobs with { SpeechFilterAvailable = speechFilter });
             });
 
             switch (outcome)

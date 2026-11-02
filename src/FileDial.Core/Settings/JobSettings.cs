@@ -17,6 +17,15 @@ public sealed record JobSettings
     /// <summary>Папка для результатов; null — рядом с исходным файлом.</summary>
     public string? OutputFolder { get; init; }
 
+    /// <summary>Файл модели whisper.cpp (ggml-*.bin) для субтитров и текста из речи; null — не указан.</summary>
+    public string? WhisperModel { get; init; }
+
+    /// <summary>Язык речи: auto, ru, en.</summary>
+    public string WhisperLanguage { get; init; } = "auto";
+
+    /// <summary>В найденном ffmpeg есть фильтр whisper (проверяется программой при запуске).</summary>
+    public bool SpeechFilterAvailable { get; init; }
+
     public string OutputDirectoryFor(string sourcePath) =>
         string.IsNullOrWhiteSpace(OutputFolder) ? Path.GetDirectoryName(sourcePath)! : OutputFolder;
 

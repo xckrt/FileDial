@@ -29,6 +29,12 @@ public sealed record AppSettings
     /// <summary>Папка для результатов; пусто — рядом с исходным файлом.</summary>
     public string? OutputFolder { get; init; }
 
+    /// <summary>Файл модели whisper.cpp для субтитров и текста из речи.</summary>
+    public string? WhisperModel { get; init; }
+
+    /// <summary>Язык речи: auto, ru или en.</summary>
+    public string WhisperLanguage { get; init; } = "auto";
+
     [JsonIgnore]
     public HotkeyGesture HotkeyGesture =>
         HotkeyGesture.TryParse(Hotkey, out var g) && g.Problem() is null ? g : HotkeyGesture.Default;
@@ -39,6 +45,8 @@ public sealed record AppSettings
         VideoTargetBytes = VideoTargetBytes,
         ImageTargetBytes = ImageTargetBytes,
         OutputFolder = string.IsNullOrWhiteSpace(OutputFolder) ? null : OutputFolder,
+        WhisperModel = string.IsNullOrWhiteSpace(WhisperModel) ? null : WhisperModel,
+        WhisperLanguage = WhisperLanguage,
     };
 
     /// <summary>Приводит значения к допустимым: цели — к ближайшим из списка, сочетание — к рабочему.</summary>
@@ -49,6 +57,8 @@ public sealed record AppSettings
         ImageTargetBytes = Nearest(ImageTargets, ImageTargetBytes),
         FfmpegFolder = string.IsNullOrWhiteSpace(FfmpegFolder) ? null : FfmpegFolder.Trim(),
         OutputFolder = string.IsNullOrWhiteSpace(OutputFolder) ? null : OutputFolder.Trim(),
+        WhisperModel = string.IsNullOrWhiteSpace(WhisperModel) ? null : WhisperModel.Trim(),
+        WhisperLanguage = WhisperLanguage is "ru" or "en" ? WhisperLanguage : "auto",
     };
 
     private static long Nearest(IReadOnlyList<long> allowed, long value) =>

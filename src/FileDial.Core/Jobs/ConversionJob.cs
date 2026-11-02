@@ -39,6 +39,15 @@ public sealed record ConversionSpec
 
     /// <summary>Длительность результата для процентов, если она не равна длительности исходника (обрезка).</summary>
     public Func<ProbeInfo, double>? OutputDuration { get; init; }
+
+    /// <summary>
+    /// Если результат пишет сам фильтр (например, whisper → destination), аргументы получают путь
+    /// временного файла, а ffmpeg ничего не выводит в файл сам. Иначе — null.
+    /// </summary>
+    public Func<string, ProbeInfo, string, IReadOnlyList<string>>? FilterArguments { get; init; }
+
+    /// <summary>Что сказать, если результат пуст (например, в записи нет речи). null — пустой результат считается ошибкой.</summary>
+    public string? EmptyOutputMessage { get; init; }
 }
 
 /// <summary>Преобразование файла в новый файл рядом с исходником.</summary>
@@ -72,8 +81,15 @@ public sealed class ConversionJob(FfmpegTools tools, ConversionSpec spec, string
             };
             args.AddRange(spec.InputArguments(sourcePath, info));
             args.AddRange(["-i", sourcePath]);
-            args.AddRange(spec.Arguments(sourcePath, info));
-            args.Add(tempOutput);
+            if (spec.FilterArguments is { } filterArgs)
+            {
+                args.AddRange(filterArgs(sourcePath, info, tempOutput));
+            }
+            else
+            {
+                args.AddRange(spec.Arguments(sourcePath, info));
+                args.Add(tempOutput);
+            }
 
             var duration = spec.OutputDuration?.Invoke(info) ?? info.DurationSeconds;
             var timed = spec.Timed && duration > 0;
@@ -85,8 +101,12 @@ public sealed class ConversionJob(FfmpegTools tools, ConversionSpec spec, string
                     progress?.Report(new JobProgress("Обработка", Math.Clamp(t.TotalSeconds / duration, 0, 1)));
             }, captureOutput: false, ct).ConfigureAwait(false);
 
-            if (result.ExitCode != 0 || !File.Exists(tempOutput))
+            if (result.ExitCode != 0)
                 throw new CompressionException($"ffmpeg не смог обработать файл (код {result.ExitCode}).", result.ErrorTail);
+            if (spec.EmptyOutputMessage is { } empty && (!File.Exists(tempOutput) || new FileInfo(tempOutput).Length == 0))
+                return new JobResult(JobStatus.NothingToDo, empty);
+            if (!File.Exists(tempOutput))
+                throw new CompressionException("ffmpeg не создал результат.", result.ErrorTail);
 
             var finalPath = OutputFiles.MoveToFreeName(tempOutput,
                 () => OutputNameGenerator.Generate(sourcePath, spec.Suffix, extension, OutputNameGenerator.PathTaken, directory));

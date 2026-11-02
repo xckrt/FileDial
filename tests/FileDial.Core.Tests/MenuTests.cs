@@ -10,7 +10,7 @@ public class ActionCatalogTests
     [InlineData(@"C:\v\a.MOV")]
     [InlineData(@"C:\v\a.mkv")]
     [InlineData(@"C:\v\a.WebM")]
-    public void VideoFiles_GetEightActions_TrimAndSubtitlesAreStubs(string path)
+    public void VideoFiles_GetEightActions_NoStubsLeft(string path)
     {
         var actions = ActionCatalog.ForFile(path, 80_000_000);
 
@@ -21,8 +21,9 @@ public class ActionCatalogTests
         Assert.Equal(ActionIds.Compress25, actions[0].Id);
         Assert.True(actions[0].IsEnabled);
         Assert.Null(actions[0].DisabledReason);
-        Assert.Equal([ActionIds.Subtitles],
-            actions.Where(a => a.DisabledReason == ActionCatalog.NotInPrototype).Select(a => a.Id));
+        // Заглушек у видео больше нет; субтитрам без модели whisper нужна настройка.
+        Assert.DoesNotContain(actions, a => a.DisabledReason == ActionCatalog.NotInPrototype);
+        Assert.Equal("Укажите модель whisper в настройках", actions.Single(a => a.Id == ActionIds.Subtitles).DisabledReason);
         // Без сведений ffprobe звук и длительность неизвестны — эти действия не запрещаем.
         Assert.True(actions.Single(a => a.Id == ActionIds.Gif).IsEnabled);
         Assert.True(actions.Single(a => a.Id == ActionIds.ExtractAudio).IsEnabled);

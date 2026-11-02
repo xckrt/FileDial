@@ -3,6 +3,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using FileDial.App.Interop;
 using FileDial.Core.Compression;
+using FileDial.Core.Jobs;
 using FileDial.Core.Settings;
 using FileDial.Core.Text;
 
@@ -18,6 +19,7 @@ public partial class SettingsWindow : Window
     private readonly AppSettings _initial;
     private HotkeyGesture _hotkey;
     private string? _ffmpegFolder;
+    private string? _whisperModel;
 
     /// <param name="apply">Применяет настройки и автозапуск; возвращает текст ошибки или null.</param>
     internal SettingsWindow(AppSettings settings, bool autostart, NativeMethods.POINT cursor,
@@ -28,6 +30,7 @@ public partial class SettingsWindow : Window
         _initial = settings;
         _hotkey = settings.HotkeyGesture;
         _ffmpegFolder = settings.FfmpegFolder;
+        _whisperModel = settings.WhisperModel;
 
         HotkeyBox.Text = _hotkey.Format();
         AutostartBox.IsChecked = autostart;
@@ -41,6 +44,18 @@ public partial class SettingsWindow : Window
         FillTargets(VideoTargets, "Video", AppSettings.VideoTargets, settings.VideoTargetBytes);
         FillTargets(ImageTargets, "Image", AppSettings.ImageTargets, settings.ImageTargetBytes);
         UpdateFfmpegStatus();
+        UpdateWhisperStatus();
+        foreach (var (code, label) in Speech.Languages)
+        {
+            WhisperLanguages.Children.Add(new RadioButton
+            {
+                Content = label,
+                Tag = code,
+                GroupName = "WhisperLanguage",
+                IsChecked = code == settings.WhisperLanguage,
+                Style = (Style)Application.Current.FindResource("SegmentRadio"),
+            });
+        }
 
         // На маленьких экранах окно ниже рабочей области — остальное прокручивается.
         Height = Math.Min(Height, SystemParameters.WorkArea.Height - 16);
@@ -202,6 +217,37 @@ public partial class SettingsWindow : Window
         };
     }
 
+    private void OnPickWhisperModel(object sender, RoutedEventArgs e)
+    {
+        var dialog = new Microsoft.Win32.OpenFileDialog
+        {
+            Title = "Модель whisper.cpp",
+            Filter = "Модель whisper (ggml-*.bin)|*.bin|Все файлы|*.*",
+        };
+        if (dialog.ShowDialog(this) != true)
+            return;
+        _whisperModel = dialog.FileName;
+        UpdateWhisperStatus();
+    }
+
+    private void OnResetWhisperModel(object sender, RoutedEventArgs e)
+    {
+        _whisperModel = null;
+        UpdateWhisperStatus();
+    }
+
+    private void UpdateWhisperStatus()
+    {
+        WhisperModelBox.Text = _whisperModel ?? "Не указана";
+        WhisperStatus.Text = _whisperModel switch
+        {
+            null => "Без модели «Субтитры» и «В текст» неактивны. Модель ggml-*.bin от whisper.cpp скачивается " +
+                    "один раз — см. README, раздел «Распознавание речи».",
+            var m when !File.Exists(m) => "Файл модели не найден.",
+            var m => $"Модель: {Path.GetFileName(m)}, {SizeFormatter.Format(new FileInfo(m).Length)}. Работает офлайн.",
+        };
+    }
+
     // --- Сохранение ---
 
     private void OnSave(object sender, RoutedEventArgs e)
@@ -221,6 +267,9 @@ public partial class SettingsWindow : Window
             OpenFolderWhenDone = OpenFolderBox.IsChecked == true,
             OutputFolder = string.IsNullOrEmpty(folder) ? null : folder,
             FfmpegFolder = _ffmpegFolder,
+            WhisperModel = _whisperModel,
+            WhisperLanguage = WhisperLanguages.Children.OfType<RadioButton>()
+                .FirstOrDefault(r => r.IsChecked == true)?.Tag as string ?? "auto",
             VideoTargetBytes = SelectedTarget(VideoTargets, _initial.VideoTargetBytes),
             ImageTargetBytes = SelectedTarget(ImageTargets, _initial.ImageTargetBytes),
         };

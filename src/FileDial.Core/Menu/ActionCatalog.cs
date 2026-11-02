@@ -39,7 +39,7 @@ public static class ActionCatalog
         {
             FileKind.Video => ForVideo(path, sizeBytes, media, settings ?? JobSettings.Default),
             FileKind.Image => ForImage(path, sizeBytes, media, settings ?? JobSettings.Default),
-            FileKind.Audio => ForAudio(path, media),
+            FileKind.Audio => ForAudio(path, media, settings ?? JobSettings.Default),
             _ => [],
         };
 
@@ -96,7 +96,7 @@ public static class ActionCatalog
                 tooLongForGif ? $"GIF — только для роликов до {ConversionSpecs.GifMaxSeconds} с" : null),
             Action(ActionIds.ExtractAudio, "Извлечь звук", noSound ? "В видео нет звука" : null),
             Action(ActionIds.Frame, "Кадр в картинку", null),
-            Stub(ActionIds.Subtitles, "Субтитры"),
+            Action(ActionIds.Subtitles, "Субтитры", Speech.WhyNot(settings) ?? (noSound ? "В видео нет звука" : null)),
             Action(ActionIds.Mute, "Убрать звук", noSound ? "В видео и так нет звука" : null),
             DialAction.Group(ActionIds.Convert, "Формат", Formats(path, VideoFormats, ActionIds.VideoTo)),
         ];
@@ -122,7 +122,7 @@ public static class ActionCatalog
         ];
     }
 
-    private static IReadOnlyList<DialAction> ForAudio(string path, ProbeInfo? media) =>
+    private static IReadOnlyList<DialAction> ForAudio(string path, ProbeInfo? media, JobSettings settings) =>
     [
         DialAction.Group(ActionIds.AudioConvert, "Формат", Formats(path, AudioFormats, ActionIds.AudioTo)),
         Action(ActionIds.Normalize, "Выровнять громкость", null),
@@ -131,7 +131,7 @@ public static class ActionCatalog
         Action(ActionIds.SlowDown, "Замедлить ×0,75", null),
         Action(ActionIds.ToMono, "В моно", media is { AudioChannels: 1 } ? "Звук уже моно" : null),
         Action(ActionIds.AudioTrim, "Обрезать", null),
-        Stub(ActionIds.SpeechToText, "В текст"),
+        Action(ActionIds.SpeechToText, "В текст", Speech.WhyNot(settings)),
     ];
 
     /// <summary>Вложенные секторы форматов; свой же формат неактивен.</summary>
