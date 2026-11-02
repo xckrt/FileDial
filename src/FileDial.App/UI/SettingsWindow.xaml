@@ -69,7 +69,19 @@
                     <TextBlock x:Name="FfmpegStatus" Foreground="{StaticResource MutedBrush}" FontSize="12"
                                TextWrapping="Wrap" Margin="0,6,0,0" />
 
-                    <TextBlock Text="Распознавание речи (субтитры, текст)" Style="{StaticResource SectionTitle}" />
+                    <TextBlock x:Name="SpeechSection" Text="Распознавание речи (субтитры, текст)"
+                               Style="{StaticResource SectionTitle}" />
+                    <WrapPanel x:Name="DownloadButtons" Margin="0,0,0,8" />
+                    <StackPanel x:Name="DownloadPanel" Visibility="Collapsed" Margin="0,0,0,10">
+                        <DockPanel>
+                            <Button DockPanel.Dock="Right" Content="Отмена" Style="{StaticResource SmallButton}"
+                                    Margin="8,0,0,0" Click="OnCancelDownload" />
+                            <TextBlock x:Name="DownloadText" Foreground="{StaticResource TextBrush}" FontSize="12"
+                                       VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                        </DockPanel>
+                        <ProgressBar x:Name="DownloadProgress" Style="{StaticResource FlatProgress}" Minimum="0"
+                                     Maximum="1" Margin="0,6,0,0" />
+                    </StackPanel>
                     <DockPanel>
                         <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
                             <Button Content="Выбрать…" Style="{StaticResource FlatButton}" Click="OnPickWhisperModel" />

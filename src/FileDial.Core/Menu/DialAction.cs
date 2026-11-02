@@ -1,4 +1,4 @@
-namespace FileDial.Core.Menu;
+﻿namespace FileDial.Core.Menu;
 
 /// <summary>
 /// Один сектор круга. Для неактивного сектора <see cref="DisabledReason"/> объясняет почему.
@@ -12,6 +12,9 @@ public sealed record DialAction(string Id, string Label, bool IsEnabled, string?
     public string? Caption { get; init; }
 
     public bool IsGroup => Children is { Count: > 0 };
+
+    /// <summary>Для неактивного сектора: действие, которое устраняет причину (например, открыть загрузку модели).</summary>
+    public string? FixActionId { get; init; }
 
     public string Title => Caption ?? Label;
 
@@ -56,6 +59,9 @@ public static class ActionIds
     public const string ToMono = "audio-to-mono";
     public const string AudioTrim = "audio-trim";
     public const string SpeechToText = "audio-to-text";
+
+    /// <summary>Открыть настройки распознавания речи (скачать модель).</summary>
+    public const string SetupSpeech = "setup-speech";
 
     // Конвертация: id вида «image-to:.png». Расширение после двоеточия — целевой формат.
     public const string ImageToPrefix = "image-to:";

@@ -131,14 +131,17 @@ public partial class App : Application
         _historyWindow?.Refresh();
     }
 
-    private void OpenSettings()
+    private void OpenSettings() => OpenSettings(focusSpeech: false);
+
+    private void OpenSettings(bool focusSpeech)
     {
         if (_settingsWindow is not null)
         {
             _settingsWindow.Activate();
             return;
         }
-        _settingsWindow = new SettingsWindow(_settings, Autostart.IsEnabled(), WindowPlacement.CursorPosition(), ApplySettings);
+        _settingsWindow = new SettingsWindow(_settings, Autostart.IsEnabled(), WindowPlacement.CursorPosition(),
+            ApplySettings, focusSpeech);
         _settingsWindow.Closed += (_, _) => _settingsWindow = null;
         _settingsWindow.Show();
         _settingsWindow.Activate();
@@ -204,7 +207,12 @@ public partial class App : Application
                 var tools = FfmpegLocator.LocateDefault(settings.FfmpegFolder);
                 var media = tools is null ? null : new FfprobeMediaProbe(tools, MediaProbeTimeout);
                 return SelectionInterpreter.Interpret(selection, new FileSystemProbe(), media,
-                    settings.Jobs with { SpeechFilterAvailable = speechFilter });
+                    settings.Jobs with
+                    {
+                        // Модель из настроек или найденная сама (рядом с программой / скачанная).
+                        WhisperModel = SpeechModels.FindDefault(settings.WhisperModel),
+                        SpeechFilterAvailable = speechFilter,
+                    });
             });
 
             switch (outcome)
@@ -234,6 +242,11 @@ public partial class App : Application
         radial.Closed += (_, _) =>
         {
             _radial = null;
+            if (radial.Chosen is { Id: ActionIds.SetupSpeech })
+            {
+                OpenSettings(focusSpeech: true);
+                return;
+            }
             if (radial.Chosen is not { } action || menu.SourcePaths.Count == 0 || !FileJobs.IsImplemented(action.Id))
                 return;
             if (FileJobs.NeedsTrimInput(action.Id) && !menu.IsBatch)
@@ -269,7 +282,8 @@ public partial class App : Application
             return;
         }
 
-        var window = new JobWindow(action.Id, action.Title, sourcePaths, WindowPlacement.CursorPosition(), _settings,
+        var effective = _settings with { WhisperModel = SpeechModels.FindDefault(_settings.WhisperModel) };
+        var window = new JobWindow(action.Id, action.Title, sourcePaths, WindowPlacement.CursorPosition(), effective,
             jobFactory);
         window.Closed += (_, _) => _jobs.Remove(window);
         window.Finished += RecordHistory;

@@ -1,4 +1,5 @@
-﻿using System.Windows;
+﻿using System.Net.Http;
+using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using FileDial.App.Interop;
@@ -20,10 +21,13 @@ public partial class SettingsWindow : Window
     private HotkeyGesture _hotkey;
     private string? _ffmpegFolder;
     private string? _whisperModel;
+    private CancellationTokenSource? _download;
+    private static readonly HttpClient Http = new() { Timeout = Timeout.InfiniteTimeSpan };
 
     /// <param name="apply">Применяет настройки и автозапуск; возвращает текст ошибки или null.</param>
+    /// <param name="focusSpeech">Сразу показать раздел распознавания речи (пришли из круга за моделью).</param>
     internal SettingsWindow(AppSettings settings, bool autostart, NativeMethods.POINT cursor,
-        Func<AppSettings, bool, string?> apply)
+        Func<AppSettings, bool, string?> apply, bool focusSpeech = false)
     {
         InitializeComponent();
         _apply = apply;
@@ -66,7 +70,11 @@ public partial class SettingsWindow : Window
         {
             placement.Apply();
             Motion.To(this, OpacityProperty, 1, Motion.Normal);
+            if (focusSpeech)
+                SpeechSection.BringIntoView(new Rect(0, 0, 1, 300));
         };
+        // Закрыли окно во время загрузки — останавливаем её, недокачанный файл удаляется.
+        Closed += (_, _) => _download?.Cancel();
     }
 
     /// <summary>Пока идёт запись сочетания, горячую клавишу программы не обрабатываем.</summary>
@@ -238,15 +246,82 @@ public partial class SettingsWindow : Window
 
     private void UpdateWhisperStatus()
     {
-        WhisperModelBox.Text = _whisperModel ?? "Не указана";
-        WhisperStatus.Text = _whisperModel switch
+        var effective = SpeechModels.FindDefault(_whisperModel);
+        WhisperModelBox.Text = _whisperModel ?? (effective is null ? "Не установлена" : $"Авто: {effective}");
+        WhisperStatus.Text = (_whisperModel, effective) switch
         {
-            null => "Без модели «Субтитры» и «В текст» неактивны. Модель ggml-*.bin от whisper.cpp скачивается " +
-                    "один раз — см. README, раздел «Распознавание речи».",
-            var m when !File.Exists(m) => "Файл модели не найден.",
-            var m => $"Модель: {Path.GetFileName(m)}, {SizeFormatter.Format(new FileInfo(m).Length)}. Работает офлайн.",
+            (not null, _) when !File.Exists(_whisperModel) => "Файл модели не найден.",
+            (not null, _) => $"Модель: {Path.GetFileName(_whisperModel)}, {Size(_whisperModel)}. Работает офлайн.",
+            (null, not null) => $"Используется {Path.GetFileName(effective)} ({Size(effective)}). Работает офлайн.",
+            _ => "Модель не установлена — скачайте её кнопкой ниже. Это нужно один раз, дальше всё работает офлайн.",
         };
+
+        DownloadButtons.Children.Clear();
+        foreach (var model in SpeechModels.Downloadable)
+        {
+            var downloaded = File.Exists(Path.Combine(SpeechModels.DataFolder, model.FileName));
+            var button = new Button
+            {
+                Content = downloaded
+                    ? $"{model.Label}: скачана"
+                    : $"Скачать: {model.Label.ToLowerInvariant()} ({SizeFormatter.Format(model.SizeBytes)})",
+                ToolTip = model.Id == "small" ? "Заметно точнее для русского, медленнее" : "Быстрая, для простой речи",
+                Style = (Style)FindResource(downloaded ? "SmallButton" : "AccentButton"),
+                Margin = new Thickness(0, 0, 8, 0),
+                IsEnabled = !downloaded && _download is null,
+            };
+            button.Click += async (_, _) => await DownloadAsync(model);
+            DownloadButtons.Children.Add(button);
+        }
     }
+
+    private static string Size(string path) => SizeFormatter.Format(new FileInfo(path).Length);
+
+    private async Task DownloadAsync(SpeechModelInfo model)
+    {
+        _download = new CancellationTokenSource();
+        DownloadPanel.Visibility = Visibility.Visible;
+        UpdateWhisperStatus();
+        var progress = new Progress<(long Done, long Total)>(p =>
+        {
+            DownloadText.Text = $"{model.FileName}: {SizeFormatter.Format(p.Done)} из {SizeFormatter.Format(p.Total)}";
+            DownloadProgress.Value = p.Total > 0 ? (double)p.Done / p.Total : 0;
+        });
+        DownloadText.Text = $"{model.FileName}: подключение…";
+        DownloadProgress.Value = 0;
+
+        try
+        {
+            var path = await Task.Run(() =>
+                SpeechModelDownloader.DownloadAsync(Http, model, SpeechModels.DataFolder, progress, _download.Token));
+            // Скачанная модель находится автоматически; выбранный вручную файл заменяем на неё.
+            _whisperModel = null;
+            ShowError($"Модель {Path.GetFileName(path)} скачана и проверена.");
+        }
+        catch (OperationCanceledException)
+        {
+            ShowError("Загрузка отменена.");
+        }
+        catch (Exception ex) when (ex is HttpRequestException or IOException or InvalidDataException)
+        {
+            ErrorLog.Write("Загрузка модели", ex);
+            ShowError(ex is HttpRequestException
+                ? "Не удалось скачать: нет подключения к интернету или сервер недоступен."
+                : ex.Message);
+        }
+        finally
+        {
+            _download.Dispose();
+            _download = null;
+            if (IsLoaded)
+            {
+                DownloadPanel.Visibility = Visibility.Collapsed;
+                UpdateWhisperStatus();
+            }
+        }
+    }
+
+    private void OnCancelDownload(object sender, RoutedEventArgs e) => _download?.Cancel();
 
     // --- Сохранение ---
 

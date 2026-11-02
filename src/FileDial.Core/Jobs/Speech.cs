@@ -13,11 +13,17 @@ public static class Speech
     public static readonly IReadOnlyList<(string Code, string Label)> Languages =
         [("auto", "Авто"), ("ru", "Русский"), ("en", "English")];
 
+    public const string NoModel = "Нужна модель распознавания речи";
+
+    /// <summary>Не хватает именно модели — это поправимо одной кнопкой «Скачать».</summary>
+    public static bool NeedsModel(JobSettings settings) =>
+        string.IsNullOrWhiteSpace(settings.WhisperModel) || !File.Exists(settings.WhisperModel);
+
     /// <summary>Причина, почему распознавание недоступно, или null.</summary>
     public static string? WhyNot(JobSettings settings)
     {
         if (string.IsNullOrWhiteSpace(settings.WhisperModel))
-            return "Укажите модель whisper в настройках";
+            return NoModel;
         if (!File.Exists(settings.WhisperModel))
             return "Файл модели whisper не найден";
         if (!settings.SpeechFilterAvailable)

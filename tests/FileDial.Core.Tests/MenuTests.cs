@@ -1,4 +1,5 @@
-﻿using FileDial.Core.Menu;
+﻿using FileDial.Core.Jobs;
+using FileDial.Core.Menu;
 using FileDial.Core.Selection;
 
 namespace FileDial.Core.Tests;
@@ -23,7 +24,7 @@ public class ActionCatalogTests
         Assert.Null(actions[0].DisabledReason);
         // Заглушек у видео больше нет; субтитрам без модели whisper нужна настройка.
         Assert.DoesNotContain(actions, a => a.DisabledReason == ActionCatalog.NotInPrototype);
-        Assert.Equal("Укажите модель whisper в настройках", actions.Single(a => a.Id == ActionIds.Subtitles).DisabledReason);
+        Assert.Equal(Speech.NoModel, actions.Single(a => a.Id == ActionIds.Subtitles).DisabledReason);
         // Без сведений ffprobe звук и длительность неизвестны — эти действия не запрещаем.
         Assert.True(actions.Single(a => a.Id == ActionIds.Gif).IsEnabled);
         Assert.True(actions.Single(a => a.Id == ActionIds.ExtractAudio).IsEnabled);

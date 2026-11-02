@@ -415,6 +415,7 @@ internal sealed class RadialWindow : Window
         {
             null => DefaultHint(),
             { IsGroup: true } => "Выберите формат снаружи или Enter",
+            { IsEnabled: false, FixActionId: not null } => $"{current.DisabledReason} — Enter: скачать",
             { IsEnabled: false } => current.DisabledReason ?? ActionCatalog.NotInPrototype,
             _ => "Enter — запустить",
         };
@@ -460,6 +461,13 @@ internal sealed class RadialWindow : Window
 
     private void Run(DialAction? action)
     {
+        // Неактивный сектор, причину которого можно устранить (нет модели речи), ведёт к исправлению.
+        if (!_closing && action is { IsEnabled: false, FixActionId: { } fix })
+        {
+            Chosen = new DialAction(fix, action.Label, true);
+            SafeClose();
+            return;
+        }
         if (_closing || action is not { IsEnabled: true } || action.IsGroup)
             return; // неактивный сектор или группа: ничего не запускаем, круг остаётся открытым
         Chosen = action;

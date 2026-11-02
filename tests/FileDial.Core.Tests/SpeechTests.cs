@@ -26,7 +26,7 @@ public class SpeechTests : IDisposable
     [Fact]
     public void WhyNot_ExplainsEachMissingPiece()
     {
-        Assert.Equal("Укажите модель whisper в настройках", Speech.WhyNot(JobSettings.Default));
+        Assert.Equal(Speech.NoModel, Speech.WhyNot(JobSettings.Default));
         Assert.Equal("Файл модели whisper не найден",
             Speech.WhyNot(new JobSettings { WhisperModel = Path.Combine(_root, "нет.bin"), SpeechFilterAvailable = true }));
         Assert.Equal("Ваш ffmpeg собран без whisper", Speech.WhyNot(new JobSettings { WhisperModel = FakeModel() }));
@@ -40,7 +40,7 @@ public class SpeechTests : IDisposable
         var on = new JobSettings { WhisperModel = FakeModel(), SpeechFilterAvailable = true };
 
         var subtitlesOff = ActionCatalog.ForFile(@"C:\v.mp4", 1, null, off).Single(a => a.Id == ActionIds.Subtitles);
-        Assert.Equal("Укажите модель whisper в настройках", subtitlesOff.DisabledReason);
+        Assert.Equal(Speech.NoModel, subtitlesOff.DisabledReason);
         Assert.True(ActionCatalog.ForFile(@"C:\v.mp4", 1, null, on).Single(a => a.Id == ActionIds.Subtitles).IsEnabled);
         Assert.True(ActionCatalog.ForFile(@"C:\a.mp3", 1, null, on).Single(a => a.Id == ActionIds.SpeechToText).IsEnabled);
 

@@ -96,7 +96,7 @@ public static class ActionCatalog
                 tooLongForGif ? $"GIF — только для роликов до {ConversionSpecs.GifMaxSeconds} с" : null),
             Action(ActionIds.ExtractAudio, "Извлечь звук", noSound ? "В видео нет звука" : null),
             Action(ActionIds.Frame, "Кадр в картинку", null),
-            Action(ActionIds.Subtitles, "Субтитры", Speech.WhyNot(settings) ?? (noSound ? "В видео нет звука" : null)),
+            SpeechAction(ActionIds.Subtitles, "Субтитры", settings, noSound ? "В видео нет звука" : null),
             Action(ActionIds.Mute, "Убрать звук", noSound ? "В видео и так нет звука" : null),
             DialAction.Group(ActionIds.Convert, "Формат", Formats(path, VideoFormats, ActionIds.VideoTo)),
         ];
@@ -131,7 +131,7 @@ public static class ActionCatalog
         Action(ActionIds.SlowDown, "Замедлить ×0,75", null),
         Action(ActionIds.ToMono, "В моно", media is { AudioChannels: 1 } ? "Звук уже моно" : null),
         Action(ActionIds.AudioTrim, "Обрезать", null),
-        Action(ActionIds.SpeechToText, "В текст", Speech.WhyNot(settings)),
+        SpeechAction(ActionIds.SpeechToText, "В текст", settings, null),
     ];
 
     /// <summary>Вложенные секторы форматов; свой же формат неактивен.</summary>
@@ -154,6 +154,13 @@ public static class ActionCatalog
     };
 
     private static DialAction Action(string id, string label, string? whyNot) => new(id, label, whyNot is null, whyNot);
+
+    /// <summary>Распознавание речи: без модели сектор неактивен, но выбор ведёт к её загрузке.</summary>
+    private static DialAction SpeechAction(string id, string label, JobSettings settings, string? otherReason)
+    {
+        var action = Action(id, label, Speech.WhyNot(settings) ?? otherReason);
+        return Speech.NeedsModel(settings) ? action with { FixActionId = ActionIds.SetupSpeech } : action;
+    }
 
     private static DialAction Stub(string id, string label) => new(id, label, false, NotInPrototype);
 }
