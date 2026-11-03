@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using FileDial.App.Interop;
 
 namespace FileDial.App.UI;
@@ -25,10 +25,36 @@ internal static class ShellActions
         }
     }
 
+    /// <summary>
+    /// README рядом с программой, а если его нет (exe скопировали отдельно) — копия справки, вшитой в exe,
+    /// в папке данных. null — справку взять неоткуда.
+    /// </summary>
+    public static string? ReadmePath()
+    {
+        var nearby = Path.Combine(AppContext.BaseDirectory, "README.md");
+        if (File.Exists(nearby))
+            return nearby;
+        try
+        {
+            using var embedded = typeof(ShellActions).Assembly.GetManifestResourceStream("README.md");
+            if (embedded is null)
+                return null;
+            var copy = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "FileDial", "README.md");
+            Directory.CreateDirectory(Path.GetDirectoryName(copy)!);
+            using (var file = File.Create(copy))
+                embedded.CopyTo(file);
+            return copy;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            ErrorLog.Write("Справка", ex);
+            return null;
+        }
+    }
+
     public static void OpenReadme()
     {
-        var readme = Path.Combine(AppContext.BaseDirectory, "README.md");
-        if (!File.Exists(readme) || OpenWithShell(readme))
+        if (ReadmePath() is not { } readme || OpenWithShell(readme))
             return;
 
         // Для .md может не быть программы по умолчанию — открываем в Блокноте.

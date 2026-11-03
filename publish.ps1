@@ -5,7 +5,9 @@
 .DESCRIPTION
     1. Прогоняет тесты (можно пропустить ключом -SkipTests).
     2. dotnet publish с профилем win-x64: .NET внутри exe, ставить ничего не нужно.
-    3. Упаковывает dist\FileDial в dist\FileDial-<версия>-win-x64.zip и печатает SHA-256.
+    3. Упаковывает dist\FileDial в dist\FileDial-<версия>-win-x64.zip (переносная версия).
+    4. Кладёт рядом установщик dist\FileDial-Setup-<версия>.exe — это тот же exe: по слову «Setup» в имени
+       он открывает мастер установки. Печатает SHA-256 обоих файлов.
 
     ffmpeg и модель распознавания речи в дистрибутив не входят: программа ставит их сама одной кнопкой.
     Для полностью офлайн-дистрибутива положите в dist\FileDial перед упаковкой:
@@ -31,6 +33,7 @@ $project = 'src\FileDial.App\FileDial.App.csproj'
 $version = ($csproj.Project.PropertyGroup | Where-Object { $_.Version } | Select-Object -First 1).Version
 $out = Join-Path $PSScriptRoot 'dist\FileDial'
 $zip = Join-Path $PSScriptRoot "dist\FileDial-$version-win-x64.zip"
+$setup = Join-Path $PSScriptRoot "dist\FileDial-Setup-$version.exe"
 
 if (-not $SkipTests) {
     Write-Host '== Тесты' -ForegroundColor Cyan
@@ -49,6 +52,7 @@ if ($LASTEXITCODE -ne 0) { throw 'dotnet publish завершился с оши�
 
 if (Test-Path $zip) { Remove-Item -Force $zip }
 Compress-Archive -Path (Join-Path $out '*') -DestinationPath $zip -CompressionLevel Optimal
+Copy-Item (Join-Path $out 'FileDial.exe') $setup -Force
 
 Write-Host '== Готово' -ForegroundColor Green
 Get-ChildItem $out -Recurse -File | ForEach-Object {
@@ -56,3 +60,5 @@ Get-ChildItem $out -Recurse -File | ForEach-Object {
 }
 '{0} — {1:N1} МБ' -f (Split-Path $zip -Leaf), ((Get-Item $zip).Length / 1MB)
 'SHA-256: ' + (Get-FileHash $zip -Algorithm SHA256).Hash.ToLowerInvariant()
+'{0} — {1:N1} МБ' -f (Split-Path $setup -Leaf), ((Get-Item $setup).Length / 1MB)
+'SHA-256: ' + (Get-FileHash $setup -Algorithm SHA256).Hash.ToLowerInvariant()

@@ -4,6 +4,7 @@ using FileDial.App.Documents;
 using FileDial.App.Hotkey;
 using FileDial.App.Interop;
 using FileDial.App.Selection;
+using FileDial.App.Setup;
 using FileDial.App.Settings;
 using FileDial.App.Tray;
 using FileDial.App.UI;
@@ -25,6 +26,7 @@ public partial class App : Application
     private static readonly TimeSpan MediaProbeTimeout = TimeSpan.FromSeconds(2);
 
     private Mutex? _singleInstance;
+    private EventWaitHandle? _exitSignal;
     private HotkeyManager? _hotkey;
     private TrayIcon? _tray;
     private RadialWindow? _radial;
@@ -49,6 +51,13 @@ public partial class App : Application
             args.SetObserved();
         };
 
+        // Тот же exe — и установщик: «FileDial-Setup-….exe», --install, --uninstall.
+        if (SetupLauncher.Detect(e.Args, Environment.ProcessPath) is { } setupMode)
+        {
+            SetupLauncher.Run(this, setupMode, e.Args);
+            return;
+        }
+
         _singleInstance = new Mutex(true, @"Local\FileDial.Prototype", out var created);
         if (!created)
         {
@@ -57,6 +66,10 @@ public partial class App : Application
             Shutdown();
             return;
         }
+
+        // Установщик просит закрыться перед обновлением или удалением — выходим штатно, как из меню трея.
+        _exitSignal = new EventWaitHandle(false, EventResetMode.AutoReset, RunningCopies.ExitEventName);
+        ThreadPool.RegisterWaitForSingleObject(_exitSignal, (_, _) => Dispatcher.BeginInvoke(ExitApp), null, -1, executeOnlyOnce: true);
 
         _settings = SettingsStore.Load(SettingsStore.DefaultPath);
         Motion.UserEnabled = _settings.Animations;
@@ -407,6 +420,7 @@ public partial class App : Application
         _tray?.Dispose();
         _hotkey?.Dispose();
         _singleInstance?.Dispose();
+        _exitSignal?.Dispose();
         base.OnExit(e);
     }
 

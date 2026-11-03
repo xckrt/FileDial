@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
@@ -18,7 +18,7 @@
     <ApplicationIcon>FileDial.ico</ApplicationIcon>
 
     <!-- Сведения о файле (свойства exe → «Подробно»). -->
-    <Version>0.1.0</Version>
+    <Version>0.2.0</Version>
     <Product>FileDial</Product>
     <Company>FileDial</Company>
     <!-- AssemblyTitle — то, что Windows показывает как «Описание файла». -->
@@ -41,6 +41,8 @@
   <ItemGroup>
     <!-- Тот же значок — для трея: из него берётся размер под текущий DPI. -->
     <EmbeddedResource Include="FileDial.ico" LogicalName="FileDial.ico" />
+    <!-- Справка и внутри exe: установщик кладёт её в папку программы, даже если рядом с ним README нет. -->
+    <EmbeddedResource Include="..\..\README.md" LogicalName="README.md" />
   </ItemGroup>
 
   <ItemGroup>
