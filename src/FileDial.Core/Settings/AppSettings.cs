@@ -14,6 +14,11 @@ public sealed record AppSettings
 
     public bool Animations { get; init; } = true;
 
+    /// <summary>Оформление: graphite (по умолчанию, палитра брифа), brass, paper или auto (по теме Windows).</summary>
+    public string Theme { get; init; } = "graphite";
+
+    public static readonly IReadOnlyList<string> Themes = ["auto", "graphite", "brass", "paper"];
+
     public bool OpenFolderWhenDone { get; init; }
 
     /// <summary>Записывать выполненные действия в историю (хранится только на этом компьютере).</summary>
@@ -53,6 +58,7 @@ public sealed record AppSettings
     public AppSettings Normalized() => this with
     {
         Hotkey = HotkeyGesture.Format(),
+        Theme = Themes.Contains(Theme) ? Theme : "graphite",
         VideoTargetBytes = Nearest(VideoTargets, VideoTargetBytes),
         ImageTargetBytes = Nearest(ImageTargets, ImageTargetBytes),
         FfmpegFolder = string.IsNullOrWhiteSpace(FfmpegFolder) ? null : FfmpegFolder.Trim(),

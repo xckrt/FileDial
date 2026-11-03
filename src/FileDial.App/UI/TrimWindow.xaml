@@ -4,7 +4,7 @@
         Title="FileDial — обрезать" Width="440" Height="300"
         WindowStyle="None" ResizeMode="NoResize" AllowsTransparency="True" Background="Transparent"
         ShowInTaskbar="True" UseLayoutRounding="True">
-    <Border Background="{StaticResource BackgroundBrush}" BorderBrush="{StaticResource SectorBrush}"
+    <Border Background="{DynamicResource BackgroundBrush}" BorderBrush="{DynamicResource SectorBrush}"
             BorderThickness="1" CornerRadius="10" Padding="20,16,20,16"
             MouseLeftButtonDown="OnDragArea">
         <DockPanel LastChildFill="True">
@@ -15,10 +15,10 @@
             </StackPanel>
 
             <StackPanel>
-                <TextBlock Text="Обрезать" Foreground="{StaticResource MutedBrush}" FontSize="12" />
-                <TextBlock x:Name="FileNameText" Foreground="{StaticResource TextBrush}" FontSize="15"
+                <TextBlock Text="Обрезать" Foreground="{DynamicResource MutedBrush}" FontSize="12" />
+                <TextBlock x:Name="FileNameText" Foreground="{DynamicResource TextBrush}" FontSize="15"
                            FontWeight="SemiBold" TextTrimming="CharacterEllipsis" Margin="0,2,0,2" />
-                <TextBlock x:Name="DurationText" Foreground="{StaticResource MutedBrush}" FontSize="12"
+                <TextBlock x:Name="DurationText" Foreground="{DynamicResource MutedBrush}" FontSize="12"
                            Text="Читаю файл…" Margin="0,0,0,12" />
 
                 <Grid>
@@ -28,21 +28,21 @@
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
                     <StackPanel Grid.Column="0">
-                        <TextBlock Text="Начало" Foreground="{StaticResource MutedBrush}" FontSize="12" Margin="0,0,0,4" />
+                        <TextBlock Text="Начало" Foreground="{DynamicResource MutedBrush}" FontSize="12" Margin="0,0,0,4" />
                         <TextBox x:Name="StartBox" Style="{StaticResource FlatTextBox}" IsEnabled="False"
                                  TextChanged="OnInputChanged" />
                     </StackPanel>
                     <StackPanel Grid.Column="2">
-                        <TextBlock Text="Конец" Foreground="{StaticResource MutedBrush}" FontSize="12" Margin="0,0,0,4" />
+                        <TextBlock Text="Конец" Foreground="{DynamicResource MutedBrush}" FontSize="12" Margin="0,0,0,4" />
                         <TextBox x:Name="EndBox" Style="{StaticResource FlatTextBox}" IsEnabled="False"
                                  TextChanged="OnInputChanged" />
                     </StackPanel>
                 </Grid>
 
-                <CheckBox x:Name="PreciseBox" Checked="OnPreciseChanged" Unchecked="OnPreciseChanged" Margin="0,12,0,0" IsChecked="True" Foreground="{StaticResource TextBrush}"
+                <CheckBox x:Name="PreciseBox" Checked="OnPreciseChanged" Unchecked="OnPreciseChanged" Margin="0,12,0,0" IsChecked="True" Foreground="{DynamicResource TextBrush}"
                           FontSize="13" Visibility="Collapsed"
                           Content="Точно по кадрам (дольше: видео перекодируется)" />
-                <TextBlock x:Name="StatusText" Foreground="{StaticResource TextBrush}" FontSize="13"
+                <TextBlock x:Name="StatusText" Foreground="{DynamicResource TextBrush}" FontSize="13"
                            TextWrapping="Wrap" Margin="0,10,0,0" />
             </StackPanel>
         </DockPanel>

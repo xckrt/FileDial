@@ -1,4 +1,5 @@
-﻿using System.Windows;
+﻿using System.Globalization;
+using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Interop;
@@ -14,6 +15,7 @@ namespace FileDial.App.UI;
 
 /// <summary>
 /// Круговое меню: прозрачное окно без рамки поверх всех окон, не в панели задач.
+/// Выглядит как поворотная ручка: шкала делений по ободу и указатель, который переезжает к выбранному сектору.
 /// Сектор-группа (например, «Конвертировать») при наведении раскрывает снаружи круга веер вложенных секторов.
 /// </summary>
 internal sealed class RadialWindow : Window
@@ -26,6 +28,12 @@ internal sealed class RadialWindow : Window
     /// <summary>На сколько выбранный сектор выдвигается наружу.</summary>
     private const double PopDistance = 5;
 
+    // Шкала делений по ободу: между краем секторов и краем круга.
+    private const double TickMinor = 4;
+    private const double TickMajor = 7;
+
+    private const int OpenDuration = 260;
+
     // Внешнее кольцо с вложенными секторами.
     private const double ChildInner = 196;
     private const double ChildOuter = 264;
@@ -34,19 +42,29 @@ internal sealed class RadialWindow : Window
     /// <summary>Окно с запасом под внешнее кольцо и выдвижение сектора.</summary>
     private const double WithSubmenuSize = 2 * (ChildOuter + PopDistance + 6);
 
-    private readonly SectorGeometry _geometry = new(ActionCatalog.SectorCount, innerRadius: 72, outerRadius: 182, gapDegrees: 1.5);
+    private readonly SectorGeometry _geometry = new(ActionCatalog.SectorCount, innerRadius: 72, outerRadius: 176, gapDegrees: 1.5);
     private readonly DialMenu _menu;
     private readonly double _size;
     private readonly WindowPlacement _placement;
     private readonly Path[] _sectors = new Path[ActionCatalog.SectorCount];
-    private readonly TextBlock[] _labels = new TextBlock[ActionCatalog.SectorCount];
     // Свои (незамороженные) кисти и сдвиги у каждого сектора — чтобы их можно было анимировать.
     private readonly SolidColorBrush[] _fills = new SolidColorBrush[ActionCatalog.SectorCount];
     private readonly SolidColorBrush[] _labelBrushes = new SolidColorBrush[ActionCatalog.SectorCount];
     private readonly TranslateTransform[] _shifts = new TranslateTransform[ActionCatalog.SectorCount];
+    // Сектор со своей подписью, значком и номером — одна группа, чтобы появляться по очереди.
+    private readonly Canvas[] _groups = new Canvas[ActionCatalog.SectorCount];
+    private readonly Path?[] _markers = new Path?[ActionCatalog.SectorCount];
     private readonly Canvas _canvas;
     private readonly ScaleTransform _scale = new(1, 1);
+    private readonly RotateTransform _spin = new();
     private readonly TextBlock _hint;
+
+    // Указатель на ободе: переезжает к выбранному сектору.
+    private Path? _pointer;
+    private readonly RotateTransform _pointerTurn = new();
+    private readonly SolidColorBrush _pointerFill = new(Palette.Accent.Color);
+    private double _pointerAngle;
+    private bool _pointerShown;
 
     // Внешнее кольцо: строится при раскрытии группы.
     private readonly Canvas _subLayer;
@@ -57,6 +75,7 @@ internal sealed class RadialWindow : Window
     private int? _selected;
     private int? _expanded;
     private int? _selectedChild;
+    private bool _pressed;
     private bool _closing;
     private bool _isClosed;
 
@@ -81,7 +100,7 @@ internal sealed class RadialWindow : Window
         {
             Width = _size,
             Height = _size,
-            RenderTransform = _scale,
+            RenderTransform = new TransformGroup { Children = { _scale, _spin } },
             RenderTransformOrigin = new Point(0.5, 0.5),
         };
 
@@ -96,16 +115,26 @@ internal sealed class RadialWindow : Window
         };
         canvas.Children.Add(_subLayer);
 
-        var background = new Ellipse { Width = circle, Height = circle, Fill = Palette.Background };
+        var background = new Ellipse
+        {
+            Width = circle,
+            Height = circle,
+            Fill = Palette.Background,
+            Stroke = Palette.Rim,
+            StrokeThickness = 1,
+        };
         Canvas.SetLeft(background, Center - circle / 2);
         Canvas.SetTop(background, Center - circle / 2);
         canvas.Children.Add(background);
+        foreach (var ticks in Ticks(circle / 2 - 4))
+            canvas.Children.Add(ticks);
 
         for (var i = 0; i < (HasSectors ? ActionCatalog.SectorCount : 0); i++)
         {
             _fills[i] = new SolidColorBrush(Palette.Sector.Color);
             _labelBrushes[i] = new SolidColorBrush(Palette.Text.Color);
             _shifts[i] = new TranslateTransform();
+            var group = _groups[i] = new Canvas();
             var (start, end) = _geometry.DrawnAngles(i);
             _sectors[i] = new Path
             {
@@ -113,16 +142,38 @@ internal sealed class RadialWindow : Window
                 Fill = _fills[i],
                 RenderTransform = _shifts[i],
             };
-            canvas.Children.Add(_sectors[i]);
+            group.Children.Add(_sectors[i]);
 
-            var action = ActionAt(i);
-            _labels[i] = Label(action is null ? null : $"{i + 1}", action?.Label, LabelWidth, 13, _labelBrushes[i], _shifts[i]);
-            canvas.Children.Add(_labels[i]);
-            Place(_labels[i], _geometry.LabelPoint(i), LabelWidth);
+            if (ActionAt(i) is { } action)
+            {
+                var label = ActionLabel(action, _labelBrushes[i], _shifts[i]);
+                group.Children.Add(label);
+                Place(label, _geometry.LabelPoint(i), LabelWidth);
+                group.Children.Add(Digit(i));
 
-            // Группа отмечена маленьким треугольником у внешнего края: там раскроется веер.
-            if (action?.IsGroup == true)
-                canvas.Children.Add(GroupMarker(i));
+                // Группа отмечена маленьким треугольником у внешнего края: там раскроется веер.
+                if (action.IsGroup)
+                    group.Children.Add(_markers[i] = GroupMarker(i));
+            }
+            canvas.Children.Add(group);
+        }
+
+        if (HasSectors)
+        {
+            // Тонкое кольцо вокруг центра — как втулка у ручки.
+            var hub = _geometry.InnerRadius - 7;
+            var ring = new Ellipse
+            {
+                Width = hub * 2,
+                Height = hub * 2,
+                Stroke = Palette.Rim,
+                StrokeThickness = 1,
+                IsHitTestVisible = false,
+            };
+            Canvas.SetLeft(ring, Center - hub);
+            Canvas.SetTop(ring, Center - hub);
+            canvas.Children.Add(ring);
+            canvas.Children.Add(_pointer = Pointer(circle / 2));
         }
 
         _hint = new TextBlock
@@ -145,17 +196,25 @@ internal sealed class RadialWindow : Window
             WindowPlacement.MakeToolWindow(this, noActivate: false);
             _placement.Apply();
         };
-        // Появление: из лёгкого уменьшения и прозрачности.
+        // Появление: круг доворачивается, как ручка, а секторы зажигаются по часовой стрелке.
         if (Motion.Enabled)
         {
             _canvas.Opacity = 0;
-            _scale.ScaleX = _scale.ScaleY = 0.88;
+            _scale.ScaleX = _scale.ScaleY = 0.9;
+            _spin.Angle = -18;
+            foreach (var group in _groups)
+                if (group is not null)
+                    group.Opacity = 0;
         }
         Loaded += (_, _) =>
         {
             Motion.To(_canvas, OpacityProperty, 1, Motion.Normal);
-            Motion.To(_scale, ScaleTransform.ScaleXProperty, 1, Motion.Normal);
-            Motion.To(_scale, ScaleTransform.ScaleYProperty, 1, Motion.Normal);
+            Motion.To(_scale, ScaleTransform.ScaleXProperty, 1, OpenDuration);
+            Motion.To(_scale, ScaleTransform.ScaleYProperty, 1, OpenDuration);
+            Motion.To(_spin, RotateTransform.AngleProperty, 0, OpenDuration);
+            for (var i = 0; i < _groups.Length; i++)
+                if (_groups[i] is { } group)
+                    Motion.Animate(group, OpacityProperty, 0, 1, 140, delay: 30 + i * 22);
             _placement.Apply();
             TakeFocus();
             // Если система не отдала фокус сразу, пробуем ещё раз; без фокуса круг закрываем, чтобы он не «висел».
@@ -211,6 +270,122 @@ internal sealed class RadialWindow : Window
         return geometry;
     }
 
+    /// <summary>Значок над названием действия. Кисть общая — подсвечиваются вместе.</summary>
+    private static StackPanel ActionLabel(DialAction action, Brush foreground, Transform shift)
+    {
+        var panel = new StackPanel { Width = LabelWidth, IsHitTestVisible = false, RenderTransform = shift };
+        if (Icons.Create(action.Id, foreground) is { } icon)
+        {
+            icon.HorizontalAlignment = HorizontalAlignment.Center;
+            icon.Margin = new Thickness(0, 0, 0, 4);
+            panel.Children.Add(icon);
+        }
+        panel.Children.Add(new TextBlock
+        {
+            Text = action.Label,
+            TextAlignment = TextAlignment.Center,
+            TextWrapping = TextWrapping.Wrap,
+            FontFamily = Palette.DialFont,
+            FontSize = 14,
+            Foreground = foreground,
+        });
+        return panel;
+    }
+
+    /// <summary>Номер клавиши — мелко в углу сектора у обода, как индекс на шкале.</summary>
+    private TextBlock Digit(int index)
+    {
+        var digit = new TextBlock
+        {
+            Text = (index + 1).ToString(CultureInfo.InvariantCulture),
+            FontFamily = Palette.DialFont,
+            FontSize = 11,
+            Foreground = _labelBrushes[index],
+            Opacity = 0.6,
+            IsHitTestVisible = false,
+            RenderTransform = _shifts[index],
+        };
+        var point = SectorGeometry.PointAt(_geometry.CenterAngle(index) - 15, _geometry.OuterRadius - 12);
+        digit.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+        Canvas.SetLeft(digit, Center + point.X - digit.DesiredSize.Width / 2);
+        Canvas.SetTop(digit, Center + point.Y - digit.DesiredSize.Height / 2);
+        return digit;
+    }
+
+    /// <summary>Деления через 5°; длинные — напротив середин секторов.</summary>
+    private IEnumerable<Path> Ticks(double outer)
+    {
+        var minor = new StreamGeometry();
+        var major = new StreamGeometry();
+        using (var minorContext = minor.Open())
+        using (var majorContext = major.Open())
+        {
+            for (var angle = 0; angle < 360; angle += 5)
+            {
+                var isMajor = HasSectors && angle % (360 / ActionCatalog.SectorCount) == 0;
+                var context = isMajor ? majorContext : minorContext;
+                context.BeginFigure(ToCanvas(SectorGeometry.PointAt(angle, outer)), false, false);
+                context.LineTo(ToCanvas(SectorGeometry.PointAt(angle, outer - (isMajor ? TickMajor : TickMinor))), true, false);
+            }
+        }
+        minor.Freeze();
+        major.Freeze();
+        yield return new Path { Data = minor, Stroke = Palette.Rim, StrokeThickness = 1, IsHitTestVisible = false };
+        yield return new Path { Data = major, Stroke = Palette.TextMuted, StrokeThickness = 1.4, IsHitTestVisible = false };
+    }
+
+    /// <summary>Засечка-указатель на ободе острием внутрь: рисуется у сектора 0 и поворачивается.</summary>
+    private Path Pointer(double rim)
+    {
+        // Острие не заходит под выдвинутый сектор.
+        var tip = ToCanvas(SectorGeometry.PointAt(0, _geometry.OuterRadius + PopDistance + 1));
+        var left = ToCanvas(SectorGeometry.PointAt(-2.6, rim - 1));
+        var right = ToCanvas(SectorGeometry.PointAt(2.6, rim - 1));
+        var figure = new PathFigure { StartPoint = tip, IsClosed = true };
+        figure.Segments.Add(new LineSegment(left, false));
+        figure.Segments.Add(new LineSegment(right, false));
+        var geometry = new PathGeometry([figure]);
+        geometry.Freeze();
+        _pointerTurn.CenterX = _pointerTurn.CenterY = Center;
+        return new Path
+        {
+            Data = geometry,
+            Fill = _pointerFill,
+            RenderTransform = _pointerTurn,
+            Opacity = 0,
+            IsHitTestVisible = false,
+        };
+    }
+
+    /// <summary>Указатель переезжает коротким путём и встаёт с лёгкой отдачей.</summary>
+    private void MovePointer(int? index)
+    {
+        if (_pointer is null)
+            return;
+        if (index is not { } i || ActionAt(i) is not { } action)
+        {
+            _pointerShown = false;
+            Motion.To(_pointer, OpacityProperty, 0, Motion.Fast);
+            return;
+        }
+
+        var target = _geometry.CenterAngle(i);
+        Motion.ColorTo(_pointerFill, (action.IsEnabled ? Palette.Accent : Palette.TextMuted).Color, Motion.Fast);
+        if (!_pointerShown)
+        {
+            // Из скрытого состояния — сразу на место, без пролёта через полкруга.
+            _pointerAngle = target;
+            _pointerTurn.BeginAnimation(RotateTransform.AngleProperty, null);
+            _pointerTurn.Angle = target;
+            _pointerShown = true;
+            Motion.To(_pointer, OpacityProperty, 1, Motion.Fast);
+            return;
+        }
+        var delta = ((target - _pointerAngle) % 360 + 540) % 360 - 180;
+        _pointerAngle += delta;
+        Motion.To(_pointerTurn, RotateTransform.AngleProperty, _pointerAngle, 240, Motion.Detent);
+    }
+
     private static TextBlock Label(string? number, string? text, double width, double fontSize, Brush foreground,
         Transform shift)
     {
@@ -219,6 +394,7 @@ internal sealed class RadialWindow : Window
             Width = width,
             TextAlignment = TextAlignment.Center,
             TextWrapping = TextWrapping.Wrap,
+            FontFamily = Palette.DialFont,
             FontSize = fontSize,
             IsHitTestVisible = false,
             Foreground = foreground,
@@ -260,12 +436,13 @@ internal sealed class RadialWindow : Window
 
     private FrameworkElement BuildCenter()
     {
-        var size = HasSectors ? _geometry.InnerRadius * 2 - 16 : CompactDiameter - 48;
+        var size = HasSectors ? _geometry.InnerRadius * 2 - 20 : CompactDiameter - 48;
         var title = new TextBlock
         {
             Text = _menu.Title,
             Foreground = Palette.Text,
-            FontSize = 13,
+            FontFamily = Palette.HeadingFont,
+            FontSize = 13.5,
             FontWeight = FontWeights.SemiBold,
             TextAlignment = TextAlignment.Center,
             TextWrapping = TextWrapping.Wrap,
@@ -305,13 +482,16 @@ internal sealed class RadialWindow : Window
         _children.Clear();
 
         var children = ExpandedChildren;
-        _sub = new SubmenuGeometry(_geometry.CenterAngle(group), children.Count, ChildInner, ChildOuter, ChildSweep, ChildGap);
+        var parentAngle = _geometry.CenterAngle(group);
+        _sub = new SubmenuGeometry(parentAngle, children.Count, ChildInner, ChildOuter, ChildSweep, ChildGap);
 
         // Подложка веера сливается с фоном основного круга — без «дыры» между ними.
         _subLayer.Children.Add(new Path
         {
             Data = RingSector(_sub.FanStart - 1, _sub.FanEnd + 1, _geometry.OuterRadius, ChildOuter + 4),
             Fill = Palette.Background,
+            Stroke = Palette.Rim,
+            StrokeThickness = 1,
         });
 
         for (var i = 0; i < children.Count; i++)
@@ -321,22 +501,26 @@ internal sealed class RadialWindow : Window
             var shift = new TranslateTransform();
             var (start, end) = _sub.DrawnAngles(i);
             var sector = new Path { Data = RingSector(start, end, ChildInner, ChildOuter), Fill = fill, RenderTransform = shift };
-            _subLayer.Children.Add(sector);
-
-            var label = Label($"{i + 1}", children[i].Label, ChildLabelWidth, 12.5, text, shift);
-            _subLayer.Children.Add(label);
+            var label = Label($"{i + 1}", children[i].Label, ChildLabelWidth, 13, text, shift);
             Place(label, _sub.LabelPoint(i), ChildLabelWidth);
+
+            // Каждый формат разворачивается веером из-под своей группы, один за другим.
+            var turn = new RotateTransform(0, Center, Center);
+            var item = new Canvas { RenderTransform = turn, Children = { sector, label } };
+            _subLayer.Children.Add(item);
+            Motion.Animate(turn, RotateTransform.AngleProperty, parentAngle - _sub.CenterAngle(i), 0, 220, delay: i * 26);
+            Motion.Animate(item, OpacityProperty, 0, 1, 150, delay: i * 26);
             _children.Add((sector, fill, text, shift));
         }
 
-        // Веер «вырастает» из круга.
+        // Подложка веера проявляется вместе с первым сектором.
         _subLayer.Visibility = Visibility.Visible;
         if (Motion.Enabled)
         {
             _subLayer.Opacity = 0;
-            _subScale.ScaleX = _subScale.ScaleY = 0.92;
+            _subScale.ScaleX = _subScale.ScaleY = 0.96;
         }
-        Motion.To(_subLayer, OpacityProperty, 1, Motion.Normal);
+        Motion.To(_subLayer, OpacityProperty, 1, Motion.Fast);
         Motion.To(_subScale, ScaleTransform.ScaleXProperty, 1, Motion.Normal);
         Motion.To(_subScale, ScaleTransform.ScaleYProperty, 1, Motion.Normal);
     }
@@ -385,6 +569,10 @@ internal sealed class RadialWindow : Window
             var push = selected && enabled ? SectorGeometry.PointAt(_geometry.CenterAngle(i), PopDistance) : default;
             Motion.To(_shifts[i], TranslateTransform.XProperty, push.X, 120);
             Motion.To(_shifts[i], TranslateTransform.YProperty, push.Y, 120);
+
+            // Метка группы нужна, пока веер закрыт: при выборе на её место встаёт указатель.
+            if (_markers[i] is { } marker)
+                Motion.To(marker, OpacityProperty, selected ? 0 : 1, Motion.Fast);
         }
 
         for (var i = 0; i < _children.Count; i++)
@@ -401,6 +589,7 @@ internal sealed class RadialWindow : Window
             Motion.To(_children[i].Shift, TranslateTransform.YProperty, push.Y, 120);
         }
 
+        MovePointer(_selected);
         _hint.Text = HintText();
         // В компактном круге единственное действие выделяем цветом — это приглашение нажать.
         _hint.Foreground = _menu.QuickAction is not null && !HasSectors ? Palette.Accent : Palette.TextMuted;
@@ -472,7 +661,26 @@ internal sealed class RadialWindow : Window
         if (_closing || action is not { IsEnabled: true } || action.IsGroup)
             return; // неактивный сектор или группа: ничего не запускаем, круг остаётся открытым
         Chosen = action;
+        Press(action);
         SafeClose();
+    }
+
+    /// <summary>Нажатие: выбранный сектор уходит дальше наружу, пока круг гаснет.</summary>
+    private void Press(DialAction action)
+    {
+        _pressed = true;
+        TranslateTransform? shift = null;
+        var angle = 0.0;
+        if (_selectedChild is { } c && _sub is not null && ChildAt(c) == action)
+            (shift, angle) = (_children[c].Shift, _sub.CenterAngle(c));
+        else if (_selected is { } s && ActionAt(s) == action)
+            (shift, angle) = (_shifts[s], _geometry.CenterAngle(s));
+        if (shift is null)
+            return;
+
+        var push = SectorGeometry.PointAt(angle, PopDistance * 2.6);
+        Motion.To(shift, TranslateTransform.XProperty, push.X, Motion.Fast);
+        Motion.To(shift, TranslateTransform.YProperty, push.Y, Motion.Fast);
     }
 
     // --- Ввод ---
@@ -641,14 +849,17 @@ internal sealed class RadialWindow : Window
             return;
         _closing = true;
         IsHitTestVisible = false;
-        // Короткое исчезновение; Close — асинхронно, так надёжнее внутри Deactivated и обработчиков ввода.
+        // Close — асинхронно, так надёжнее внутри Deactivated и обработчиков ввода.
         if (!Motion.Enabled || !IsLoaded)
         {
             Dispatcher.BeginInvoke(CloseIfOpen);
             return;
         }
-        Motion.To(_canvas, OpacityProperty, 0, Motion.Fast);
-        Motion.To(_scale, ScaleTransform.ScaleXProperty, 0.94, Motion.Fast);
-        Motion.To(_scale, ScaleTransform.ScaleYProperty, 0.94, Motion.Fast, () => Dispatcher.BeginInvoke(CloseIfOpen));
+        // Ручка чуть проворачивается дальше и гаснет; после выбора — чуть дольше, чтобы нажатие было видно.
+        var duration = _pressed ? 170 : 110;
+        Motion.To(_spin, RotateTransform.AngleProperty, 8, duration);
+        Motion.To(_canvas, OpacityProperty, 0, duration);
+        Motion.To(_scale, ScaleTransform.ScaleXProperty, 0.94, duration);
+        Motion.To(_scale, ScaleTransform.ScaleYProperty, 0.94, duration, () => Dispatcher.BeginInvoke(CloseIfOpen));
     }
 }

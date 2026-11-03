@@ -4,11 +4,11 @@
         Title="FileDial — настройки" Width="520" Height="980"
         WindowStyle="None" ResizeMode="NoResize" AllowsTransparency="True" Background="Transparent"
         ShowInTaskbar="True" UseLayoutRounding="True">
-    <Border Background="{StaticResource BackgroundBrush}" BorderBrush="{StaticResource SectorBrush}"
+    <Border Background="{DynamicResource BackgroundBrush}" BorderBrush="{DynamicResource SectorBrush}"
             BorderThickness="1" CornerRadius="10" Padding="22,16,22,16"
             MouseLeftButtonDown="OnDragArea">
         <DockPanel LastChildFill="True">
-            <TextBlock DockPanel.Dock="Top" Text="Настройки" Foreground="{StaticResource TextBrush}" FontSize="17"
+            <TextBlock DockPanel.Dock="Top" Text="Настройки" Foreground="{DynamicResource TextBrush}" FontSize="17"
                        FontWeight="SemiBold" />
 
             <DockPanel DockPanel.Dock="Bottom" Margin="0,12,0,0" LastChildFill="True">
@@ -16,7 +16,7 @@
                     <Button Content="Сохранить" Style="{StaticResource AccentButton}" IsDefault="True" Click="OnSave" />
                     <Button Content="Отмена" Style="{StaticResource FlatButton}" IsCancel="True" Click="OnCancel" />
                 </StackPanel>
-                <TextBlock x:Name="StatusText" Foreground="{StaticResource TextBrush}" FontSize="12"
+                <TextBlock x:Name="StatusText" Foreground="{DynamicResource TextBrush}" FontSize="12"
                            TextWrapping="Wrap" VerticalAlignment="Center" Margin="0,0,12,0" />
             </DockPanel>
 
@@ -27,9 +27,12 @@
                              IsReadOnlyCaretVisible="False" Cursor="Hand"
                              PreviewKeyDown="OnHotkeyKeyDown" GotKeyboardFocus="OnHotkeyFocus"
                              LostKeyboardFocus="OnHotkeyBlur" />
-                    <TextBlock x:Name="HotkeyHint" Foreground="{StaticResource MutedBrush}" FontSize="12"
+                    <TextBlock x:Name="HotkeyHint" Foreground="{DynamicResource MutedBrush}" FontSize="12"
                                TextWrapping="Wrap" Margin="0,6,0,0"
                                Text="Щёлкните поле и нажмите сочетание: Ctrl, Alt или Win вместе с буквой, цифрой или F1–F24." />
+
+                    <TextBlock Text="Оформление" Style="{StaticResource SectionTitle}" />
+                    <WrapPanel x:Name="ThemeChoices" />
 
                     <TextBlock Text="Общее" Style="{StaticResource SectionTitle}" />
                     <CheckBox x:Name="AutostartBox" Style="{StaticResource FlatCheckBox}"
@@ -66,14 +69,14 @@
                         <TextBox x:Name="FfmpegFolderBox" Style="{StaticResource FlatTextBox}" IsReadOnly="True"
                                  FontSize="13" />
                     </DockPanel>
-                    <TextBlock x:Name="FfmpegStatus" Foreground="{StaticResource MutedBrush}" FontSize="12"
+                    <TextBlock x:Name="FfmpegStatus" Foreground="{DynamicResource MutedBrush}" FontSize="12"
                                TextWrapping="Wrap" Margin="0,6,0,0" />
                     <WrapPanel x:Name="FfmpegInstallButtons" Margin="0,8,0,0" />
                     <StackPanel x:Name="FfmpegPanel" Visibility="Collapsed" Margin="0,8,0,0">
                         <DockPanel>
                             <Button DockPanel.Dock="Right" Content="Отмена" Style="{StaticResource SmallButton}"
                                     Margin="8,0,0,0" Click="OnCancelFfmpegInstall" />
-                            <TextBlock x:Name="FfmpegInstallText" Foreground="{StaticResource TextBrush}" FontSize="12"
+                            <TextBlock x:Name="FfmpegInstallText" Foreground="{DynamicResource TextBrush}" FontSize="12"
                                        VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
                         </DockPanel>
                         <ProgressBar x:Name="FfmpegProgress" Style="{StaticResource FlatProgress}" Minimum="0"
@@ -87,7 +90,7 @@
                         <DockPanel>
                             <Button DockPanel.Dock="Right" Content="Отмена" Style="{StaticResource SmallButton}"
                                     Margin="8,0,0,0" Click="OnCancelDownload" />
-                            <TextBlock x:Name="DownloadText" Foreground="{StaticResource TextBrush}" FontSize="12"
+                            <TextBlock x:Name="DownloadText" Foreground="{DynamicResource TextBrush}" FontSize="12"
                                        VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
                         </DockPanel>
                         <ProgressBar x:Name="DownloadProgress" Style="{StaticResource FlatProgress}" Minimum="0"
@@ -101,7 +104,7 @@
                         <TextBox x:Name="WhisperModelBox" Style="{StaticResource FlatTextBox}" IsReadOnly="True"
                                  FontSize="13" />
                     </DockPanel>
-                    <TextBlock x:Name="WhisperStatus" Foreground="{StaticResource MutedBrush}" FontSize="12"
+                    <TextBlock x:Name="WhisperStatus" Foreground="{DynamicResource MutedBrush}" FontSize="12"
                                TextWrapping="Wrap" Margin="0,6,0,8" />
                     <WrapPanel x:Name="WhisperLanguages" />
                 </StackPanel>

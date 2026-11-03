@@ -58,6 +58,7 @@ public partial class App : Application
 
         _settings = SettingsStore.Load(SettingsStore.DefaultPath);
         Motion.UserEnabled = _settings.Animations;
+        Palette.Apply(Theme.Resolve(_settings.Theme));
 
         _ = RefreshSpeechSupportAsync();
         var noFfmpeg = FfmpegLocator.LocateDefault(_settings.FfmpegFolder) is null;
@@ -179,6 +180,7 @@ public partial class App : Application
 
         _settings = settings.Normalized();
         Motion.UserEnabled = _settings.Animations;
+        Palette.Apply(Theme.Resolve(_settings.Theme));
         _tray?.SetHotkey(_hotkey.Current?.Format());
         _ = RefreshSpeechSupportAsync(); // могла смениться папка ffmpeg
         return null;

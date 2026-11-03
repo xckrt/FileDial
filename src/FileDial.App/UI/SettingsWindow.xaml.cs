@@ -26,6 +26,7 @@ public partial class SettingsWindow : Window
 {
     private readonly Func<AppSettings, bool, string?> _apply;
     private readonly AppSettings _initial;
+    private bool _saved;
     private HotkeyGesture _hotkey;
     private string? _ffmpegFolder;
     private string? _whisperModel;
@@ -61,6 +62,20 @@ public partial class SettingsWindow : Window
         (settings.OutputFolder is null ? NextToSourceRadio : FolderRadio).IsChecked = true;
         UpdateOutputControls();
 
+        foreach (var id in AppSettings.Themes)
+        {
+            var choice = new RadioButton
+            {
+                Content = id == "auto" ? "Как в Windows" : Theme.Resolve(id).Name,
+                Tag = id,
+                GroupName = "Theme",
+                IsChecked = id == settings.Theme,
+                Style = (Style)Application.Current.FindResource("SegmentRadio"),
+            };
+            // Тема применяется сразу, чтобы её было видно; без сохранения откатывается при закрытии.
+            choice.Checked += (_, _) => Palette.Apply(Theme.Resolve(id));
+            ThemeChoices.Children.Add(choice);
+        }
         FillTargets(VideoTargets, "Video", AppSettings.VideoTargets, settings.VideoTargetBytes);
         FillTargets(ImageTargets, "Image", AppSettings.ImageTargets, settings.ImageTargetBytes);
         UpdateFfmpegStatus();
@@ -94,6 +109,8 @@ public partial class SettingsWindow : Window
         // Закрыли окно во время загрузки — останавливаем её, недокачанный файл удаляется.
         Closed += (_, _) =>
         {
+            if (!_saved)
+                Palette.Apply(Theme.Resolve(_initial.Theme));
             _download?.Cancel();
             _ffmpegInstall?.Cancel();
         };
@@ -442,6 +459,8 @@ public partial class SettingsWindow : Window
         var settings = _initial with
         {
             Hotkey = _hotkey.Format(),
+            Theme = ThemeChoices.Children.OfType<RadioButton>()
+                .FirstOrDefault(r => r.IsChecked == true)?.Tag as string ?? _initial.Theme,
             Animations = AnimationsBox.IsChecked == true,
             KeepHistory = HistoryBox.IsChecked == true,
             OpenFolderWhenDone = OpenFolderBox.IsChecked == true,
@@ -459,6 +478,7 @@ public partial class SettingsWindow : Window
             ShowError(error);
             return;
         }
+        _saved = true;
         Close();
     }
 

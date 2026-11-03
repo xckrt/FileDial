@@ -116,6 +116,18 @@ public class SettingsStoreTests : IDisposable
         Assert.Null(s.OutputFolder);
     }
 
+    [Theory]
+    [InlineData("brass", "brass")]
+    [InlineData("auto", "auto")]
+    [InlineData("неон", "graphite")] // неизвестная тема — к теме по умолчанию
+    [InlineData("", "graphite")]
+    public void Theme_IsNormalized(string stored, string expected)
+    {
+        Directory.CreateDirectory(_dir);
+        File.WriteAllText(File_, $$"""{ "Theme": "{{stored}}" }""");
+        Assert.Equal(expected, SettingsStore.Load(File_).Theme);
+    }
+
     [Fact]
     public void UnknownFields_AreIgnored()
     {

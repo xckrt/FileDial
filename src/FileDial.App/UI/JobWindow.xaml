@@ -4,7 +4,7 @@
         Title="FileDial" Width="440" Height="236"
         WindowStyle="None" ResizeMode="NoResize" AllowsTransparency="True" Background="Transparent"
         ShowInTaskbar="True" UseLayoutRounding="True">
-    <Border Background="{StaticResource BackgroundBrush}" BorderBrush="{StaticResource SectorBrush}"
+    <Border Background="{DynamicResource BackgroundBrush}" BorderBrush="{DynamicResource SectorBrush}"
             BorderThickness="1" CornerRadius="10" Padding="20,16,20,16"
             MouseLeftButtonDown="OnDragArea">
         <DockPanel LastChildFill="True">
@@ -18,24 +18,24 @@
             </StackPanel>
 
             <StackPanel>
-                <TextBlock x:Name="ActionText" Foreground="{StaticResource MutedBrush}" FontSize="12" />
-                <TextBlock x:Name="FileNameText" Foreground="{StaticResource TextBrush}" FontSize="15"
+                <TextBlock x:Name="ActionText" Foreground="{DynamicResource MutedBrush}" FontSize="12" />
+                <TextBlock x:Name="FileNameText" Foreground="{DynamicResource TextBrush}" FontSize="15"
                            FontWeight="SemiBold" TextTrimming="CharacterEllipsis" Margin="0,2,0,12" />
 
                 <DockPanel>
-                    <TextBlock x:Name="PercentText" DockPanel.Dock="Right" Foreground="{StaticResource TextBrush}"
+                    <TextBlock x:Name="PercentText" DockPanel.Dock="Right" Foreground="{DynamicResource TextBrush}"
                                FontSize="13" />
-                    <TextBlock x:Name="StageText" Foreground="{StaticResource TextBrush}" FontSize="13"
+                    <TextBlock x:Name="StageText" Foreground="{DynamicResource TextBrush}" FontSize="13"
                                TextTrimming="CharacterEllipsis" />
                 </DockPanel>
                 <ProgressBar x:Name="ProgressIndicator" Style="{StaticResource FlatProgress}" Minimum="0" Maximum="1"
                              Margin="0,8,0,0" />
 
-                <TextBlock x:Name="MessageText" Foreground="{StaticResource TextBrush}" FontSize="13"
+                <TextBlock x:Name="MessageText" Foreground="{DynamicResource TextBrush}" FontSize="13"
                            TextWrapping="Wrap" Margin="0,10,0,0" Visibility="Collapsed" MaxHeight="58"
                            TextTrimming="CharacterEllipsis" />
                 <TextBlock x:Name="HelpLinkText" Margin="0,6,0,0" FontSize="13" Visibility="Collapsed">
-                    <Hyperlink Foreground="{StaticResource AccentBrush}" Click="OnOpenReadme">
+                    <Hyperlink Foreground="{DynamicResource AccentBrush}" Click="OnOpenReadme">
                         Установить ffmpeg одной кнопкой
                     </Hyperlink>
                 </TextBlock>

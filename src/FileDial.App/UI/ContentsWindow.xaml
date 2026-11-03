@@ -1,18 +1,18 @@
-<Window x:Class="FileDial.App.UI.ContentsWindow"
+﻿<Window x:Class="FileDial.App.UI.ContentsWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="FileDial — содержимое архива" Width="560" Height="600"
         WindowStyle="None" ResizeMode="NoResize" AllowsTransparency="True" Background="Transparent"
         ShowInTaskbar="True" UseLayoutRounding="True">
-    <Border Background="{StaticResource BackgroundBrush}" BorderBrush="{StaticResource SectorBrush}"
+    <Border Background="{DynamicResource BackgroundBrush}" BorderBrush="{DynamicResource SectorBrush}"
             BorderThickness="1" CornerRadius="10" Padding="22,16,22,16"
             MouseLeftButtonDown="OnDragArea">
         <DockPanel LastChildFill="True">
             <StackPanel DockPanel.Dock="Top" Margin="0,0,0,10">
-                <TextBlock Text="Содержимое архива" Foreground="{StaticResource MutedBrush}" FontSize="12" />
-                <TextBlock x:Name="ArchiveName" Foreground="{StaticResource TextBrush}" FontSize="16" FontWeight="SemiBold"
+                <TextBlock Text="Содержимое архива" Foreground="{DynamicResource MutedBrush}" FontSize="12" />
+                <TextBlock x:Name="ArchiveName" Foreground="{DynamicResource TextBrush}" FontSize="16" FontWeight="SemiBold"
                            TextTrimming="CharacterEllipsis" Margin="0,2,0,2" />
-                <TextBlock x:Name="SummaryText" Foreground="{StaticResource MutedBrush}" FontSize="12" Text="Читаю архив…"
+                <TextBlock x:Name="SummaryText" Foreground="{DynamicResource MutedBrush}" FontSize="12" Text="Читаю архив…"
                            TextWrapping="Wrap" />
             </StackPanel>
 
@@ -42,7 +42,7 @@
                     <DataTemplate>
                         <DockPanel Margin="0,2">
                             <TextBlock DockPanel.Dock="Right" Text="{Binding SizeText}" FontSize="12" Margin="12,0,0,0"
-                                       Foreground="{StaticResource MutedBrush}" />
+                                       Foreground="{DynamicResource MutedBrush}" />
                             <TextBlock Text="{Binding Display}" Foreground="{Binding Brush}" FontSize="13"
                                        TextTrimming="CharacterEllipsis" ToolTip="{Binding Path}" />
                         </DockPanel>
