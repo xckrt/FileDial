@@ -1,4 +1,4 @@
-using FileDial.Core.Compression;
+﻿using FileDial.Core.Compression;
 using FileDial.Core.History;
 using FileDial.Core.Menu;
 using FileDial.Core.Text;
@@ -102,7 +102,8 @@ public static class BatchRunner
     {
         var target = ActionIds.TargetExtension(actionId, ActionIds.ImageToPrefix)
                      ?? ActionIds.TargetExtension(actionId, ActionIds.AudioToPrefix)
-                     ?? ActionIds.TargetExtension(actionId, ActionIds.VideoToPrefix);
+                     ?? ActionIds.TargetExtension(actionId, ActionIds.VideoToPrefix)
+                     ?? ActionIds.TargetExtension(actionId, ActionIds.ArchiveToPrefix);
         if (target is null)
             return null;
         return path => ActionCatalog.NormalizeExtension(Path.GetExtension(path)) == target

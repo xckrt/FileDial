@@ -402,7 +402,8 @@ internal sealed class RadialWindow : Window
         }
 
         _hint.Text = HintText();
-        _hint.Foreground = Palette.TextMuted;
+        // В компактном круге единственное действие выделяем цветом — это приглашение нажать.
+        _hint.Foreground = _menu.QuickAction is not null && !HasSectors ? Palette.Accent : Palette.TextMuted;
     }
 
     private string HintText()
@@ -429,7 +430,7 @@ internal sealed class RadialWindow : Window
     private string DefaultHint()
     {
         if (_menu.Kind == DialMenuKind.Unsupported)
-            return "Esc — закрыть";
+            return _menu.QuickAction is { } quick ? $"Enter или клик — {LowerFirst(quick.Title)}" : "Esc — закрыть";
         if (_menu.Actions.Any(a => a.IsEnabled))
             return "1–8, Enter · Esc";
         return _menu.Actions.FirstOrDefault(a => a.DisabledReason is not null and not ActionCatalog.NotInPrototype)
@@ -503,7 +504,9 @@ internal sealed class RadialWindow : Window
     {
         base.OnMouseLeftButtonUp(e);
         var (main, child, _) = Hit(e.GetPosition(this));
-        if (child is { } c)
+        if (!HasSectors && _menu.QuickAction is { } quick)
+            Run(quick); // компактный круг — одна большая кнопка
+        else if (child is { } c)
             Run(ChildAt(c));
         else if (main is { } m)
             Run(ActionAt(m));
@@ -533,6 +536,10 @@ internal sealed class RadialWindow : Window
                 return;
             case Key.Escape:
                 SafeClose();
+                return;
+            case Key.Enter or Key.Space when !HasSectors:
+                if (_menu.QuickAction is { } quick)
+                    Run(quick);
                 return;
             case Key.Enter or Key.Space:
                 if (_selectedChild is { } c)

@@ -40,6 +40,7 @@ public static class ActionCatalog
             FileKind.Video => ForVideo(path, sizeBytes, media, settings ?? JobSettings.Default),
             FileKind.Image => ForImage(path, sizeBytes, media, settings ?? JobSettings.Default),
             FileKind.Audio => ForAudio(path, media, settings ?? JobSettings.Default),
+            FileKind.Archive => ForArchive(path),
             _ => [],
         };
 
@@ -75,7 +76,8 @@ public static class ActionCatalog
     private static string? TargetOf(string actionId) =>
         ActionIds.TargetExtension(actionId, ActionIds.ImageToPrefix)
         ?? ActionIds.TargetExtension(actionId, ActionIds.AudioToPrefix)
-        ?? ActionIds.TargetExtension(actionId, ActionIds.VideoToPrefix);
+        ?? ActionIds.TargetExtension(actionId, ActionIds.VideoToPrefix)
+        ?? ActionIds.TargetExtension(actionId, ActionIds.ArchiveToPrefix);
 
     /// <summary>Все запускаемые действия, включая вложенные в группы.</summary>
     public static IEnumerable<DialAction> Flatten(IEnumerable<DialAction> actions) =>
@@ -133,6 +135,32 @@ public static class ActionCatalog
         Action(ActionIds.AudioTrim, "Обрезать", null),
         SpeechAction(ActionIds.SpeechToText, "В текст", settings, null),
     ];
+
+    public static readonly IReadOnlyList<(string Label, string Extension)> ArchiveFormats = [("ZIP", ".zip"), ("7z", ".7z")];
+
+    private static IReadOnlyList<DialAction> ForArchive(string path)
+    {
+        // zip распаковывает .NET; остальное — встроенный в Windows tar.exe (есть с Windows 10 1803).
+        string? noTar = !Archives.ArchiveSupport.IsZip(path) && !Archives.ArchiveSupport.TarAvailable
+            ? "Нужен tar.exe из Windows 10 1803 или новее" : null;
+        var formats = Formats(path, ArchiveFormats, ActionIds.ArchiveTo)
+            .Select(c => c.Id == ActionIds.ArchiveTo(".7z") && !Archives.ArchiveSupport.TarAvailable
+                ? c with { IsEnabled = false, DisabledReason = "Нужен tar.exe из Windows 10 1803 или новее" }
+                : c)
+            .ToList();
+        return
+        [
+            Action(ActionIds.ExtractHere, "Распаковать сюда", noTar),
+            Action(ActionIds.ExtractToFolder, "Распаковать в папку", noTar),
+            Action(ActionIds.ExtractTo, "Распаковать в…", noTar),
+            Action(ActionIds.TestArchive, "Проверить архив", noTar),
+            DialAction.Group(ActionIds.ArchiveConvert, "Формат", noTar is null ? formats
+                : formats.Select(c => c with { IsEnabled = false, DisabledReason = noTar }).ToList()),
+            Stub(ActionIds.ArchivePassword, "Защитить паролем"),
+            Stub(ActionIds.ArchiveSplit, "Разбить на части"),
+            Stub(ActionIds.ArchiveContents, "Содержимое"),
+        ];
+    }
 
     /// <summary>Вложенные секторы форматов; свой же формат неактивен.</summary>
     private static IReadOnlyList<DialAction> Formats(string path, IReadOnlyList<(string Label, string Extension)> formats,

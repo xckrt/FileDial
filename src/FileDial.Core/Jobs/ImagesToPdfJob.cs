@@ -1,4 +1,4 @@
-using FileDial.Core.Compression;
+﻿using FileDial.Core.Compression;
 using FileDial.Core.Text;
 
 namespace FileDial.Core.Jobs;
@@ -7,7 +7,7 @@ namespace FileDial.Core.Jobs;
 /// Картинки → один PDF, по картинке на страницу, в порядке выделения. Каждая картинка приводится
 /// к JPEG через ffmpeg (прозрачность — на белом фоне), затем всё собирается <see cref="PdfWriter"/>.
 /// </summary>
-public sealed class ImagesToPdfJob(FfmpegTools tools, string? outputDirectory = null) : IFileJob
+public sealed class ImagesToPdfJob(FfmpegTools tools, string? outputDirectory = null) : IFileJob, IMultiFileJob
 {
     public Task<JobResult> RunAsync(string sourcePath, IProgress<JobProgress>? progress, CancellationToken ct) =>
         RunAsync([sourcePath], progress, ct);

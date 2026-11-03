@@ -1,4 +1,5 @@
-﻿using FileDial.Core.Compression;
+﻿using FileDial.Core.Archives;
+using FileDial.Core.Compression;
 using FileDial.Core.Menu;
 using FileDial.Core.Settings;
 using FileDial.Core.Text;
@@ -17,6 +18,12 @@ public enum JobStatus
 
 public sealed record JobResult(JobStatus Status, string Message, string? OutputPath = null);
 
+/// <summary>Действие над несколькими файлами сразу, результат — один файл (PDF из картинок, архив из файлов).</summary>
+public interface IMultiFileJob
+{
+    Task<JobResult> RunAsync(IReadOnlyList<string> paths, IProgress<JobProgress>? progress, CancellationToken ct);
+}
+
 /// <summary>Действие над файлом, создающее новый файл рядом с исходником. Исходник только читается.</summary>
 public interface IFileJob
 {
@@ -26,10 +33,30 @@ public interface IFileJob
 public static class FileJobs
 {
     /// <summary>Задача для действия или null, если действие не реализовано.</summary>
-    public static IFileJob? Create(string actionId, FfmpegTools tools, JobSettings? settings = null)
+    /// <param name="tools">ffmpeg; для архивов не нужен (может быть null).</param>
+    public static IFileJob? Create(string actionId, FfmpegTools? tools, JobSettings? settings = null)
     {
         settings ??= JobSettings.Default;
         var output = settings.OutputFolder;
+
+        // Архивы — без ffmpeg.
+        switch (actionId)
+        {
+            case ActionIds.ExtractHere: return new ArchiveExtractJob(ExtractMode.Here, output);
+            case ActionIds.ExtractToFolder: return new ArchiveExtractJob(ExtractMode.ToFolder, output);
+            case ActionIds.TestArchive: return new ArchiveTestJob();
+            case ActionIds.CompressToZip: return new ArchiveCreateJob(ArchiveFormat.Zip, output);
+        }
+        if (ActionIds.TargetExtension(actionId, ActionIds.ArchiveToPrefix) is { } archiveTarget)
+            return archiveTarget switch
+            {
+                ".zip" => new ArchiveRepackJob(ArchiveFormat.Zip, output),
+                ".7z" => new ArchiveRepackJob(ArchiveFormat.SevenZip, output),
+                _ => null,
+            };
+
+        if (tools is null)
+            return null;
         return actionId switch
         {
             ActionIds.Compress25 => new CompressJob(tools,
@@ -42,8 +69,17 @@ public static class FileJobs
         };
     }
 
+    /// <summary>Нужен ли ffmpeg для действия (архивы обходятся без него).</summary>
+    public static bool NeedsFfmpeg(string actionId) =>
+        actionId is not (ActionIds.ExtractHere or ActionIds.ExtractToFolder or ActionIds.ExtractTo
+            or ActionIds.TestArchive or ActionIds.CompressToZip)
+        && ActionIds.TargetExtension(actionId, ActionIds.ArchiveToPrefix) is null;
+
+    /// <summary>Перед запуском нужно спросить папку назначения.</summary>
+    public static bool NeedsFolderInput(string actionId) => actionId == ActionIds.ExtractTo;
+
     public static bool IsImplemented(string actionId) =>
-        actionId is ActionIds.Compress25 or ActionIds.ImageCompress1Mb or ActionIds.ImageToPdf
+        !NeedsFfmpeg(actionId) || actionId is ActionIds.Compress25 or ActionIds.ImageCompress1Mb or ActionIds.ImageToPdf
             or ActionIds.Subtitles or ActionIds.SpeechToText || NeedsTrimInput(actionId) ||
         ConversionSpecs.For(actionId) is not null;
 

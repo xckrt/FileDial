@@ -22,6 +22,12 @@ public sealed record DialMenu(
     public IReadOnlyList<string> SourcePaths { get; init; } = SourcePath is null ? [] : [SourcePath];
 
     public bool IsBatch => SourcePaths.Count > 1;
+
+    /// <summary>
+    /// Единственное действие для компактного круга (у файлов без своего круга, папок, смешанного выделения):
+    /// Enter или клик по кругу запускает его. null — компактный круг только сообщает «не поддерживается».
+    /// </summary>
+    public DialAction? QuickAction { get; init; }
 }
 
 /// <summary>Результат обработки нажатия: либо круг, либо короткое уведомление.</summary>
@@ -64,14 +70,23 @@ public static class SelectionInterpreter
             case FileStateKind.Unavailable:
                 return new HotkeyOutcome.ShowToast("Файл недоступен: нет доступа или он занят");
             case FileStateKind.Directory:
-                return Unsupported(Path.GetFileName(path.TrimEnd('\\', '/')), path);
+                return Unsupported(Path.GetFileName(path.TrimEnd('\\', '/')), path, null, [path]);
         }
 
         var name = Path.GetFileName(path);
         var size = SizeFormatter.Format(state.Size);
         var kind = FileKinds.Of(path);
         if (kind == FileKind.Other)
-            return Unsupported(name, path, size);
+            return Unsupported(name, path, size, [path]);
+
+        if (kind == FileKind.Archive)
+        {
+            // Число файлов — для подписи; tar на огромном tar.gz может думать долго, поэтому с таймаутом.
+            var count = Archives.ArchiveSupport.CountFiles(path, TimeSpan.FromSeconds(2));
+            return new HotkeyOutcome.ShowMenu(new DialMenu(DialMenuKind.Actions, NameShortener.Middle(name, MaxTitleLength),
+                count is { } n ? $"{size} · {Archives.ArchiveSupport.FilesLabel(n)}" : size,
+                ActionCatalog.ForFile(path, state.Size, null, settings), path));
+        }
 
         // Длительность и размер кадра нужны, чтобы не предлагать заведомо ненужное или невозможное;
         // без ffprobe обходимся тем, что знаем по имени и размеру файла.
@@ -104,7 +119,7 @@ public static class SelectionInterpreter
         {
             var state = probe.Probe(path);
             if (state.Kind == FileStateKind.Directory)
-                return Unsupported($"Выделено {count}", null, "Среди выделенного есть папки");
+                return Unsupported($"Выделено {count}", null, "Среди выделенного есть папки", paths);
             if (state.Kind != FileStateKind.File)
                 return new HotkeyOutcome.ShowToast($"Файл недоступен: {Path.GetFileName(path)}");
             sizes.Add(state.Size);
@@ -112,9 +127,9 @@ public static class SelectionInterpreter
 
         var kinds = paths.Select(FileKinds.Of).Distinct().ToList();
         if (kinds.Count > 1)
-            return Unsupported($"Выделено {count}", null, "Файлы разных типов");
+            return Unsupported($"Выделено {count}", null, "Файлы разных типов", paths);
         if (kinds[0] == FileKind.Other)
-            return Unsupported($"Выделено {count}", null);
+            return Unsupported($"Выделено {count}", null, null, paths);
 
         var title = KindCount(kinds[0], paths.Count);
         var actions = ActionCatalog.ForBatch(kinds[0], paths, sizes, settings);
@@ -134,11 +149,22 @@ public static class SelectionInterpreter
         _ => Plural.Count(n, "файл", "файла", "файлов"),
     };
 
-    private static HotkeyOutcome Unsupported(string title, string? path, string? details = null) =>
+    /// <param name="zipPaths">Что можно сжать в ZIP прямо из компактного круга; null — ничего.</param>
+    private static HotkeyOutcome Unsupported(string title, string? path, string? details = null,
+        IReadOnlyList<string>? zipPaths = null) =>
         new HotkeyOutcome.ShowMenu(new DialMenu(
             DialMenuKind.Unsupported,
             NameShortener.Middle(title, MaxTitleLength),
-            details is null ? UnsupportedText : $"{details}\n{UnsupportedText}",
+            // Если можно хотя бы сжать в ZIP, «не поддерживается» было бы неправдой — оставляем размер или причину.
+            zipPaths is { Count: > 0 }
+                ? details ?? ""
+                : details is null ? UnsupportedText : $"{details}\n{UnsupportedText}",
             [],
-            path));
+            path ?? zipPaths?.FirstOrDefault())
+        {
+            SourcePaths = zipPaths ?? (path is null ? [] : [path]),
+            QuickAction = zipPaths is { Count: > 0 }
+                ? new DialAction(ActionIds.CompressToZip, "Сжать в ZIP", true) { Caption = "Сжать в ZIP" }
+                : null,
+        });
 }

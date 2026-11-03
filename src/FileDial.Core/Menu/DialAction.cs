@@ -60,6 +60,20 @@ public static class ActionIds
     public const string AudioTrim = "audio-trim";
     public const string SpeechToText = "audio-to-text";
 
+    // Архивы
+    public const string ExtractHere = "archive-extract-here";
+    public const string ExtractToFolder = "archive-extract-folder";
+    public const string ExtractTo = "archive-extract-to";
+    public const string TestArchive = "archive-test";
+    public const string ArchiveConvert = "archive-convert";
+    public const string ArchivePassword = "archive-password";
+    public const string ArchiveSplit = "archive-split";
+    public const string ArchiveContents = "archive-contents";
+    /// <summary>Сжать выбранные файлы и папки в ZIP (для всего, у чего нет своего круга).</summary>
+    public const string CompressToZip = "compress-to-zip";
+    public const string ArchiveToPrefix = "archive-to:";
+    public static string ArchiveTo(string extension) => ArchiveToPrefix + extension;
+
     /// <summary>Открыть настройки распознавания речи (скачать модель).</summary>
     public const string SetupSpeech = "setup-speech";
 

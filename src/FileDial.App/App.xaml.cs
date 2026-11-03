@@ -6,6 +6,7 @@ using FileDial.App.Selection;
 using FileDial.App.Settings;
 using FileDial.App.Tray;
 using FileDial.App.UI;
+using FileDial.Core.Archives;
 using FileDial.Core.Compression;
 using FileDial.Core.History;
 using FileDial.Core.Jobs;
@@ -259,11 +260,27 @@ public partial class App : Application
                 return;
             if (FileJobs.NeedsTrimInput(action.Id) && !menu.IsBatch)
                 AskTrimRange(action, menu.SourcePaths[0]);
+            else if (FileJobs.NeedsFolderInput(action.Id))
+                AskExtractFolder(action, menu.SourcePaths);
             else
                 StartJob(action, menu.SourcePaths);
         };
         _radial = radial;
         radial.Show();
+    }
+
+    /// <summary>«Распаковать в…»: сначала выбор папки, потом обычное окно выполнения (для пакета — одна папка на всех).</summary>
+    private void AskExtractFolder(DialAction action, IReadOnlyList<string> archives)
+    {
+        var dialog = new Microsoft.Win32.OpenFolderDialog
+        {
+            Title = "Куда распаковать",
+            InitialDirectory = Path.GetDirectoryName(archives[0]),
+        };
+        if (dialog.ShowDialog() != true)
+            return;
+        var folder = dialog.FolderName;
+        StartJob(action, archives, _ => new ArchiveExtractJob(ExtractMode.ToChosen, folder));
     }
 
     /// <summary>Обрезка: сначала окно с границами, потом обычное окно выполнения.</summary>
@@ -272,12 +289,12 @@ public partial class App : Application
         var settings = _settings;
         var dialog = new TrimWindow(sourcePath, WindowPlacement.CursorPosition(), settings.FfmpegFolder);
         dialog.Confirmed += request =>
-            StartJob(action, [sourcePath], tools => FileJobs.CreateTrim(tools, sourcePath, request, settings.Jobs));
+            StartJob(action, [sourcePath], tools => FileJobs.CreateTrim(tools!, sourcePath, request, settings.Jobs));
         dialog.Show();
         dialog.Activate();
     }
 
-    private void StartJob(DialAction action, IReadOnlyList<string> sourcePaths, Func<FfmpegTools, IFileJob>? jobFactory = null)
+    private void StartJob(DialAction action, IReadOnlyList<string> sourcePaths, Func<FfmpegTools?, IFileJob>? jobFactory = null)
     {
         var sourcePath = sourcePaths[0];
         // То же действие над тем же файлом параллельно бессмысленно — показываем уже идущее.

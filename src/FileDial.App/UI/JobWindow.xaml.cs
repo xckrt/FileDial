@@ -16,7 +16,7 @@ public partial class JobWindow : Window
     private readonly string _sourcePath;
     private readonly IReadOnlyList<string> _sources;
     private readonly string _actionId;
-    private readonly Func<FfmpegTools, IFileJob>? _jobFactory;
+    private readonly Func<FfmpegTools?, IFileJob>? _jobFactory;
     private readonly AppSettings _settings;
     private readonly CancellationTokenSource _cts = new();
     private string? _resultPath;
@@ -28,7 +28,7 @@ public partial class JobWindow : Window
     /// <param name="jobFactory">Готовая задача (например, обрезка с введёнными границами); иначе — по id действия.</param>
     /// <param name="sourcePaths">Один файл или несколько файлов одного типа (действие выполнится для каждого).</param>
     internal JobWindow(string actionId, string actionLabel, IReadOnlyList<string> sourcePaths, NativeMethods.POINT cursor,
-        AppSettings? settings = null, Func<FfmpegTools, IFileJob>? jobFactory = null)
+        AppSettings? settings = null, Func<FfmpegTools?, IFileJob>? jobFactory = null)
     {
         InitializeComponent();
         _settings = settings ?? new AppSettings();
@@ -78,7 +78,8 @@ public partial class JobWindow : Window
     private async Task RunAsync()
     {
         var tools = FfmpegLocator.LocateDefault(_settings.FfmpegFolder);
-        if (tools is null)
+        // Архивам ffmpeg не нужен — их можно распаковывать и до его установки.
+        if (tools is null && FileJobs.NeedsFfmpeg(_actionId))
         {
             ShowFinished(
                 "Для этого действия нужен ffmpeg — его ещё нет на компьютере.",
@@ -106,10 +107,10 @@ public partial class JobWindow : Window
             // Отдельный поток пула: чтение файлов и ожидание процессов не трогают UI-поток.
             JobResult result;
             var perFileHistory = false;
-            if (job is ImagesToPdfJob pdf)
+            if (job is IMultiFileJob multi)
             {
-                // Несколько картинок собираются в один документ — это одно действие, а не пакет.
-                result = await Task.Run(() => pdf.RunAsync(_sources, progress, _cts.Token));
+                // Несколько файлов собираются в один результат (PDF, ZIP) — это одно действие, а не пакет.
+                result = await Task.Run(() => multi.RunAsync(_sources, progress, _cts.Token));
             }
             else if (IsBatch)
             {

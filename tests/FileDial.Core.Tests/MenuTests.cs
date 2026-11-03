@@ -99,14 +99,16 @@ public class SelectionInterpreterTests
     }
 
     [Fact]
-    public void OtherType_ShowsUnsupported()
+    public void OtherType_ShowsCompactCircleWithZip()
     {
         var outcome = SelectionInterpreter.Interpret(SelectionResult.Success([@"C:\a\doc.pdf"]), File30Mb);
 
         var menu = Assert.IsType<HotkeyOutcome.ShowMenu>(outcome).Menu;
         Assert.Equal(DialMenuKind.Unsupported, menu.Kind);
         Assert.Empty(menu.Actions);
-        Assert.Contains("Пока не поддерживается", menu.Subtitle);
+        // Сжать в ZIP можно — значит, «не поддерживается» не пишем, только размер.
+        Assert.Equal("30 МБ", menu.Subtitle);
+        Assert.Equal(ActionIds.CompressToZip, menu.QuickAction!.Id);
     }
 
     [Fact]
