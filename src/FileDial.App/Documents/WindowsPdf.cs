@@ -4,6 +4,7 @@ using FileDial.Core.Archives;
 using FileDial.Core.Compression;
 using FileDial.Core.Documents;
 using FileDial.Core.Jobs;
+using FileDial.Core.Localization;
 using FileDial.Core.Text;
 using Windows.Graphics.Imaging;
 using Windows.Media.Ocr;
@@ -37,7 +38,7 @@ internal static class WindowsPdf
         }
         catch (Exception ex) when (ex is COMException or ArgumentException or UnauthorizedAccessException)
         {
-            throw new CompressionException($"Windows не смогла открыть {Path.GetFileName(path)}: файл повреждён или это не PDF.",
+            throw new CompressionException(Lang.T.ShellPdfOpenFailed(Path.GetFileName(path)),
                 ex.Message);
         }
     }
@@ -77,7 +78,7 @@ internal sealed class PdfImagesJob(string? outputDirectory = null) : IFileJob, I
 
     public async Task<JobResult> RunAsync(string sourcePath, IProgress<JobProgress>? progress, CancellationToken ct)
     {
-        progress?.Report(new JobProgress("Чтение PDF", null));
+        progress?.Report(new JobProgress(Lang.T.ShellReadingPdf, null));
         var doc = await WindowsPdf.LoadAsync(sourcePath, Password);
         var count = (int)doc.PageCount;
         var parent = outputDirectory ?? Path.GetDirectoryName(sourcePath)!;
@@ -94,18 +95,18 @@ internal sealed class PdfImagesJob(string? outputDirectory = null) : IFileJob, I
             for (var i = 0; i < count; i++)
             {
                 ct.ThrowIfCancellationRequested();
-                progress?.Report(new JobProgress($"Страница {i + 1} из {count}", (double)i / count));
+                progress?.Report(new JobProgress(Lang.T.ShellPageOf(i + 1, count), (double)i / count));
                 using var page = doc.GetPage((uint)i);
                 using var png = await WindowsPdf.RenderAsync(page, Dpi, MaxSide);
-                await using var file = File.Create(Path.Combine(staging, $"{stem} — стр. {(i + 1).ToString().PadLeft(digits, '0')}.png"));
+                await using var file = File.Create(Path.Combine(staging, Lang.T.ShellPageImageName(stem, (i + 1).ToString().PadLeft(digits, '0')) + ".png"));
                 await png.AsStreamForRead().CopyToAsync(file, ct);
             }
 
-            var result = FreeNames.Child(parent, $"{stem} (картинки)", isDirectory: true);
+            var result = FreeNames.Child(parent, Lang.T.ShellImagesFolderName(stem), isDirectory: true);
             Directory.Move(staging, result);
-            progress?.Report(new JobProgress("Готово", 1));
+            progress?.Report(new JobProgress(Lang.T.ShellProgressDone, 1));
             return new JobResult(JobStatus.Done,
-                $"{Plural.Count(count, "картинка", "картинки", "картинок")} → папка {Path.GetFileName(result)}.", result);
+                Lang.T.ShellImagesSaved(count, Path.GetFileName(result)), result);
         }
         finally
         {
@@ -129,7 +130,7 @@ internal sealed class PdfOcrJob(string? outputDirectory = null) : IFileJob, IPas
 
     public static string? WhyNot() =>
         OcrEngine.AvailableRecognizerLanguages.Count == 0
-            ? "В Windows нет языка для распознавания текста: Параметры → Время и язык → Язык → ваш язык → Распознавание текста."
+            ? Lang.T.ShellOcrNoLanguage
             : null;
 
     public async Task<JobResult> RunAsync(string sourcePath, IProgress<JobProgress>? progress, CancellationToken ct)
@@ -138,9 +139,9 @@ internal sealed class PdfOcrJob(string? outputDirectory = null) : IFileJob, IPas
                      ?? (OcrEngine.AvailableRecognizerLanguages.FirstOrDefault() is { } language
                          ? OcrEngine.TryCreateFromLanguage(language)
                          : null)
-                     ?? throw new CompressionException(WhyNot() ?? "Распознавание текста недоступно.");
+                     ?? throw new CompressionException(WhyNot() ?? Lang.T.ShellOcrUnavailable);
 
-        progress?.Report(new JobProgress("Чтение PDF", null));
+        progress?.Report(new JobProgress(Lang.T.ShellReadingPdf, null));
         var doc = await WindowsPdf.LoadAsync(sourcePath, Password);
         var count = (int)doc.PageCount;
         var directory = outputDirectory ?? Path.GetDirectoryName(sourcePath)!;
@@ -148,10 +149,12 @@ internal sealed class PdfOcrJob(string? outputDirectory = null) : IFileJob, IPas
             throw new CompressionException(problem);
 
         var text = new StringBuilder();
+        // Считаем только распознанные слова: разделители страниц — не текст.
+        var words = 0;
         for (var i = 0; i < count; i++)
         {
             ct.ThrowIfCancellationRequested();
-            progress?.Report(new JobProgress($"Распознавание · страница {i + 1} из {count}", (double)i / count));
+            progress?.Report(new JobProgress(Lang.T.ShellRecognizingPage(i + 1, count), (double)i / count));
             using var page = doc.GetPage((uint)i);
             using var png = await WindowsPdf.RenderAsync(page, Dpi, OcrEngine.MaxImageDimension);
             var decoder = await BitmapDecoder.CreateAsync(png);
@@ -162,16 +165,18 @@ internal sealed class PdfOcrJob(string? outputDirectory = null) : IFileJob, IPas
             {
                 if (i > 0)
                     text.AppendLine();
-                text.AppendLine($"— Страница {i + 1} —");
+                text.AppendLine(Lang.T.ShellPageMarker(i + 1));
             }
             foreach (var line in result.Lines)
+            {
                 text.AppendLine(line.Text);
+                // Номера страниц из скана — не текст.
+                words += line.Words.Count(w => !w.Text.All(char.IsDigit));
+            }
         }
 
-        var words = text.ToString().Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries)
-            .Count(w => !w.StartsWith('—') && !w.All(char.IsDigit));
         if (words == 0)
-            return new JobResult(JobStatus.NothingToDo, "Текст на страницах не найден.");
+            return new JobResult(JobStatus.NothingToDo, Lang.T.ShellNoTextFound);
 
         var temp = Path.Combine(directory, $".filedial-{Guid.NewGuid():N}.tmp");
         try
@@ -179,9 +184,9 @@ internal sealed class PdfOcrJob(string? outputDirectory = null) : IFileJob, IPas
             await File.WriteAllTextAsync(temp, text.ToString(), new UTF8Encoding(true), ct);
             var output = OutputFiles.MoveToFreeName(temp, () =>
                 OutputNameGenerator.Generate(sourcePath, "", ".txt", OutputNameGenerator.PathTaken, directory));
-            progress?.Report(new JobProgress("Готово", 1));
+            progress?.Report(new JobProgress(Lang.T.ShellProgressDone, 1));
             return new JobResult(JobStatus.Done,
-                $"{PdfFiles.PagesLabel(count)}, язык: {engine.RecognizerLanguage.DisplayName}. Сохранено как {Path.GetFileName(output)}.",
+                Lang.T.ShellOcrDone(PdfFiles.PagesLabel(count), engine.RecognizerLanguage.DisplayName, Path.GetFileName(output)),
                 output);
         }
         finally

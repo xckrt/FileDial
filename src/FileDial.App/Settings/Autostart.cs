@@ -1,3 +1,4 @@
+using FileDial.Core.Localization;
 using Microsoft.Win32;
 
 namespace FileDial.App.Settings;
@@ -39,7 +40,7 @@ internal static class Autostart
         catch (Exception ex) when (ex is System.Security.SecurityException or UnauthorizedAccessException or IOException)
         {
             ErrorLog.Write("Автозапуск", ex);
-            return "Не удалось изменить автозапуск: нет доступа к реестру.";
+            return Lang.T.ShellAutostartFailed;
         }
     }
 

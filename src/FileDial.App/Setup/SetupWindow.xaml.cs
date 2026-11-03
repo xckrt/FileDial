@@ -5,6 +5,7 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
 using FileDial.App.UI;
+using FileDial.Core.Localization;
 using FileDial.Core.Settings;
 using FileDial.Core.Setup;
 using FileDial.Core.Text;
@@ -33,6 +34,15 @@ public partial class SetupWindow : Window
     private string? _installedExe;
     private IReadOnlyList<string> _leftovers = [];
 
+    // Тексты, зависящие от хода работы, — функциями: при смене языка окно пересобирает их на новом (ApplyTexts).
+    private Func<string> _progressTitle = () => "";
+    private Func<string>? _stageText;
+    private Func<string> _doneTitle = () => "";
+    private Func<string> _doneText = () => "";
+    private bool _showHowTo;
+    private Func<string>? _folderNote;
+    private string _language = "auto";
+
     internal SetupWindow(bool uninstall, string sourceExe, string version, InstalledApp? installed)
     {
         InitializeComponent();
@@ -41,12 +51,16 @@ public partial class SetupWindow : Window
         _version = version;
         _installed = installed;
         _directory = installed?.Directory ?? Installer.DefaultDirectory;
-        VersionText.Text = $"Версия {version}";
 
         if (uninstall)
             InitUninstall();
         else
             InitInstall();
+        ApplyTexts();
+
+        // Язык выбирается прямо в установщике — окно переводится сразу.
+        Lang.Changed += ApplyTexts;
+        Closed += (_, _) => Lang.Changed -= ApplyTexts;
 
         // Появление: круг доворачивается на место, как в самой программе.
         if (Motion.Enabled)
@@ -69,20 +83,13 @@ public partial class SetupWindow : Window
 
     private void InitInstall()
     {
-        Title = "Установка FileDial";
         Dial.Highlight = 0;
         var settings = SettingsStore.Load(SettingsStore.DefaultPath);
         CenterText.Text = settings.HotkeyGesture.Format();
-        PrimaryButton.Content = "Установить";
 
         if (_installed is { } app)
         {
-            var same = app.Version == _version;
-            UpdateNote.Text = same
-                ? "Эта версия уже установлена — можно переустановить или поменять параметры ниже."
-                : $"Установлена версия {app.Version} — она обновится, настройки и история сохранятся.";
             UpdateNote.Visibility = Visibility.Visible;
-            PrimaryButton.Content = same ? "Переустановить" : "Обновить";
             // Папку при обновлении не меняем: иначе осталась бы вторая копия программы.
             ChangeFolderButton.IsEnabled = false;
             AutostartBox.IsChecked = _installer.AutostartPointsTo(app.ExePath);
@@ -94,7 +101,6 @@ public partial class SetupWindow : Window
         {
             var choice = new RadioButton
             {
-                Content = id == "auto" ? "Как в Windows" : Theme.Resolve(id).Name,
                 Tag = id,
                 GroupName = "SetupTheme",
                 IsChecked = id == settings.Theme,
@@ -109,8 +115,95 @@ public partial class SetupWindow : Window
             ThemeChoices.Children.Add(choice);
         }
 
-        ShowFolder();
+        _language = settings.Language;
+        foreach (var code in Lang.Settings)
+        {
+            var choice = new RadioButton
+            {
+                Tag = code,
+                GroupName = "SetupLanguage",
+                IsChecked = code == _language,
+                Style = (Style)Application.Current.FindResource("SegmentRadio"),
+            };
+            choice.Checked += (_, _) =>
+            {
+                _language = code;
+                Lang.Set(code);
+            };
+            LanguageChoices.Children.Add(choice);
+        }
     }
+
+    /// <summary>
+    /// Все тексты окна, которые задаются из кода, — для текущего состояния. Вызывается при открытии и при смене языка;
+    /// постоянные подписи переводятся сами (<c>{l:T …}</c> в разметке).
+    /// </summary>
+    private void ApplyTexts()
+    {
+        var t = Lang.T;
+        Title = _uninstall ? t.SetupUninstallWindowTitle : t.SetupWindowTitle;
+        VersionText.Text = t.SetupVersion(_version);
+
+        if (_uninstall)
+        {
+            UninstallText.Text = t.SetupUninstallText(_directory);
+            RemoveDataBox.Content = t.SetupRemoveData;
+            RemoveDataHint.Text = t.SetupRemoveDataHint(SizeFormatter.Format(_dataSize));
+        }
+        else
+        {
+            if (_installed is { } app)
+                UpdateNote.Text = app.Version == _version ? t.SetupSameVersionNote : t.SetupUpdateNote(app.Version);
+            foreach (var choice in ThemeChoices.Children.OfType<RadioButton>())
+                choice.Content = choice.Tag is "auto" ? t.LikeWindows : Theme.Resolve((string)choice.Tag).Name;
+            // Названия языков — на них самих, не переводятся.
+            foreach (var choice in LanguageChoices.Children.OfType<RadioButton>())
+                choice.Content = choice.Tag switch
+                {
+                    "ru" => new RuTexts().NativeName,
+                    "en" => new EnTexts().NativeName,
+                    _ => t.LikeWindows,
+                };
+            if (_folderNote is { } note)
+                FolderStatus.Text = note();
+            else if (_state == State.Options)
+                ShowFolder(); // заодно включает кнопку — только на странице параметров
+        }
+
+        switch (_state)
+        {
+            case State.Options:
+                PrimaryButton.Content = OptionsPrimaryText;
+                SecondaryButton.Content = t.SetupCancel;
+                FooterNote.Text = _uninstall ? "" : t.SetupNoAdmin;
+                break;
+            case State.Working:
+                SecondaryButton.Content = t.SetupCancel;
+                ProgressTitle.Text = _progressTitle();
+                if (_stageText is { } stage)
+                    StageText.Text = stage();
+                break;
+            case State.Done:
+                PrimaryButton.Content = _uninstall ? t.SetupClose : t.SetupDone;
+                DoneTitle.Text = _doneTitle();
+                DoneText.Text = _doneText();
+                if (_showHowTo)
+                    AddHowTo();
+                break;
+            case State.Failed:
+                PrimaryButton.Content = t.SetupBack;
+                SecondaryButton.Content = t.SetupClose;
+                DoneTitle.Text = _doneTitle();
+                DoneText.Text = _doneText();
+                break;
+        }
+    }
+
+    private string OptionsPrimaryText =>
+        _uninstall ? Lang.T.SetupRemove
+        : _installed is null ? Lang.T.SetupInstall
+        : _installed.Version == _version ? Lang.T.SetupReinstall
+        : Lang.T.SetupUpdate;
 
     private string ChosenTheme =>
         ThemeChoices.Children.OfType<RadioButton>().FirstOrDefault(r => r.IsChecked == true)?.Tag as string ?? "graphite";
@@ -129,8 +222,8 @@ public partial class SetupWindow : Window
             return;
         }
         var free = new DriveInfo(Path.GetPathRoot(_directory)!).AvailableFreeSpace;
-        FolderStatus.Text = $"Нужно {SizeFormatter.Format(PayloadBytes)} · на диске {Path.GetPathRoot(_directory)!.TrimEnd('\\')} " +
-                            $"свободно {SizeFormatter.Format(free)}";
+        FolderStatus.Text = Lang.T.SetupFolderSpace(SizeFormatter.Format(PayloadBytes),
+            Path.GetPathRoot(_directory)!.TrimEnd('\\'), SizeFormatter.Format(free));
         FolderStatus.Foreground = Palette.TextMuted;
     }
 
@@ -141,12 +234,13 @@ public partial class SetupWindow : Window
             existing = parent;
         var dialog = new Microsoft.Win32.OpenFolderDialog
         {
-            Title = "Куда установить FileDial",
+            Title = Lang.T.SetupChooseFolder,
             InitialDirectory = existing,
         };
         if (dialog.ShowDialog(this) != true)
             return;
         _directory = Installer.NormalizeDirectory(dialog.FolderName);
+        _folderNote = null;
         ShowFolder();
     }
 
@@ -154,18 +248,20 @@ public partial class SetupWindow : Window
     {
         var options = new InstallOptions(_directory, AutostartBox.IsChecked == true, StartMenuBox.IsChecked == true,
             DesktopBox.IsChecked == true, ChosenTheme) { ReadmePath = ShellActions.ReadmePath() };
-        BeginWork(_installed is null ? "Установка" : "Обновление");
+        BeginWork(_installed is null ? () => Lang.T.SetupInstalling : () => Lang.T.SetupUpdating);
         _cts = new CancellationTokenSource();
         var started = DateTime.UtcNow;
         try
         {
             if (RunningCopies.Any())
             {
-                StageText.Text = "Закрываю запущенный FileDial…";
+                SetStage(() => Lang.T.SetupClosingRunning);
                 await RunningCopies.StopAsync(TimeSpan.FromSeconds(10));
             }
             var progress = new Progress<InstallProgress>(p =>
             {
+                // Этапы пишет установщик ядра на текущем языке; язык во время работы не меняется.
+                _stageText = null;
                 StageText.Text = p.Stage;
                 SetDial(p.Fraction);
                 // Файл уже на месте — дальше отмена оставила бы установку наполовину.
@@ -174,21 +270,25 @@ public partial class SetupWindow : Window
             });
             _installedExe = await Task.Run(() => _installer.InstallAsync(_sourceExe, _version, options, progress, _cts.Token));
             await FinishAnimationAsync(started, 1);
+            SaveLanguage();
 
-            ShowDone("Готово", $"FileDial {_version} установлен в {_directory}.");
+            var directory = _directory;
+            ShowDone(() => Lang.T.SetupDone, () => Lang.T.SetupInstalledTo(_version, directory));
+            _showHowTo = true;
             AddHowTo();
             LaunchBox.Visibility = Visibility.Visible;
         }
         catch (OperationCanceledException)
         {
             ShowOptions(OptionsPage);
-            FolderStatus.Text = "Установка отменена — ничего не изменилось.";
+            _folderNote = () => Lang.T.SetupCancelled;
+            FolderStatus.Text = _folderNote();
             FolderStatus.Foreground = Palette.Text;
         }
         catch (Exception ex)
         {
             ErrorLog.Write("Установка", ex);
-            ShowFailed("Не получилось установить", Explain(ex));
+            ShowFailed(() => Lang.T.SetupInstallFailed, () => Explain(ex));
         }
     }
 
@@ -196,12 +296,7 @@ public partial class SetupWindow : Window
     {
         HowTo.Children.Clear();
         var hotkey = SettingsStore.Load(SettingsStore.DefaultPath).HotkeyGesture.Format();
-        string[] steps =
-        [
-            "Выделите файл в Проводнике или на рабочем столе",
-            $"Нажмите {hotkey} — круг появится у курсора",
-            "Выберите действие мышью или цифрой 1–8",
-        ];
+        string[] steps = [Lang.T.SetupStepSelect, Lang.T.SetupStepPress(hotkey), Lang.T.SetupStepPick];
         for (var i = 0; i < steps.Length; i++)
         {
             var row = new DockPanel { Margin = new Thickness(0, 0, 0, 8) };
@@ -220,7 +315,7 @@ public partial class SetupWindow : Window
         }
         HowTo.Children.Add(new TextBlock
         {
-            Text = "Значок FileDial живёт в области уведомлений: там настройки и история.",
+            Text = Lang.T.SetupTrayHint,
             FontSize = 12,
             Foreground = Palette.TextMuted,
             TextWrapping = TextWrapping.Wrap,
@@ -228,22 +323,33 @@ public partial class SetupWindow : Window
         });
     }
 
+    /// <summary>Язык, выбранный в установщике, — в настройки программы (тему записывает сам установщик).</summary>
+    private void SaveLanguage()
+    {
+        try
+        {
+            var settings = SettingsStore.Load(SettingsStore.DefaultPath);
+            if (settings.Language != _language)
+                SettingsStore.Save(SettingsStore.DefaultPath, settings with { Language = _language });
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            ErrorLog.Write("Язык после установки", ex);
+        }
+    }
+
     // --- Удаление ---
+
+    private long _dataSize;
 
     private void InitUninstall()
     {
-        Title = "Удаление FileDial";
         Dial.Progress = 1;
         OptionsPage.Visibility = Visibility.Collapsed;
         UninstallPage.Visibility = Visibility.Visible;
         FooterNote.Text = "";
-        PrimaryButton.Content = "Удалить";
-        UninstallText.Text = $"Программа будет удалена из «{_directory}» вместе с ярлыками, автозапуском и записью в «Приложениях».";
 
-        var data = _installer.DataSize();
-        RemoveDataBox.Content = "Удалить также настройки, историю и скачанные компоненты";
-        RemoveDataHint.Text = $"ffmpeg, модели распознавания речи и прочее — {SizeFormatter.Format(data)}. " +
-                              "Без галочки всё останется для повторной установки.";
+        var data = _dataSize = _installer.DataSize();
         if (data == 0)
             RemoveDataBox.Visibility = RemoveDataHint.Visibility = Visibility.Collapsed;
     }
@@ -252,53 +358,58 @@ public partial class SetupWindow : Window
     {
         var removeData = RemoveDataBox.IsChecked == true;
         var app = _installed ?? new InstalledApp(_directory, _version);
-        BeginWork("Удаление");
+        BeginWork(() => Lang.T.SetupUninstalling);
         var started = DateTime.UtcNow;
         try
         {
             if (RunningCopies.Any())
             {
-                StageText.Text = "Закрываю запущенный FileDial…";
+                SetStage(() => Lang.T.SetupClosingRunning);
                 await RunningCopies.StopAsync(TimeSpan.FromSeconds(10));
             }
             // Круг гаснет против хода установки.
             var progress = new Progress<InstallProgress>(p =>
             {
+                _stageText = null;
                 StageText.Text = p.Stage;
                 SetDial(1 - p.Fraction);
             });
             _leftovers = await Task.Run(() => _installer.Uninstall(app, removeData, progress));
             await FinishAnimationAsync(started, 0);
 
-            ShowDone("FileDial удалён", removeData
-                ? "Программа, настройки и скачанные компоненты удалены."
-                : "Настройки и история сохранены — при повторной установке всё вернётся.");
+            ShowDone(() => Lang.T.SetupRemoved,
+                () => removeData ? Lang.T.SetupRemovedAll : Lang.T.SetupRemovedKeptData);
             DoneMark.Visibility = Visibility.Collapsed;
             LaunchBox.Visibility = Visibility.Collapsed;
-            PrimaryButton.Content = "Закрыть";
         }
         catch (Exception ex)
         {
             ErrorLog.Write("Удаление", ex);
-            ShowFailed("Не получилось удалить", Explain(ex));
+            ShowFailed(() => Lang.T.SetupUninstallFailed, () => Explain(ex));
         }
     }
 
     // --- Общее ---
 
-    private void BeginWork(string title)
+    private void BeginWork(Func<string> title)
     {
         _state = State.Working;
+        _progressTitle = title;
+        _stageText = () => Lang.T.SetupPreparing;
         ShowPage(ProgressPage);
-        ProgressTitle.Text = title;
-        StageText.Text = "Подготовка";
         Dial.Highlight = -1;
         CenterText.Text = _uninstall ? "" : "0%";
         PrimaryButton.Visibility = Visibility.Collapsed;
         SecondaryButton.Visibility = _uninstall ? Visibility.Collapsed : Visibility.Visible;
-        SecondaryButton.Content = "Отмена";
         CloseButton.IsEnabled = false;
         FooterNote.Text = "";
+        ApplyTexts();
+    }
+
+    private void SetStage(Func<string> stage)
+    {
+        _stageText = stage;
+        StageText.Text = stage();
     }
 
     private void SetDial(double fraction)
@@ -320,32 +431,32 @@ public partial class SetupWindow : Window
         SetDial(final);
     }
 
-    private void ShowDone(string title, string text)
+    private void ShowDone(Func<string> title, Func<string> text)
     {
         _state = State.Done;
+        _doneTitle = title;
+        _doneText = text;
         ShowPage(DonePage);
-        DoneTitle.Text = title;
-        DoneText.Text = text;
+        ApplyTexts();
         CenterText.Text = "";
         DoneMark.Visibility = Visibility.Visible;
         Motion.Animate(DoneMark, OpacityProperty, 0, 1, 260);
-        PrimaryButton.Content = "Готово";
         PrimaryButton.Visibility = Visibility.Visible;
         SecondaryButton.Visibility = Visibility.Collapsed;
         CloseButton.IsEnabled = true;
     }
 
-    private void ShowFailed(string title, string text)
+    private void ShowFailed(Func<string> title, Func<string> text)
     {
         _state = State.Failed;
+        _doneTitle = title;
+        _doneText = text;
+        _showHowTo = false;
         ShowPage(DonePage);
-        DoneTitle.Text = title;
-        DoneText.Text = text;
+        ApplyTexts();
         HowTo.Children.Clear();
         LaunchBox.Visibility = Visibility.Collapsed;
-        PrimaryButton.Content = "Назад";
         PrimaryButton.Visibility = Visibility.Visible;
-        SecondaryButton.Content = "Закрыть";
         SecondaryButton.Visibility = Visibility.Visible;
         CloseButton.IsEnabled = true;
         SetDial(_uninstall ? 1 : 0);
@@ -356,12 +467,10 @@ public partial class SetupWindow : Window
     {
         _state = State.Options;
         ShowPage(_uninstall ? UninstallPage : page);
-        PrimaryButton.Content = _uninstall ? "Удалить" : _installed is null ? "Установить" : "Обновить";
+        ApplyTexts();
         PrimaryButton.Visibility = Visibility.Visible;
-        SecondaryButton.Content = "Отмена";
         SecondaryButton.Visibility = Visibility.Visible;
         CloseButton.IsEnabled = true;
-        FooterNote.Text = _uninstall ? "" : "Без прав администратора";
         SetDial(_uninstall ? 1 : 0);
         if (!_uninstall && _state != State.Done)
         {
@@ -379,9 +488,9 @@ public partial class SetupWindow : Window
 
     private static string Explain(Exception ex) => ex switch
     {
-        UnauthorizedAccessException => "Нет доступа к папке или реестру. Выберите папку в своём профиле и попробуйте снова.",
-        IOException io => $"Файл занят или диск недоступен: {io.Message}",
-        _ => "Подробности записаны в журнал ошибок (%LOCALAPPDATA%\\FileDial\\errors.log).",
+        UnauthorizedAccessException => Lang.T.SetupNoAccess,
+        IOException io => Lang.T.SetupFileBusy(io.Message),
+        _ => Lang.T.SetupSeeErrorLog,
     };
 
     private async void OnPrimary(object sender, RoutedEventArgs e)
