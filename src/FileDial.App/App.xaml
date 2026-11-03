@@ -225,6 +225,30 @@
             <Setter Property="Margin" Value="0,16,0,6" />
         </Style>
 
+        <Style x:Key="FlatPasswordBox" TargetType="PasswordBox">
+            <Setter Property="Background" Value="{StaticResource SectorBrush}" />
+            <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
+            <Setter Property="CaretBrush" Value="{StaticResource TextBrush}" />
+            <Setter Property="SelectionBrush" Value="{StaticResource AccentBrush}" />
+            <Setter Property="FontSize" Value="15" />
+            <Setter Property="Padding" Value="8,6" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="PasswordBox">
+                        <Border x:Name="Bg" Background="{TemplateBinding Background}" CornerRadius="6"
+                                BorderThickness="1" BorderBrush="{TemplateBinding Background}">
+                            <ScrollViewer x:Name="PART_ContentHost" Margin="{TemplateBinding Padding}" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="Bg" Property="BorderBrush" Value="{StaticResource AccentBrush}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
         <Style x:Key="FlatProgress" TargetType="ProgressBar">
             <Setter Property="Height" Value="6" />
             <Setter Property="Template">

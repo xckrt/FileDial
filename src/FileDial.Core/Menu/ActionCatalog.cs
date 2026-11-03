@@ -157,7 +157,7 @@ public static class ActionCatalog
             Action(ActionIds.TestArchive, "Проверить архив", noTar),
             DialAction.Group(ActionIds.ArchiveConvert, "Формат", noTar is null ? formats
                 : formats.Select(c => c with { IsEnabled = false, DisabledReason = noTar }).ToList()),
-            Stub(ActionIds.ArchivePassword, "Защитить паролем"),
+            Action(ActionIds.ArchivePassword, "Защитить паролем", noTar),
             Stub(ActionIds.ArchiveSplit, "Разбить на части"),
             Action(ActionIds.ArchiveContents, "Содержимое", noTar),
         ];

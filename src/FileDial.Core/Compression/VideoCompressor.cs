@@ -11,7 +11,7 @@ public enum CompressionStatus
 public sealed record CompressionResult(CompressionStatus Status, long SourceSize, string? OutputPath, long OutputSize);
 
 /// <summary>Ошибка с текстом для пользователя.</summary>
-public sealed class CompressionException(string message, string? details = null) : Exception(message)
+public class CompressionException(string message, string? details = null) : Exception(message)
 {
     public string? Details { get; } = details;
 }

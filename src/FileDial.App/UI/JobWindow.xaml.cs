@@ -2,6 +2,7 @@
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using FileDial.App.Interop;
+using FileDial.Core.Archives;
 using FileDial.Core.Compression;
 using FileDial.Core.History;
 using FileDial.Core.Jobs;
@@ -135,7 +136,7 @@ public partial class JobWindow : Window
             }
             else
             {
-                result = await Task.Run(() => job.RunAsync(_sourcePath, progress, _cts.Token));
+                result = await RunAskingPasswordAsync(job, progress);
             }
             _running = false;
 
@@ -201,6 +202,29 @@ public partial class JobWindow : Window
             StageText.Text = "Ошибка";
             ResetProgress();
             ShowFinished($"Не удалось обработать файл: {ex.Message}", HistoryStatus.Failed);
+        }
+    }
+
+    /// <summary>
+    /// Запуск с повтором: если архиву нужен пароль (или введённый неверен), спрашиваем и пробуем снова.
+    /// Отказ от ввода пароля — это отмена.
+    /// </summary>
+    private async Task<JobResult> RunAskingPasswordAsync(IFileJob job, IProgress<JobProgress> progress)
+    {
+        while (true)
+        {
+            try
+            {
+                return await Task.Run(() => job.RunAsync(_sourcePath, progress, _cts.Token));
+            }
+            catch (PasswordRequiredException ex) when (job is IPasswordAware aware)
+            {
+                StageText.Text = "Нужен пароль";
+                ProgressIndicator.IsIndeterminate = false;
+                var password = PasswordWindow.AskExisting(Path.GetFileName(_sourcePath), ex.WrongPassword, this)
+                               ?? throw new OperationCanceledException();
+                job = aware.WithPassword(password);
+            }
         }
     }
 

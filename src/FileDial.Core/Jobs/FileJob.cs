@@ -72,8 +72,11 @@ public static class FileJobs
     /// <summary>Нужен ли ffmpeg для действия (архивы обходятся без него).</summary>
     public static bool NeedsFfmpeg(string actionId) =>
         actionId is not (ActionIds.ExtractHere or ActionIds.ExtractToFolder or ActionIds.ExtractTo
-            or ActionIds.TestArchive or ActionIds.CompressToZip)
+            or ActionIds.TestArchive or ActionIds.CompressToZip or ActionIds.ArchivePassword)
         && ActionIds.TargetExtension(actionId, ActionIds.ArchiveToPrefix) is null;
+
+    /// <summary>Перед запуском нужно спросить новый пароль («Защитить паролем»).</summary>
+    public static bool NeedsNewPassword(string actionId) => actionId == ActionIds.ArchivePassword;
 
     /// <summary>Перед запуском нужно спросить папку назначения.</summary>
     public static bool NeedsFolderInput(string actionId) => actionId == ActionIds.ExtractTo;

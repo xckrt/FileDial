@@ -13,6 +13,19 @@ public enum ArchiveFormat
     SevenZip,
 }
 
+/// <summary>Архиву нужен пароль (или введённый неверен) — окно спросит пароль и повторит действие.</summary>
+public sealed class PasswordRequiredException(bool wrongPassword)
+    : CompressionException(wrongPassword ? "Неверный пароль." : "Архив защищён паролем.")
+{
+    public bool WrongPassword { get; } = wrongPassword;
+}
+
+/// <summary>Действие, которое можно повторить с паролем от архива.</summary>
+public interface IPasswordAware
+{
+    Jobs.IFileJob WithPassword(string password);
+}
+
 /// <summary>Общие сведения об архивах: имена, кодировки, запуск tar.exe.</summary>
 public static class ArchiveSupport
 {
@@ -127,22 +140,64 @@ public static class ArchiveSupport
             throw new CompressionException("В Windows нет tar.exe — такие архивы не поддерживаются (нужна Windows 10 1803 или новее).");
         var result = await ProcessRunner.RunAsync(Tar, args, null, captureOutput: false, ct, workingDirectory, TarOutput)
             .ConfigureAwait(false);
-        if (result.ExitCode != 0)
-            throw new CompressionException(failureMessage, result.ErrorTail);
+        if (result.ExitCode == 0)
+            return;
+
+        // Сообщения libarchive о шифровании: нет пароля / неверный / шифрование, которое он не умеет.
+        var error = result.ErrorTail;
+        if (error.Contains("read passphrase", StringComparison.OrdinalIgnoreCase))
+            throw new PasswordRequiredException(wrongPassword: false);
+        if (error.Contains("Incorrect passphrase", StringComparison.OrdinalIgnoreCase))
+            throw new PasswordRequiredException(wrongPassword: true);
+        if (error.Contains("encrypt", StringComparison.OrdinalIgnoreCase))
+            throw new CompressionException(
+                "Архив зашифрован способом, который встроенный в Windows tar.exe не поддерживает (зашифрованные 7z и RAR). " +
+                "Откройте его в 7-Zip или WinRAR.", error);
+        throw new CompressionException(failureMessage, error);
+    }
+
+    /// <summary>Аргумент пароля для tar.exe (он тоже идёт в ANSI-кодировке).</summary>
+    public static IReadOnlyList<string> PassphraseArgs(string? password)
+    {
+        if (password is null)
+            return [];
+        if (!IsAnsiSafe(password))
+            throw new CompressionException("В пароле есть символы, которые встроенный tar.exe не передаёт. Откройте архив в 7-Zip.");
+        return ["--passphrase", password];
+    }
+
+    /// <summary>Есть ли в zip зашифрованные файлы (тогда .NET его не распакует — нужен пароль и tar.exe).</summary>
+    public static bool IsEncryptedZip(string path)
+    {
+        try
+        {
+            using var zip = ZipFile.Open(path, ZipArchiveMode.Read, LegacyZipNames);
+            return zip.Entries.Any(e => e.IsEncrypted);
+        }
+        catch (InvalidDataException)
+        {
+            return false;
+        }
     }
 
     /// <summary>Распаковывает архив целиком в пустую папку <paramref name="target"/>.</summary>
+    /// <param name="password">Пароль от архива (только для zip: tar.exe расшифровывает ZipCrypto и AES).</param>
     public static async Task ExtractAllAsync(string archive, string target, IProgress<JobProgress>? progress,
-        string stage, CancellationToken ct)
+        string stage, CancellationToken ct, string? password = null)
     {
         Directory.CreateDirectory(target);
-        if (IsZip(archive))
+        if (IsZip(archive) && password is null)
+        {
+            if (IsEncryptedZip(archive))
+                throw new PasswordRequiredException(wrongPassword: false);
             await Task.Run(() => ExtractZip(archive, target, progress, stage, ct), ct).ConfigureAwait(false);
+        }
         else
         {
             progress?.Report(new JobProgress(stage, null));
             // bsdtar сам не пускает абсолютные пути и «..» за пределы папки.
-            await RunTarAsync(["-x", "-f", TarPath(archive)], ExtractError(""), ct, workingDirectory: target).ConfigureAwait(false);
+            await RunTarAsync(["-x", .. PassphraseArgs(password), "-f", TarPath(archive)], ExtractError(""), ct,
+                workingDirectory: target).ConfigureAwait(false);
         }
     }
 

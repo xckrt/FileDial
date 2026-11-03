@@ -271,11 +271,23 @@ public partial class App : Application
                 AskTrimRange(action, menu.SourcePaths[0]);
             else if (FileJobs.NeedsFolderInput(action.Id))
                 AskExtractFolder(action, menu.SourcePaths);
+            else if (FileJobs.NeedsNewPassword(action.Id))
+                AskNewPassword(action, menu.SourcePaths);
             else
                 StartJob(action, menu.SourcePaths);
         };
         _radial = radial;
         radial.Show();
+    }
+
+    /// <summary>«Защитить паролем»: пароль вводится дважды, затем обычное окно выполнения.</summary>
+    private void AskNewPassword(DialAction action, IReadOnlyList<string> archives)
+    {
+        var name = archives.Count == 1 ? Path.GetFileName(archives[0]) : $"Архивов: {archives.Count}";
+        if (PasswordWindow.AskNew(name) is not { } password)
+            return;
+        var output = _settings.Jobs.OutputFolder;
+        StartJob(action, archives, _ => new ArchiveProtectJob(password, output));
     }
 
     /// <summary>«Распаковать в…»: сначала выбор папки, потом обычное окно выполнения (для пакета — одна папка на всех).</summary>

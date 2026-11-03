@@ -19,8 +19,14 @@ public enum ExtractMode
 /// Распаковка через временную папку рядом с местом назначения: пока всё не распаковано, ничего «настоящего»
 /// не появляется; при ошибке или отмене временная папка удаляется. Существующие файлы и папки не перезаписываются.
 /// </summary>
-public sealed class ArchiveExtractJob(ExtractMode mode, string? destination = null) : IFileJob
+public sealed class ArchiveExtractJob(ExtractMode mode, string? destination = null) : IFileJob, IPasswordAware
 {
+    /// <summary>Пароль от архива, если он зашифрован.</summary>
+    public string? Password { get; init; }
+
+    public IFileJob WithPassword(string password) =>
+        new ArchiveExtractJob(mode, destination) { Password = password };
+
     public async Task<JobResult> RunAsync(string archive, IProgress<JobProgress>? progress, CancellationToken ct)
     {
         var parent = destination ?? Path.GetDirectoryName(archive)!;
@@ -32,7 +38,7 @@ public sealed class ArchiveExtractJob(ExtractMode mode, string? destination = nu
         var staging = Path.Combine(parent, $".filedial-{Guid.NewGuid():N}");
         try
         {
-            await ArchiveSupport.ExtractAllAsync(archive, staging, progress, "Распаковка", ct).ConfigureAwait(false);
+            await ArchiveSupport.ExtractAllAsync(archive, staging, progress, "Распаковка", ct, Password).ConfigureAwait(false);
             var entries = Directory.GetFileSystemEntries(staging);
             if (entries.Length == 0)
                 return new JobResult(JobStatus.NothingToDo, "Архив пуст — распаковывать нечего.");
@@ -72,8 +78,12 @@ public sealed class ArchiveExtractJob(ExtractMode mode, string? destination = nu
 }
 
 /// <summary>Проверка целостности: архив читается целиком, контрольные суммы сверяются, на диск ничего не пишется.</summary>
-public sealed class ArchiveTestJob : IFileJob
+public sealed class ArchiveTestJob : IFileJob, IPasswordAware
 {
+    public string? Password { get; init; }
+
+    public IFileJob WithPassword(string password) => new ArchiveTestJob { Password = password };
+
     public async Task<JobResult> RunAsync(string archive, IProgress<JobProgress>? progress, CancellationToken ct)
     {
         progress?.Report(new JobProgress("Проверка", null));
@@ -81,12 +91,14 @@ public sealed class ArchiveTestJob : IFileJob
         if (ArchiveSupport.TarAvailable)
         {
             // -O: содержимое в stdout (мы его отбрасываем) — tar читает всё и проверяет CRC каждого файла.
-            await ArchiveSupport.RunTarAsync(["-x", "-O", "-f", ArchiveSupport.TarPath(archive)],
+            await ArchiveSupport.RunTarAsync(["-x", "-O", .. ArchiveSupport.PassphraseArgs(Password), "-f", ArchiveSupport.TarPath(archive)],
                 "Архив повреждён или защищён паролем — прочитать его целиком не удалось.", ct).ConfigureAwait(false);
             files = ArchiveSupport.CountFiles(archive, TimeSpan.FromMinutes(5)) ?? 0;
         }
         else if (ArchiveSupport.IsZip(archive))
         {
+            if (ArchiveSupport.IsEncryptedZip(archive))
+                throw new CompressionException("Для проверки архива с паролем нужен tar.exe (Windows 10 1803 или новее).");
             files = await Task.Run(() => ReadZipFully(archive, ct), ct).ConfigureAwait(false);
         }
         else
@@ -248,14 +260,19 @@ public sealed class ArchiveCreateJob(ArchiveFormat format, string? outputDirecto
 }
 
 /// <summary>Перепаковка в другой формат: распаковка во временную папку и сжатие заново.</summary>
-public sealed class ArchiveRepackJob(ArchiveFormat format, string? outputDirectory = null) : IFileJob
+public sealed class ArchiveRepackJob(ArchiveFormat format, string? outputDirectory = null) : IFileJob, IPasswordAware
 {
+    /// <summary>Пароль от исходного архива; результат пароля не имеет (это перепаковка, а не защита).</summary>
+    public string? Password { get; init; }
+
+    public IFileJob WithPassword(string password) => new ArchiveRepackJob(format, outputDirectory) { Password = password };
+
     public async Task<JobResult> RunAsync(string archive, IProgress<JobProgress>? progress, CancellationToken ct)
     {
         var work = Path.Combine(Path.GetTempPath(), "FileDial", Guid.NewGuid().ToString("N"));
         try
         {
-            await ArchiveSupport.ExtractAllAsync(archive, work, progress, "Распаковка", ct).ConfigureAwait(false);
+            await ArchiveSupport.ExtractAllAsync(archive, work, progress, "Распаковка", ct, Password).ConfigureAwait(false);
             var entries = Directory.GetFileSystemEntries(work);
             if (entries.Length == 0)
                 return new JobResult(JobStatus.NothingToDo, "Архив пуст — перепаковывать нечего.");
@@ -271,6 +288,71 @@ public sealed class ArchiveRepackJob(ArchiveFormat format, string? outputDirecto
         {
             OutputFiles.TryDeleteDirectory(work);
         }
+    }
+}
+
+/// <summary>
+/// «Защитить паролем»: содержимое архива перепаковывается в ZIP с шифрованием AES-256 (<see cref="ZipAesWriter"/>)
+/// рядом с исходным — «имя_пароль.zip». Исходный архив не меняется.
+/// </summary>
+public sealed class ArchiveProtectJob(string newPassword, string? outputDirectory = null) : IFileJob, IPasswordAware
+{
+    public const string Suffix = "_пароль";
+
+    /// <summary>Пароль от исходного архива, если он уже был зашифрован.</summary>
+    public string? SourcePassword { get; init; }
+
+    public IFileJob WithPassword(string password) =>
+        new ArchiveProtectJob(newPassword, outputDirectory) { SourcePassword = password };
+
+    public async Task<JobResult> RunAsync(string archive, IProgress<JobProgress>? progress, CancellationToken ct)
+    {
+        var work = Path.Combine(Path.GetTempPath(), "FileDial", Guid.NewGuid().ToString("N"));
+        var parent = outputDirectory ?? Path.GetDirectoryName(archive)!;
+        var temp = Path.Combine(parent, $".filedial-{Guid.NewGuid():N}.tmp");
+        try
+        {
+            await ArchiveSupport.ExtractAllAsync(archive, work, progress, "Распаковка", ct, SourcePassword).ConfigureAwait(false);
+            var files = Directory.GetFiles(work, "*", SearchOption.AllDirectories);
+            if (files.Length == 0)
+                return new JobResult(JobStatus.NothingToDo, "Архив пуст — защищать нечего.");
+            if (OutputFolderCheck.WhyNot(parent, files.Sum(f => new FileInfo(f).Length) + 10_000_000) is { } problem)
+                throw new CompressionException(problem);
+
+            progress?.Report(new JobProgress("Шифрование", null));
+            await Task.Run(() => WriteEncrypted(work, temp, newPassword, progress, ct), ct).ConfigureAwait(false);
+
+            var final = OutputFiles.MoveToFreeName(temp,
+                () => FreeNames.Child(parent, ArchiveSupport.Stem(archive) + Suffix + ".zip", isDirectory: false));
+            progress?.Report(new JobProgress("Готово", 1));
+            return new JobResult(JobStatus.Done,
+                $"Создан архив с паролем: {Path.GetFileName(final)} ({ArchiveSupport.FilesLabel(files.Length)}, AES-256). " +
+                "Имена файлов в ZIP видны без пароля — так устроен формат.", final);
+        }
+        finally
+        {
+            OutputFiles.TryDeleteFile(temp);
+            OutputFiles.TryDeleteDirectory(work);
+        }
+    }
+
+    /// <summary>Все файлы и пустые папки из <paramref name="root"/> — в зашифрованный ZIP.</summary>
+    public static void WriteEncrypted(string root, string output, string password, IProgress<JobProgress>? progress,
+        CancellationToken ct)
+    {
+        using var stream = new FileStream(output, FileMode.CreateNew, FileAccess.ReadWrite);
+        using var writer = new ZipAesWriter(stream, password);
+        var files = Directory.GetFiles(root, "*", SearchOption.AllDirectories);
+        for (var i = 0; i < files.Length; i++)
+        {
+            ct.ThrowIfCancellationRequested();
+            progress?.Report(new JobProgress($"Шифрование · {Path.GetFileName(files[i])}", (double)i / files.Length));
+            writer.AddFile(files[i], Path.GetRelativePath(root, files[i]).Replace('\\', '/'), ct);
+        }
+        foreach (var dir in Directory.GetDirectories(root, "*", SearchOption.AllDirectories))
+            if (!Directory.EnumerateFileSystemEntries(dir).Any())
+                writer.AddDirectory(Path.GetRelativePath(root, dir).Replace('\\', '/'), Directory.GetLastWriteTime(dir));
+        writer.Finish();
     }
 }
 
