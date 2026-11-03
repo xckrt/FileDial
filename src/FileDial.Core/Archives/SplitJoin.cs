@@ -2,6 +2,7 @@
 using System.Text.RegularExpressions;
 using FileDial.Core.Compression;
 using FileDial.Core.Jobs;
+using FileDial.Core.Localization;
 using FileDial.Core.Text;
 
 namespace FileDial.Core.Archives;
@@ -13,14 +14,14 @@ namespace FileDial.Core.Archives;
 public static partial class FileParts
 {
     /// <summary>Готовые размеры части: почта и мессенджеры, CD, флешки FAT32 (не больше 4 ГиБ − 1 байт).</summary>
-    public static readonly IReadOnlyList<(string Label, long Bytes)> Presets =
+    public static IReadOnlyList<(string Label, long Bytes)> Presets =>
     [
-        ("10 МБ", 10_000_000),
-        ("25 МБ", 25_000_000),
-        ("100 МБ", 100_000_000),
-        ("700 МБ", 700_000_000),
-        ("1 ГБ", 1_000_000_000),
-        ("4 ГБ (FAT32)", uint.MaxValue),
+        ($"10 {Lang.T.Megabytes}", 10_000_000),
+        ($"25 {Lang.T.Megabytes}", 25_000_000),
+        ($"100 {Lang.T.Megabytes}", 100_000_000),
+        ($"700 {Lang.T.Megabytes}", 700_000_000),
+        ($"1 {Lang.T.Gigabytes}", 1_000_000_000),
+        ($"4 {Lang.T.Gigabytes} (FAT32)", uint.MaxValue),
     ];
 
     public static long PartCount(long fileSize, long partSize) =>
@@ -52,19 +53,19 @@ public static partial class FileParts
     public static string? Problem(IReadOnlyList<string> parts)
     {
         if (parts.Count == 0)
-            return "Не найдена первая часть (.001).";
+            return Lang.T.ArchiveNoFirstPart;
         if (parts.Count == 1)
-            return "Найдена только одна часть — остальные (.002 и дальше) должны лежать рядом.";
+            return Lang.T.ArchiveOnlyOnePart;
         var first = new FileInfo(parts[0]).Length;
         for (var i = 1; i < parts.Count - 1; i++)
             if (new FileInfo(parts[i]).Length != first)
-                return $"Часть {Path.GetFileName(parts[i])} другого размера — похоже, она повреждена или из другого набора.";
+                return Lang.T.ArchivePartWrongSize(Path.GetFileName(parts[i]));
         if (new FileInfo(parts[^1]).Length > first)
-            return "Последняя часть больше первой — похоже, набор неполный или перепутан.";
+            return Lang.T.ArchiveLastPartBigger;
         return null;
     }
 
-    public static string PartsLabel(long n) => Plural.Count(n, "часть", "части", "частей");
+    public static string PartsLabel(long n) => Lang.T.ArchiveParts(n);
 }
 
 /// <summary>Делит файл на части заданного размера рядом с ним. Исходный файл не меняется.</summary>
@@ -75,10 +76,9 @@ public sealed class FileSplitJob(long partSize, string? outputDirectory = null) 
         var size = new FileInfo(sourcePath).Length;
         var count = FileParts.PartCount(size, partSize);
         if (count <= 1)
-            return new JobResult(JobStatus.NothingToDo,
-                $"Файл ({SizeFormatter.Format(size)}) не больше одной части — делить нечего.");
+            return new JobResult(JobStatus.NothingToDo, Lang.T.ArchiveSplitNothing(SizeFormatter.Format(size)));
         if (count > 999)
-            throw new CompressionException("Получилось бы больше 999 частей — выберите размер части побольше.");
+            throw new CompressionException(Lang.T.ArchiveTooManyParts);
 
         var parent = outputDirectory ?? Path.GetDirectoryName(sourcePath)!;
         if (OutputFolderCheck.WhyNot(parent, size + 10_000_000) is { } problem)
@@ -113,11 +113,11 @@ public sealed class FileSplitJob(long partSize, string? outputDirectory = null) 
                 {
                     var read = await input.ReadAsync(buffer.AsMemory(0, (int)Math.Min(buffer.Length, left)), ct).ConfigureAwait(false);
                     if (read == 0)
-                        throw new IOException("Файл изменился во время деления.");
+                        throw new IOException(Lang.T.ArchiveFileChanged);
                     await output.WriteAsync(buffer.AsMemory(0, read), ct).ConfigureAwait(false);
                     left -= read;
                     done += read;
-                    progress?.Report(new JobProgress($"Часть {i} из {count}", (double)done / size));
+                    progress?.Report(new JobProgress(Lang.T.ArchiveStagePart(i, count), (double)done / size));
                 }
             }
 
@@ -125,11 +125,10 @@ public sealed class FileSplitJob(long partSize, string? outputDirectory = null) 
                 File.Move(temps[i], FileParts.PartName(basePath, i + 1));
             temps.Clear();
 
-            progress?.Report(new JobProgress("Готово", 1));
+            progress?.Report(new JobProgress(Lang.T.ArchiveDone, 1));
             return new JobResult(JobStatus.Done,
-                $"{FileParts.PartsLabel(count)} по {SizeFormatter.Format(partSize)}: " +
-                $"{Path.GetFileName(FileParts.PartName(basePath, 1))} … .{count:000}. " +
-                "Открываются 7-Zip или WinRAR (через .001), собираются FileDial.", FileParts.PartName(basePath, 1));
+                Lang.T.ArchiveSplitDone(count, SizeFormatter.Format(partSize), Path.GetFileName(FileParts.PartName(basePath, 1))),
+                FileParts.PartName(basePath, 1));
         }
         finally
         {
@@ -144,7 +143,7 @@ public sealed class FileJoinJob(string? outputDirectory = null) : IFileJob
 {
     public async Task<JobResult> RunAsync(string anyPart, IProgress<JobProgress>? progress, CancellationToken ct)
     {
-        var basePath = FileParts.BaseOf(anyPart) ?? throw new CompressionException("Это не часть файла (.001, .002, …).");
+        var basePath = FileParts.BaseOf(anyPart) ?? throw new CompressionException(Lang.T.ArchiveNotAPart);
         var parts = FileParts.Find(basePath);
         if (FileParts.Problem(parts) is { } problem)
             throw new CompressionException(problem);
@@ -169,7 +168,7 @@ public sealed class FileJoinJob(string? outputDirectory = null) : IFileJob
                     {
                         await output.WriteAsync(buffer.AsMemory(0, read), ct).ConfigureAwait(false);
                         done += read;
-                        progress?.Report(new JobProgress($"Часть {i + 1} из {parts.Count}", (double)done / total));
+                        progress?.Report(new JobProgress(Lang.T.ArchiveStagePart(i + 1, parts.Count), (double)done / total));
                     }
                 }
             }
@@ -177,9 +176,9 @@ public sealed class FileJoinJob(string? outputDirectory = null) : IFileJob
             // Если исходный файл ещё лежит рядом — не перезаписываем: «имя_2.zip».
             var final = OutputFiles.MoveToFreeName(temp,
                 () => FreeNames.Child(parent, Path.GetFileName(basePath), isDirectory: false));
-            progress?.Report(new JobProgress("Готово", 1));
+            progress?.Report(new JobProgress(Lang.T.ArchiveDone, 1));
             return new JobResult(JobStatus.Done,
-                $"Собрано из {Plural.Count(parts.Count, "части", "частей", "частей")}: {Path.GetFileName(final)} ({SizeFormatter.Format(total)}).", final);
+                Lang.T.ArchiveJoined(parts.Count, Path.GetFileName(final), SizeFormatter.Format(total)), final);
         }
         finally
         {

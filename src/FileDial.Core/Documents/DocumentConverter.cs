@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using FileDial.Core.Compression;
+using FileDial.Core.Localization;
 using Microsoft.Win32;
 
 namespace FileDial.Core.Documents;
@@ -20,8 +21,8 @@ public interface IDocumentConverter
 
 public static class DocumentConverters
 {
-    public const string NoConverter = "Нужен Microsoft Office или LibreOffice";
-    public const string NoOffice = "Нужен Microsoft Office";
+    public static string NoConverter => Lang.T.DocNoConverter;
+    public static string NoOffice => Lang.T.DocNoOffice;
 
     private static readonly Lazy<OfficeConverter> Office = new(() => new OfficeConverter());
     private static readonly Lazy<LibreOfficeConverter?> Libre = new(LibreOfficeConverter.Find);
@@ -168,9 +169,7 @@ internal sealed class OfficeConverter : IDocumentConverter
             catch (Exception ex)
             {
                 done.TrySetException(ex is COMException or InvalidCastException or Microsoft.CSharp.RuntimeBinder.RuntimeBinderException
-                    ? new CompressionException(
-                        $"{Name(family)} не смог открыть или сохранить {Path.GetFileName(source)}: документ защищён паролем, повреждён или формат не поддерживается.",
-                        ex.Message)
+                    ? new CompressionException(Lang.T.DocAppFailed(Name(family), Path.GetFileName(source)), ex.Message)
                     : ex);
             }
             finally
@@ -204,7 +203,7 @@ internal sealed class OfficeConverter : IDocumentConverter
             if (ownProcess() is { } pid)
                 try { Process.GetProcessById(pid).Kill(); } catch (Exception) { }
             if (ex is TimeoutException)
-                throw new CompressionException("Office не ответил за 5 минут — возможно, документ ждёт ответа в скрытом окне.");
+                throw new CompressionException(Lang.T.DocOfficeTimeout);
             throw;
         }
     }
@@ -272,7 +271,7 @@ internal sealed class LibreOfficeConverter(string soffice) : IDocumentConverter
     public async Task ConvertAsync(string source, string target, string? password, CancellationToken ct)
     {
         if (password is not null)
-            throw new CompressionException("Пароль на документ ставится только через Microsoft Office.");
+            throw new CompressionException(Lang.T.DocPasswordOfficeOnly);
 
         var extension = Path.GetExtension(target).ToLowerInvariant();
         var work = Path.Combine(Path.GetTempPath(), "FileDial", Guid.NewGuid().ToString("N"));
@@ -288,9 +287,7 @@ internal sealed class LibreOfficeConverter(string soffice) : IDocumentConverter
 
             var produced = Path.Combine(work, Path.GetFileNameWithoutExtension(source) + extension);
             if (!File.Exists(produced))
-                throw new CompressionException(
-                    $"LibreOffice не смог сохранить {Path.GetFileName(source)}: документ защищён паролем, повреждён или формат не поддерживается.",
-                    result.ErrorTail);
+                throw new CompressionException(Lang.T.DocLibreFailed(Path.GetFileName(source)), result.ErrorTail);
             File.Move(produced, target);
         }
         finally

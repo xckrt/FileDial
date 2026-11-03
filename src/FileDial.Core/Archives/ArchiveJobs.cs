@@ -1,6 +1,7 @@
 ﻿using System.IO.Compression;
 using FileDial.Core.Compression;
 using FileDial.Core.Jobs;
+using FileDial.Core.Localization;
 using FileDial.Core.Text;
 
 namespace FileDial.Core.Archives;
@@ -38,10 +39,10 @@ public sealed class ArchiveExtractJob(ExtractMode mode, string? destination = nu
         var staging = Path.Combine(parent, $".filedial-{Guid.NewGuid():N}");
         try
         {
-            await ArchiveSupport.ExtractAllAsync(archive, staging, progress, "Распаковка", ct, Password).ConfigureAwait(false);
+            await ArchiveSupport.ExtractAllAsync(archive, staging, progress, Lang.T.ArchiveStageExtracting, ct, Password).ConfigureAwait(false);
             var entries = Directory.GetFileSystemEntries(staging);
             if (entries.Length == 0)
-                return new JobResult(JobStatus.NothingToDo, "Архив пуст — распаковывать нечего.");
+                return new JobResult(JobStatus.NothingToDo, Lang.T.ArchiveEmptyExtract);
 
             var files = Directory.GetFiles(staging, "*", SearchOption.AllDirectories).Length;
             string result;
@@ -58,9 +59,8 @@ public sealed class ArchiveExtractJob(ExtractMode mode, string? destination = nu
                 Directory.Move(staging, result);
             }
 
-            progress?.Report(new JobProgress("Готово", 1));
-            return new JobResult(JobStatus.Done,
-                $"Распаковано: {ArchiveSupport.FilesLabel(files)} → {Path.GetFileName(result)}.", result);
+            progress?.Report(new JobProgress(Lang.T.ArchiveDone, 1));
+            return new JobResult(JobStatus.Done, Lang.T.ArchiveExtracted(files, Path.GetFileName(result)), result);
         }
         finally
         {
@@ -86,26 +86,26 @@ public sealed class ArchiveTestJob : IFileJob, IPasswordAware
 
     public async Task<JobResult> RunAsync(string archive, IProgress<JobProgress>? progress, CancellationToken ct)
     {
-        progress?.Report(new JobProgress("Проверка", null));
+        progress?.Report(new JobProgress(Lang.T.ArchiveStageTesting, null));
         int files;
         if (ArchiveSupport.TarAvailable)
         {
             // -O: содержимое в stdout (мы его отбрасываем) — tar читает всё и проверяет CRC каждого файла.
             await ArchiveSupport.RunTarAsync(["-x", "-O", .. ArchiveSupport.PassphraseArgs(Password), "-f", ArchiveSupport.TarPath(archive)],
-                "Архив повреждён или защищён паролем — прочитать его целиком не удалось.", ct).ConfigureAwait(false);
+                Lang.T.ArchiveTestFailed, ct).ConfigureAwait(false);
             files = ArchiveSupport.CountFiles(archive, TimeSpan.FromMinutes(5)) ?? 0;
         }
         else if (ArchiveSupport.IsZip(archive))
         {
             if (ArchiveSupport.IsEncryptedZip(archive))
-                throw new CompressionException("Для проверки архива с паролем нужен tar.exe (Windows 10 1803 или новее).");
+                throw new CompressionException(Lang.T.ArchiveTestNeedsTarPassword);
             files = await Task.Run(() => ReadZipFully(archive, ct), ct).ConfigureAwait(false);
         }
         else
         {
-            throw new CompressionException("Для проверки такого архива нужен tar.exe (Windows 10 1803 или новее).");
+            throw new CompressionException(Lang.T.ArchiveTestNeedsTar);
         }
-        return new JobResult(JobStatus.Done, $"Архив в порядке: {ArchiveSupport.FilesLabel(files)}, ошибок нет.");
+        return new JobResult(JobStatus.Done, Lang.T.ArchiveTestOk(files));
     }
 
     private static int ReadZipFully(string archive, CancellationToken ct)
@@ -125,7 +125,7 @@ public sealed class ArchiveTestJob : IFileJob, IPasswordAware
         }
         catch (InvalidDataException ex)
         {
-            throw new CompressionException("Архив повреждён.", ex.Message);
+            throw new CompressionException(Lang.T.ArchiveDamaged, ex.Message);
         }
     }
 }
@@ -147,8 +147,7 @@ public sealed class ArchiveCreateJob(ArchiveFormat format, string? outputDirecto
         var path = await CreateAsync(paths, parent, ArchiveName(paths), progress, ct).ConfigureAwait(false);
         var files = paths.Sum(p => Directory.Exists(p) ? Directory.GetFiles(p, "*", SearchOption.AllDirectories).Length : 1);
         return new JobResult(JobStatus.Done,
-            $"{ArchiveSupport.FilesLabel(files)} → {SizeFormatter.Format(new FileInfo(path).Length)}. " +
-            $"Сохранено как {Path.GetFileName(path)}.", path);
+            Lang.T.ArchiveCreated(files, SizeFormatter.Format(new FileInfo(path).Length), Path.GetFileName(path)), path);
     }
 
     /// <summary>Имя архива: для одного файла или папки — его имя, для нескольких — имя их папки.</summary>
@@ -160,7 +159,7 @@ public sealed class ArchiveCreateJob(ArchiveFormat format, string? outputDirecto
             return Directory.Exists(single) ? Path.GetFileName(single) : Path.GetFileNameWithoutExtension(single);
         }
         var folder = Path.GetFileName(Path.GetDirectoryName(paths[0].TrimEnd('\\', '/'))?.TrimEnd('\\', '/') ?? "");
-        return string.IsNullOrWhiteSpace(folder) ? "Архив" : folder;
+        return string.IsNullOrWhiteSpace(folder) ? Lang.T.ArchiveDefaultName : folder;
     }
 
     /// <summary>Создаёт архив из <paramref name="paths"/> (у всех один родитель) в <paramref name="parent"/>.</summary>
@@ -180,7 +179,7 @@ public sealed class ArchiveCreateJob(ArchiveFormat format, string? outputDirecto
                 await WriteSevenZipAsync(paths, temp, progress, ct).ConfigureAwait(false);
 
             var final = OutputFiles.MoveToFreeName(temp, () => FreeNames.Child(parent, name + Extension, isDirectory: false));
-            progress?.Report(new JobProgress("Готово", 1));
+            progress?.Report(new JobProgress(Lang.T.ArchiveDone, 1));
             return final;
         }
         finally
@@ -204,14 +203,14 @@ public sealed class ArchiveCreateJob(ArchiveFormat format, string? outputDirecto
         void AddFile(string file, string entryName)
         {
             ct.ThrowIfCancellationRequested();
-            progress?.Report(new JobProgress($"Сжатие · {Path.GetFileName(file)}", total > 0 ? (double)done / total : null));
+            progress?.Report(new JobProgress(Lang.T.ArchiveStageCompressingFile(Path.GetFileName(file)), total > 0 ? (double)done / total : null));
             try
             {
                 zip.CreateEntryFromFile(file, entryName, CompressionLevel.Optimal);
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
-                throw new CompressionException($"Не удалось прочитать {Path.GetFileName(file)}: файл занят или нет доступа.");
+                throw new CompressionException(Lang.T.ArchiveCannotRead(Path.GetFileName(file)));
             }
             done += new FileInfo(file).Length;
         }
@@ -242,20 +241,19 @@ public sealed class ArchiveCreateJob(ArchiveFormat format, string? outputDirecto
     private static async Task WriteSevenZipAsync(IReadOnlyList<string> paths, string temp, IProgress<JobProgress>? progress,
         CancellationToken ct)
     {
-        progress?.Report(new JobProgress("Сжатие в 7z", null));
+        progress?.Report(new JobProgress(Lang.T.ArchiveStageCompressing7z, null));
         var root = Path.GetDirectoryName(paths[0].TrimEnd('\\', '/'))!;
         var names = paths.Select(p => Path.GetFileName(p.TrimEnd('\\', '/'))).ToList();
         // Имена верхнего уровня идут аргументами — им нужен ANSI; вложенные tar читает с диска в Unicode.
         if (names.FirstOrDefault(n => !ArchiveSupport.IsAnsiSafe(n)) is { } bad)
-            throw new CompressionException(
-                $"В имени «{bad}» есть символы, которые встроенный tar.exe не передаёт в 7z. Сожмите в ZIP — там такой проблемы нет.");
+            throw new CompressionException(Lang.T.ArchiveName7zNotAnsi(bad));
         // Временный файл: относительно рабочей папки, если он там же, иначе — по короткому пути папки.
         var tempDir = Path.GetDirectoryName(temp)!;
         var tempArg = string.Equals(Path.GetFullPath(tempDir), Path.GetFullPath(root), StringComparison.OrdinalIgnoreCase)
             ? Path.GetFileName(temp)
             : Path.Combine(ArchiveSupport.TarPath(tempDir), Path.GetFileName(temp));
         await ArchiveSupport.RunTarAsync(["--format", "7zip", "-c", "-f", tempArg, .. names],
-            "Не удалось создать архив 7z.", ct, workingDirectory: root).ConfigureAwait(false);
+            Lang.T.Archive7zFailed, ct, workingDirectory: root).ConfigureAwait(false);
     }
 }
 
@@ -272,17 +270,17 @@ public sealed class ArchiveRepackJob(ArchiveFormat format, string? outputDirecto
         var work = Path.Combine(Path.GetTempPath(), "FileDial", Guid.NewGuid().ToString("N"));
         try
         {
-            await ArchiveSupport.ExtractAllAsync(archive, work, progress, "Распаковка", ct, Password).ConfigureAwait(false);
+            await ArchiveSupport.ExtractAllAsync(archive, work, progress, Lang.T.ArchiveStageExtracting, ct, Password).ConfigureAwait(false);
             var entries = Directory.GetFileSystemEntries(work);
             if (entries.Length == 0)
-                return new JobResult(JobStatus.NothingToDo, "Архив пуст — перепаковывать нечего.");
+                return new JobResult(JobStatus.NothingToDo, Lang.T.ArchiveEmptyRepack);
 
             var creator = new ArchiveCreateJob(format);
             var parent = outputDirectory ?? Path.GetDirectoryName(archive)!;
             var result = await creator.CreateAsync(entries, parent, ArchiveSupport.Stem(archive), progress, ct).ConfigureAwait(false);
             return new JobResult(JobStatus.Done,
-                $"{SizeFormatter.Format(new FileInfo(archive).Length)} → {SizeFormatter.Format(new FileInfo(result).Length)}. " +
-                $"Сохранено как {Path.GetFileName(result)}.", result);
+                Lang.T.ArchiveRepacked(SizeFormatter.Format(new FileInfo(archive).Length),
+                    SizeFormatter.Format(new FileInfo(result).Length), Path.GetFileName(result)), result);
         }
         finally
         {
@@ -297,7 +295,7 @@ public sealed class ArchiveRepackJob(ArchiveFormat format, string? outputDirecto
 /// </summary>
 public sealed class ArchiveProtectJob(string newPassword, string? outputDirectory = null) : IFileJob, IPasswordAware
 {
-    public const string Suffix = "_пароль";
+    public static string Suffix => Lang.T.ArchivePasswordSuffix;
 
     /// <summary>Пароль от исходного архива, если он уже был зашифрован.</summary>
     public string? SourcePassword { get; init; }
@@ -312,22 +310,20 @@ public sealed class ArchiveProtectJob(string newPassword, string? outputDirector
         var temp = Path.Combine(parent, $".filedial-{Guid.NewGuid():N}.tmp");
         try
         {
-            await ArchiveSupport.ExtractAllAsync(archive, work, progress, "Распаковка", ct, SourcePassword).ConfigureAwait(false);
+            await ArchiveSupport.ExtractAllAsync(archive, work, progress, Lang.T.ArchiveStageExtracting, ct, SourcePassword).ConfigureAwait(false);
             var files = Directory.GetFiles(work, "*", SearchOption.AllDirectories);
             if (files.Length == 0)
-                return new JobResult(JobStatus.NothingToDo, "Архив пуст — защищать нечего.");
+                return new JobResult(JobStatus.NothingToDo, Lang.T.ArchiveEmptyProtect);
             if (OutputFolderCheck.WhyNot(parent, files.Sum(f => new FileInfo(f).Length) + 10_000_000) is { } problem)
                 throw new CompressionException(problem);
 
-            progress?.Report(new JobProgress("Шифрование", null));
+            progress?.Report(new JobProgress(Lang.T.ArchiveStageEncrypting, null));
             await Task.Run(() => WriteEncrypted(work, temp, newPassword, progress, ct), ct).ConfigureAwait(false);
 
             var final = OutputFiles.MoveToFreeName(temp,
                 () => FreeNames.Child(parent, ArchiveSupport.Stem(archive) + Suffix + ".zip", isDirectory: false));
-            progress?.Report(new JobProgress("Готово", 1));
-            return new JobResult(JobStatus.Done,
-                $"Создан архив с паролем: {Path.GetFileName(final)} ({ArchiveSupport.FilesLabel(files.Length)}, AES-256). " +
-                "Имена файлов в ZIP видны без пароля — так устроен формат.", final);
+            progress?.Report(new JobProgress(Lang.T.ArchiveDone, 1));
+            return new JobResult(JobStatus.Done, Lang.T.ArchiveProtected(Path.GetFileName(final), files.Length), final);
         }
         finally
         {
@@ -346,7 +342,7 @@ public sealed class ArchiveProtectJob(string newPassword, string? outputDirector
         for (var i = 0; i < files.Length; i++)
         {
             ct.ThrowIfCancellationRequested();
-            progress?.Report(new JobProgress($"Шифрование · {Path.GetFileName(files[i])}", (double)i / files.Length));
+            progress?.Report(new JobProgress(Lang.T.ArchiveStageEncryptingFile(Path.GetFileName(files[i])), (double)i / files.Length));
             writer.AddFile(files[i], Path.GetRelativePath(root, files[i]).Replace('\\', '/'), ct);
         }
         foreach (var dir in Directory.GetDirectories(root, "*", SearchOption.AllDirectories))

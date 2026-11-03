@@ -1,5 +1,6 @@
 ﻿using System.Globalization;
 using System.Runtime.Versioning;
+using FileDial.Core.Localization;
 using FileDial.Core.Settings;
 using FileDial.Core.Text;
 using Microsoft.Win32;
@@ -82,13 +83,13 @@ public sealed class Installer(InstallEnvironment environment)
     public static string? WhyNot(string directory, long payloadBytes)
     {
         if (!Path.IsPathFullyQualified(directory))
-            return "Укажите полный путь к папке.";
+            return Lang.T.InstallNeedFullPath;
         if (directory.StartsWith(@"\\", StringComparison.Ordinal))
-            return "Сетевые папки не подходят — выберите папку на этом компьютере.";
+            return Lang.T.InstallNoNetwork;
 
         var windows = Environment.GetFolderPath(Environment.SpecialFolder.Windows);
         if (windows.Length > 0 && IsInside(directory, windows))
-            return "Папка Windows не подходит.";
+            return Lang.T.InstallNotWindowsFolder;
 
         var root = Path.GetPathRoot(directory)!;
         DriveInfo drive;
@@ -96,11 +97,11 @@ public sealed class Installer(InstallEnvironment environment)
         {
             drive = new DriveInfo(root);
             if (!drive.IsReady)
-                return "Диск недоступен.";
+                return Lang.T.InstallDriveNotReady;
         }
         catch (ArgumentException)
         {
-            return "Такого диска нет.";
+            return Lang.T.InstallNoDrive;
         }
 
         // Пишем пробный файл в ближайшую существующую папку: так видно права ещё до установки.
@@ -115,13 +116,12 @@ public sealed class Installer(InstallEnvironment environment)
         }
         catch (Exception ex) when (ex is UnauthorizedAccessException or IOException)
         {
-            return "Нет прав на запись в эту папку. Program Files требует прав администратора — " +
-                   "выберите папку в своём профиле или на другом диске.";
+            return Lang.T.InstallNoWriteAccess;
         }
 
         var needed = payloadBytes + Margin;
         return drive.AvailableFreeSpace < needed
-            ? $"Мало места: нужно {SizeFormatter.Format(needed)}, свободно {SizeFormatter.Format(drive.AvailableFreeSpace)}."
+            ? Lang.T.InstallLowSpace(SizeFormatter.Format(needed), SizeFormatter.Format(drive.AvailableFreeSpace))
             : null;
     }
 
@@ -173,7 +173,7 @@ public sealed class Installer(InstallEnvironment environment)
             var temp = exe + ".new";
             try
             {
-                await CopyAsync(sourceExe, temp, f => progress?.Report(new InstallProgress("Копирование программы", f * 0.85)), ct)
+                await CopyAsync(sourceExe, temp, f => progress?.Report(new InstallProgress(Lang.T.InstallStageCopying, f * 0.85)), ct)
                     .ConfigureAwait(false);
                 await ReplaceAsync(temp, exe, ct).ConfigureAwait(false);
             }
@@ -190,13 +190,13 @@ public sealed class Installer(InstallEnvironment environment)
             File.Copy(readme, Path.Combine(directory, ReadmeName), overwrite: true);
 
         // 2. Запись в «Приложениях»: оттуда же — удаление.
-        progress?.Report(new InstallProgress("Регистрация в Windows", 0.9));
+        progress?.Report(new InstallProgress(Lang.T.InstallStageRegistering, 0.9));
         using (var key = Registry.CurrentUser.CreateSubKey(environment.UninstallKey, writable: true))
         {
             key.SetValue("DisplayName", "FileDial");
             key.SetValue("DisplayVersion", version);
             key.SetValue("Publisher", "FileDial");
-            key.SetValue("Comments", "Круговое меню действий для файлов");
+            key.SetValue("Comments", Lang.T.InstallDescription);
             key.SetValue("InstallLocation", directory);
             key.SetValue("DisplayIcon", exe + ",0");
             key.SetValue("UninstallString", $"\"{exe}\" --uninstall");
@@ -208,7 +208,7 @@ public sealed class Installer(InstallEnvironment environment)
         }
 
         // 3. Автозапуск и ярлыки — как выбрано (при обновлении снятая галочка убирает прежний).
-        progress?.Report(new InstallProgress("Ярлыки и автозапуск", 0.95));
+        progress?.Report(new InstallProgress(Lang.T.InstallStageShortcuts, 0.95));
         using (var run = Registry.CurrentUser.CreateSubKey(environment.RunKey, writable: true))
         {
             if (options.Autostart)
@@ -227,7 +227,7 @@ public sealed class Installer(InstallEnvironment environment)
                 SettingsStore.Save(environment.SettingsPath, settings with { Theme = theme });
         }
 
-        progress?.Report(new InstallProgress("Готово", 1));
+        progress?.Report(new InstallProgress(Lang.T.InstallDone, 1));
         return exe;
     }
 
@@ -235,7 +235,7 @@ public sealed class Installer(InstallEnvironment environment)
     {
         var path = ShortcutPath(desktop);
         if (wanted)
-            ShellLink.Create(path, exe, "Круговое меню действий для файлов");
+            ShellLink.Create(path, exe, Lang.T.InstallDescription);
         else if (ShellLink.TargetOf(path) is { } target && string.Equals(Path.GetFileName(target), ExeName, StringComparison.OrdinalIgnoreCase))
             File.Delete(path);
     }
@@ -284,7 +284,7 @@ public sealed class Installer(InstallEnvironment environment)
     /// </summary>
     public IReadOnlyList<string> Uninstall(InstalledApp app, bool removeData, IProgress<InstallProgress>? progress = null)
     {
-        progress?.Report(new InstallProgress("Автозапуск и ярлыки", 0.2));
+        progress?.Report(new InstallProgress(Lang.T.InstallStageAutostart, 0.2));
         using (var run = Registry.CurrentUser.OpenSubKey(environment.RunKey, writable: true))
             if (run is not null && AutostartPointsTo(app.ExePath))
                 run.DeleteValue(environment.RunValue, throwOnMissingValue: false);
@@ -292,12 +292,12 @@ public sealed class Installer(InstallEnvironment environment)
             if (ShortcutExists(desktop, app.ExePath))
                 File.Delete(ShortcutPath(desktop));
 
-        progress?.Report(new InstallProgress("Запись в «Приложениях»", 0.4));
+        progress?.Report(new InstallProgress(Lang.T.InstallStageAppsEntry, 0.4));
         Registry.CurrentUser.DeleteSubKeyTree(environment.UninstallKey, throwOnMissingSubKey: false);
 
         if (removeData)
         {
-            progress?.Report(new InstallProgress("Настройки и данные", 0.6));
+            progress?.Report(new InstallProgress(Lang.T.InstallStageData, 0.6));
             foreach (var folder in environment.DataFolders.Where(Directory.Exists))
             {
                 // Программу, поставленную внутрь папки данных, удалит шаг ниже — здесь её не трогаем.
@@ -308,7 +308,7 @@ public sealed class Installer(InstallEnvironment environment)
             }
         }
 
-        progress?.Report(new InstallProgress("Файлы программы", 0.8));
+        progress?.Report(new InstallProgress(Lang.T.InstallStageFiles, 0.8));
         // Удаляем только своё: в папке, выбранной пользователем, могут лежать и чужие файлы.
         var leftovers = new List<string>();
         foreach (var file in new[] { app.ExePath, Path.Combine(app.Directory, ReadmeName) })
@@ -325,7 +325,7 @@ public sealed class Installer(InstallEnvironment environment)
         }
         if (leftovers.Count == 0)
             TryRemoveEmpty(app.Directory);
-        progress?.Report(new InstallProgress("Готово", 1));
+        progress?.Report(new InstallProgress(Lang.T.InstallDone, 1));
         return leftovers;
     }
 

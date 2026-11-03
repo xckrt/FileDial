@@ -1,7 +1,7 @@
 using FileDial.Core.Archives;
 using FileDial.Core.Compression;
 using FileDial.Core.Jobs;
-using FileDial.Core.Text;
+using FileDial.Core.Localization;
 using PdfSharp.Pdf;
 using PdfSharp.Pdf.IO;
 
@@ -10,9 +10,9 @@ namespace FileDial.Core.Documents;
 /// <summary>Чтение и запись PDF через PDFsharp. Исходник только читается; результат пишется рядом под новым именем.</summary>
 public static class PdfFiles
 {
-    public const string Locked = "PDF защищён паролем.";
+    public static string Locked => Lang.T.PdfLocked;
 
-    public static string PagesLabel(int n) => Plural.Count(n, "страница", "страницы", "страниц");
+    public static string PagesLabel(int n) => Lang.T.PdfPages(n);
 
     /// <summary>Число страниц для подписи в круге; null — не успели или не смогли (повреждён, под паролем).</summary>
     public static int? TryPageCount(string path, TimeSpan timeout)
@@ -57,8 +57,7 @@ public static class PdfFiles
                                        or FormatException or IndexOutOfRangeException or ArgumentException
                                        or NullReferenceException or InvalidCastException)
         {
-            throw new CompressionException($"Не удалось прочитать {Path.GetFileName(path)}: файл повреждён или это не PDF.",
-                ex.Message);
+            throw new CompressionException(Lang.T.PdfCannotRead(Path.GetFileName(path)), ex.Message);
         }
     }
 
@@ -126,7 +125,7 @@ public sealed class PdfRotateJob(int degrees, string? outputDirectory = null) : 
 
     public Task<JobResult> RunAsync(string sourcePath, IProgress<JobProgress>? progress, CancellationToken ct)
     {
-        progress?.Report(new JobProgress("Чтение PDF", null));
+        progress?.Report(new JobProgress(Lang.T.PdfStageReading, null));
         using var doc = PdfFiles.OpenEditable(sourcePath, Password);
         var count = doc.PageCount; // после сохранения документ PDFsharp читать уже нельзя
         foreach (var page in doc.Pages)
@@ -135,12 +134,11 @@ public sealed class PdfRotateJob(int degrees, string? outputDirectory = null) : 
             page.Rotate = ((page.Rotate + degrees) % 360 + 360) % 360;
         }
 
-        progress?.Report(new JobProgress("Сохранение", null));
-        var output = PdfFiles.SaveNear(doc, sourcePath, "_повёрнут", outputDirectory);
-        progress?.Report(new JobProgress("Готово", 1));
+        progress?.Report(new JobProgress(Lang.T.PdfStageSaving, null));
+        var output = PdfFiles.SaveNear(doc, sourcePath, Lang.T.PdfRotatedSuffix, outputDirectory);
+        progress?.Report(new JobProgress(Lang.T.DocDone, 1));
         return Task.FromResult(new JobResult(JobStatus.Done,
-            $"{PdfFiles.PagesLabel(count)} {(degrees > 0 ? "вправо" : "влево")}. Сохранено как {Path.GetFileName(output)}.",
-            output));
+            Lang.T.PdfRotated(count, degrees > 0, Path.GetFileName(output)), output));
     }
 }
 
@@ -153,10 +151,10 @@ public sealed class PdfSplitJob(string? outputDirectory = null) : IFileJob, IPas
 
     public Task<JobResult> RunAsync(string sourcePath, IProgress<JobProgress>? progress, CancellationToken ct)
     {
-        progress?.Report(new JobProgress("Чтение PDF", null));
+        progress?.Report(new JobProgress(Lang.T.PdfStageReading, null));
         using var source = PdfFiles.Open(sourcePath, Password, PdfDocumentOpenMode.Import);
         if (source.PageCount < 2)
-            return Task.FromResult(new JobResult(JobStatus.NothingToDo, "В документе одна страница — делить нечего."));
+            return Task.FromResult(new JobResult(JobStatus.NothingToDo, Lang.T.PdfSinglePageNothing));
 
         var parent = outputDirectory ?? Path.GetDirectoryName(sourcePath)!;
         if (OutputFolderCheck.WhyNot(parent, new FileInfo(sourcePath).Length * 3 + 1_000_000) is { } problem)
@@ -172,16 +170,16 @@ public sealed class PdfSplitJob(string? outputDirectory = null) : IFileJob, IPas
             for (var i = 1; i <= source.PageCount; i++)
             {
                 ct.ThrowIfCancellationRequested();
-                progress?.Report(new JobProgress($"Страница {i} из {source.PageCount}", (double)(i - 1) / source.PageCount));
+                progress?.Report(new JobProgress(Lang.T.PdfStagePage(i, source.PageCount), (double)(i - 1) / source.PageCount));
                 using var single = PdfFiles.CopyPages(source, [i]);
-                single.Save(Path.Combine(staging, $"{stem} — стр. {i.ToString().PadLeft(digits, '0')}.pdf"));
+                single.Save(Path.Combine(staging, Lang.T.PdfPageFileName(stem, i.ToString().PadLeft(digits, '0')) + ".pdf"));
             }
 
-            var result = FreeNames.Child(parent, $"{stem} (страницы)", isDirectory: true);
+            var result = FreeNames.Child(parent, Lang.T.PdfPagesFolder(stem), isDirectory: true);
             Directory.Move(staging, result);
-            progress?.Report(new JobProgress("Готово", 1));
+            progress?.Report(new JobProgress(Lang.T.DocDone, 1));
             return Task.FromResult(new JobResult(JobStatus.Done,
-                $"{PdfFiles.PagesLabel(source.PageCount)} → папка {Path.GetFileName(result)}.", result));
+                Lang.T.PdfSplitDone(source.PageCount, Path.GetFileName(result)), result));
         }
         finally
         {
@@ -199,17 +197,17 @@ public sealed class PdfExtractJob(IReadOnlyList<int> pages, string? outputDirect
 
     public Task<JobResult> RunAsync(string sourcePath, IProgress<JobProgress>? progress, CancellationToken ct)
     {
-        progress?.Report(new JobProgress("Чтение PDF", null));
+        progress?.Report(new JobProgress(Lang.T.PdfStageReading, null));
         using var source = PdfFiles.Open(sourcePath, Password, PdfDocumentOpenMode.Import);
         if (pages.Any(p => p < 1 || p > source.PageCount))
-            throw new CompressionException($"В документе {PdfFiles.PagesLabel(source.PageCount)} — такой страницы нет.");
+            throw new CompressionException(Lang.T.PdfNoSuchPage(source.PageCount));
 
         using var doc = PdfFiles.CopyPages(source, pages);
-        progress?.Report(new JobProgress("Сохранение", null));
-        var output = PdfFiles.SaveNear(doc, sourcePath, $"_стр_{PageRange.Label(pages)}", outputDirectory);
-        progress?.Report(new JobProgress("Готово", 1));
+        progress?.Report(new JobProgress(Lang.T.PdfStageSaving, null));
+        var output = PdfFiles.SaveNear(doc, sourcePath, Lang.T.PdfPagesSuffix(PageRange.Label(pages)), outputDirectory);
+        progress?.Report(new JobProgress(Lang.T.DocDone, 1));
         return Task.FromResult(new JobResult(JobStatus.Done,
-            $"{PdfFiles.PagesLabel(pages.Count)} из {source.PageCount}. Сохранено как {Path.GetFileName(output)}.", output));
+            Lang.T.PdfExtracted(pages.Count, source.PageCount, Path.GetFileName(output)), output));
     }
 }
 
@@ -222,13 +220,13 @@ public sealed class PdfMergeJob(string? outputDirectory = null) : IFileJob, IMul
     public Task<JobResult> RunAsync(IReadOnlyList<string> paths, IProgress<JobProgress>? progress, CancellationToken ct)
     {
         if (paths.Count < 2)
-            return Task.FromResult(new JobResult(JobStatus.NothingToDo, "Для объединения выделите несколько PDF."));
+            return Task.FromResult(new JobResult(JobStatus.NothingToDo, Lang.T.PdfMergeNeedsSeveral));
 
         using var merged = new PdfDocument();
         for (var i = 0; i < paths.Count; i++)
         {
             ct.ThrowIfCancellationRequested();
-            progress?.Report(new JobProgress($"Файл {i + 1} из {paths.Count} · {Path.GetFileName(paths[i])}",
+            progress?.Report(new JobProgress(Lang.T.PdfStageFile(i + 1, paths.Count, Path.GetFileName(paths[i])),
                 (double)i / paths.Count));
             try
             {
@@ -238,21 +236,20 @@ public sealed class PdfMergeJob(string? outputDirectory = null) : IFileJob, IMul
             }
             catch (PasswordRequiredException)
             {
-                throw new CompressionException($"{Path.GetFileName(paths[i])} защищён паролем — снимите защиту и повторите.");
+                throw new CompressionException(Lang.T.PdfMergeLocked(Path.GetFileName(paths[i])));
             }
         }
 
-        progress?.Report(new JobProgress("Сохранение", null));
+        progress?.Report(new JobProgress(Lang.T.PdfStageSaving, null));
         var pageCount = merged.PageCount;
         // Имя — по папке, как у «Собрать в PDF» из картинок.
         var name = ImagesToPdfJob.PdfName(paths);
         var directory = outputDirectory ?? Path.GetDirectoryName(paths[0])!;
-        var output = PdfFiles.SaveNear(merged, paths[0], "_объединено", outputDirectory,
+        var output = PdfFiles.SaveNear(merged, paths[0], Lang.T.PdfMergedSuffix, outputDirectory,
             nameSource: Path.Combine(directory, name + ".src"));
-        progress?.Report(new JobProgress("Готово", 1));
+        progress?.Report(new JobProgress(Lang.T.DocDone, 1));
         return Task.FromResult(new JobResult(JobStatus.Done,
-            $"{Plural.Count(paths.Count, "файл", "файла", "файлов")}, {PdfFiles.PagesLabel(pageCount)}. " +
-            $"Сохранено как {Path.GetFileName(output)}.", output));
+            Lang.T.PdfMerged(paths.Count, pageCount, Path.GetFileName(output)), output));
     }
 }
 
@@ -266,7 +263,7 @@ public sealed class PdfProtectJob(string newPassword, string? outputDirectory = 
 
     public Task<JobResult> RunAsync(string sourcePath, IProgress<JobProgress>? progress, CancellationToken ct)
     {
-        progress?.Report(new JobProgress("Чтение PDF", null));
+        progress?.Report(new JobProgress(Lang.T.PdfStageReading, null));
         using var doc = PdfFiles.OpenEditable(sourcePath, SourcePassword);
         ct.ThrowIfCancellationRequested();
 
@@ -275,10 +272,9 @@ public sealed class PdfProtectJob(string newPassword, string? outputDirectory = 
         security.OwnerPassword = newPassword;
         doc.SecurityHandler.SetEncryptionToV5(true);
 
-        progress?.Report(new JobProgress("Шифрование", null));
-        var output = PdfFiles.SaveNear(doc, sourcePath, "_с_паролем", outputDirectory);
-        progress?.Report(new JobProgress("Готово", 1));
-        return Task.FromResult(new JobResult(JobStatus.Done,
-            $"Сохранено как {Path.GetFileName(output)}. Без пароля документ не открыть — запишите его.", output));
+        progress?.Report(new JobProgress(Lang.T.PdfStageEncrypting, null));
+        var output = PdfFiles.SaveNear(doc, sourcePath, Lang.T.DocPasswordSuffix, outputDirectory);
+        progress?.Report(new JobProgress(Lang.T.DocDone, 1));
+        return Task.FromResult(new JobResult(JobStatus.Done, Lang.T.DocProtected(Path.GetFileName(output)), output));
     }
 }

@@ -3,7 +3,7 @@ using System.Text;
 using FileDial.Core.Archives;
 using FileDial.Core.Compression;
 using FileDial.Core.Jobs;
-using FileDial.Core.Text;
+using FileDial.Core.Localization;
 using PdfSharp.Pdf;
 using PdfSharp.Pdf.IO;
 
@@ -47,7 +47,7 @@ public sealed class DocumentConvertJob(string targetExtension, string? outputDir
         var directory = DocumentOutput.Directory(sourcePath, outputDirectory);
         DocumentOutput.CheckSpace(directory, new FileInfo(sourcePath).Length * 3 + 5_000_000);
 
-        progress?.Report(new JobProgress($"{converter.Name(family)}: сохранение в {Label(targetExtension)}", null));
+        progress?.Report(new JobProgress(Lang.T.DocStageSavingAs(converter.Name(family), Label(targetExtension)), null));
         var work = DocumentOutput.WorkDirectory();
         try
         {
@@ -61,8 +61,8 @@ public sealed class DocumentConvertJob(string targetExtension, string? outputDir
             try
             {
                 var output = DocumentOutput.Finish(temp, sourcePath, "", targetExtension, directory);
-                progress?.Report(new JobProgress("Готово", 1));
-                var note = targetExtension == ".csv" && family == DocumentFamily.Sheet ? " В CSV попадает только первый лист." : "";
+                progress?.Report(new JobProgress(Lang.T.DocDone, 1));
+                var note = targetExtension == ".csv" && family == DocumentFamily.Sheet ? Lang.T.DocCsvFirstSheetNote : "";
                 return new JobResult(JobStatus.Done, FileJobs.DoneMessage(new FileInfo(sourcePath).Length, output) + note, output);
             }
             finally
@@ -90,7 +90,7 @@ public sealed class DocumentProtectJob(string password, string? outputDirectory 
         var directory = DocumentOutput.Directory(sourcePath, outputDirectory);
         DocumentOutput.CheckSpace(directory, new FileInfo(sourcePath).Length * 3 + 5_000_000);
 
-        progress?.Report(new JobProgress($"{converter.Name(family)}: шифрование", null));
+        progress?.Report(new JobProgress(Lang.T.DocStageEncrypting(converter.Name(family)), null));
         var work = DocumentOutput.WorkDirectory();
         try
         {
@@ -100,10 +100,9 @@ public sealed class DocumentProtectJob(string password, string? outputDirectory 
             File.Move(produced, temp);
             try
             {
-                var output = DocumentOutput.Finish(temp, sourcePath, "_с_паролем", extension, directory);
-                progress?.Report(new JobProgress("Готово", 1));
-                return new JobResult(JobStatus.Done,
-                    $"Сохранено как {Path.GetFileName(output)}. Без пароля документ не открыть — запишите его.", output);
+                var output = DocumentOutput.Finish(temp, sourcePath, Lang.T.DocPasswordSuffix, extension, directory);
+                progress?.Report(new JobProgress(Lang.T.DocDone, 1));
+                return new JobResult(JobStatus.Done, Lang.T.DocProtected(Path.GetFileName(output)), output);
             }
             finally
             {
@@ -136,7 +135,7 @@ public sealed class DocumentsToPdfJob(string? outputDirectory = null) : IFileJob
             {
                 ct.ThrowIfCancellationRequested();
                 var path = paths[i];
-                progress?.Report(new JobProgress($"Документ {i + 1} из {paths.Count} · {Path.GetFileName(path)}",
+                progress?.Report(new JobProgress(Lang.T.DocStageDocument(i + 1, paths.Count, Path.GetFileName(path)),
                     (double)i / paths.Count));
                 var pdf = Path.Combine(work, $"{i}.pdf");
                 var family = OfficeDocs.FamilyOf(path);
@@ -149,7 +148,7 @@ public sealed class DocumentsToPdfJob(string? outputDirectory = null) : IFileJob
                     merged.AddPage(page);
             }
 
-            progress?.Report(new JobProgress("Сборка PDF", null));
+            progress?.Report(new JobProgress(Lang.T.DocStageBuildingPdf, null));
             var pageCount = merged.PageCount;
             var temp = DocumentOutput.TempNear(directory);
             try
@@ -158,10 +157,8 @@ public sealed class DocumentsToPdfJob(string? outputDirectory = null) : IFileJob
                     merged.Save(stream, closeStream: false);
                 var nameSource = Path.Combine(directory, ImagesToPdfJob.PdfName(paths) + ".src");
                 var output = DocumentOutput.Finish(temp, nameSource, "", ".pdf", directory);
-                progress?.Report(new JobProgress("Готово", 1));
-                return new JobResult(JobStatus.Done,
-                    $"{Plural.Count(paths.Count, "документ", "документа", "документов")}, {PdfFiles.PagesLabel(pageCount)}. " +
-                    $"Сохранено как {Path.GetFileName(output)}.", output);
+                progress?.Report(new JobProgress(Lang.T.DocDone, 1));
+                return new JobResult(JobStatus.Done, Lang.T.DocCombined(paths.Count, pageCount, Path.GetFileName(output)), output);
             }
             finally
             {
@@ -182,7 +179,7 @@ public sealed class DocumentTextJob(string? outputDirectory = null) : IFileJob
     {
         var directory = DocumentOutput.Directory(sourcePath, outputDirectory);
         DocumentOutput.CheckSpace(directory, new FileInfo(sourcePath).Length + 5_000_000);
-        progress?.Report(new JobProgress("Чтение текста", null));
+        progress?.Report(new JobProgress(Lang.T.DocStageReadingText, null));
 
         string text;
         if (OfficeDocs.IsPackage(sourcePath))
@@ -209,7 +206,7 @@ public sealed class DocumentTextJob(string? outputDirectory = null) : IFileJob
         }
 
         if (string.IsNullOrWhiteSpace(text))
-            return new JobResult(JobStatus.NothingToDo, "В документе нет текста — возможно, там только картинки.");
+            return new JobResult(JobStatus.NothingToDo, Lang.T.DocNoText);
 
         var temp = DocumentOutput.TempNear(directory);
         try
@@ -217,10 +214,9 @@ public sealed class DocumentTextJob(string? outputDirectory = null) : IFileJob
             // С BOM: так старый Блокнот и Excel сразу видят UTF-8.
             await File.WriteAllTextAsync(temp, text, new UTF8Encoding(true), ct).ConfigureAwait(false);
             var output = DocumentOutput.Finish(temp, sourcePath, "", ".txt", directory);
-            progress?.Report(new JobProgress("Готово", 1));
+            progress?.Report(new JobProgress(Lang.T.DocDone, 1));
             var words = text.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries).Length;
-            return new JobResult(JobStatus.Done,
-                $"{Plural.Count(words, "слово", "слова", "слов")}. Сохранено как {Path.GetFileName(output)}.", output);
+            return new JobResult(JobStatus.Done, Lang.T.DocTextDone(words, Path.GetFileName(output)), output);
         }
         finally
         {
@@ -238,7 +234,7 @@ public sealed class DocumentImagesJob(string? outputDirectory = null) : IFileJob
         using var zip = OfficeDocs.OpenPackage(sourcePath);
         var images = OfficeDocs.ImageEntries(zip).ToList();
         if (images.Count == 0)
-            return Task.FromResult(new JobResult(JobStatus.NothingToDo, "В документе нет картинок."));
+            return Task.FromResult(new JobResult(JobStatus.NothingToDo, Lang.T.DocNoImages));
 
         DocumentOutput.CheckSpace(parent, images.Sum(e => e.Length) + 1_000_000);
         var staging = Path.Combine(parent, $".filedial-{Guid.NewGuid():N}");
@@ -248,7 +244,7 @@ public sealed class DocumentImagesJob(string? outputDirectory = null) : IFileJob
             for (var i = 0; i < images.Count; i++)
             {
                 ct.ThrowIfCancellationRequested();
-                progress?.Report(new JobProgress($"Картинка {i + 1} из {images.Count}", (double)i / images.Count));
+                progress?.Report(new JobProgress(Lang.T.DocStageImage(i + 1, images.Count), (double)i / images.Count));
                 // Имена внутри разных частей могут совпасть (image1.png у слайда и у заметок) — берём свободное.
                 var target = FreeNames.Child(staging, Path.GetFileName(images[i].FullName), isDirectory: false);
                 using var from = images[i].Open();
@@ -256,11 +252,11 @@ public sealed class DocumentImagesJob(string? outputDirectory = null) : IFileJob
                 from.CopyTo(to);
             }
 
-            var result = FreeNames.Child(parent, $"{Path.GetFileNameWithoutExtension(sourcePath)} (картинки)", isDirectory: true);
+            var result = FreeNames.Child(parent, Lang.T.DocImagesFolder(Path.GetFileNameWithoutExtension(sourcePath)), isDirectory: true);
             Directory.Move(staging, result);
-            progress?.Report(new JobProgress("Готово", 1));
+            progress?.Report(new JobProgress(Lang.T.DocDone, 1));
             return Task.FromResult(new JobResult(JobStatus.Done,
-                $"{Plural.Count(images.Count, "картинка", "картинки", "картинок")} → папка {Path.GetFileName(result)}.", result));
+                Lang.T.DocImagesDone(images.Count, Path.GetFileName(result)), result));
         }
         finally
         {
@@ -276,7 +272,7 @@ public sealed class DocumentStripJob(string? outputDirectory = null) : IFileJob
     {
         var directory = DocumentOutput.Directory(sourcePath, outputDirectory);
         DocumentOutput.CheckSpace(directory, new FileInfo(sourcePath).Length * 2 + 1_000_000);
-        progress?.Report(new JobProgress("Очистка", null));
+        progress?.Report(new JobProgress(Lang.T.DocStageCleaning, null));
 
         var temp = DocumentOutput.TempNear(directory);
         try
@@ -284,18 +280,18 @@ public sealed class DocumentStripJob(string? outputDirectory = null) : IFileJob
             var report = OfficeDocs.StripPersonalData(sourcePath, temp);
             ct.ThrowIfCancellationRequested();
             var removed = new List<string>();
-            if (report.Properties) removed.Add("автор и компания в свойствах");
-            if (report.Comments > 0) removed.Add("имена у комментариев");
-            if (report.Revisions > 0) removed.Add("имена у исправлений");
-            if (report.Links > 0) removed.Add("путь к шаблону");
+            if (report.Properties) removed.Add(Lang.T.DocRemovedProperties);
+            if (report.Comments > 0) removed.Add(Lang.T.DocRemovedCommentNames);
+            if (report.Revisions > 0) removed.Add(Lang.T.DocRemovedRevisionNames);
+            if (report.Links > 0) removed.Add(Lang.T.DocRemovedTemplatePath);
             if (removed.Count == 0)
-                return Task.FromResult(new JobResult(JobStatus.NothingToDo, "Личных данных не найдено — документ и так чистый."));
+                return Task.FromResult(new JobResult(JobStatus.NothingToDo, Lang.T.DocNothingPersonal));
 
             var extension = Path.GetExtension(sourcePath).ToLowerInvariant();
-            var output = DocumentOutput.Finish(temp, sourcePath, "_без_данных", extension, directory);
-            progress?.Report(new JobProgress("Готово", 1));
+            var output = DocumentOutput.Finish(temp, sourcePath, Lang.T.DocCleanSuffix, extension, directory);
+            progress?.Report(new JobProgress(Lang.T.DocDone, 1));
             return Task.FromResult(new JobResult(JobStatus.Done,
-                $"Убрано: {string.Join(", ", removed)}. Сохранено как {Path.GetFileName(output)}.", output));
+                Lang.T.DocStripped(string.Join(", ", removed), Path.GetFileName(output)), output));
         }
         finally
         {
@@ -333,7 +329,7 @@ public sealed class DocumentCompressJob(FfmpegTools tools, string? outputDirecto
                 for (var i = 0; i < candidates.Count; i++)
                 {
                     ct.ThrowIfCancellationRequested();
-                    progress?.Report(new JobProgress($"Картинка {i + 1} из {candidates.Count}", (double)i / (candidates.Count + 1)));
+                    progress?.Report(new JobProgress(Lang.T.DocStageImage(i + 1, candidates.Count), (double)i / (candidates.Count + 1)));
                     var ext = Path.GetExtension(candidates[i].FullName).ToLowerInvariant();
                     var input = Path.Combine(work, $"{i}-in{ext}");
                     candidates[i].ExtractToFile(input);
@@ -344,18 +340,17 @@ public sealed class DocumentCompressJob(FfmpegTools tools, string? outputDirecto
             }
 
             if (replacements.Count == 0)
-                return new JobResult(JobStatus.NothingToDo, "Картинки в документе и так компактные — сжимать нечего.");
+                return new JobResult(JobStatus.NothingToDo, Lang.T.DocImagesAlreadyCompact);
 
-            progress?.Report(new JobProgress("Сборка документа", null));
+            progress?.Report(new JobProgress(Lang.T.DocStageRebuilding, null));
             OfficeDocs.RewritePackage(sourcePath, temp, (name, _) => replacements.GetValueOrDefault(name));
             if (new FileInfo(temp).Length >= sourceSize)
-                return new JobResult(JobStatus.NothingToDo, "Сжать заметно не получилось — документ оставлен как есть.");
+                return new JobResult(JobStatus.NothingToDo, Lang.T.DocCompressFailed);
 
-            var output = DocumentOutput.Finish(temp, sourcePath, "_сжат", Path.GetExtension(sourcePath).ToLowerInvariant(), directory);
-            progress?.Report(new JobProgress("Готово", 1));
+            var output = DocumentOutput.Finish(temp, sourcePath, Lang.T.DocCompressedSuffix, Path.GetExtension(sourcePath).ToLowerInvariant(), directory);
+            progress?.Report(new JobProgress(Lang.T.DocDone, 1));
             return new JobResult(JobStatus.Done,
-                $"{Plural.Count(replacements.Count, "картинка", "картинки", "картинок")} пересжато. " +
-                FileJobs.DoneMessage(sourceSize, output), output);
+                Lang.T.DocImagesRecompressed(replacements.Count) + " " + FileJobs.DoneMessage(sourceSize, output), output);
         }
         finally
         {

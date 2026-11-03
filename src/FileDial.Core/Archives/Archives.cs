@@ -3,7 +3,7 @@ using System.IO.Compression;
 using System.Text;
 using FileDial.Core.Compression;
 using FileDial.Core.Jobs;
-using FileDial.Core.Text;
+using FileDial.Core.Localization;
 
 namespace FileDial.Core.Archives;
 
@@ -14,8 +14,9 @@ public enum ArchiveFormat
 }
 
 /// <summary>Архиву (или PDF) нужен пароль, либо введённый неверен — окно спросит пароль и повторит действие.</summary>
-public sealed class PasswordRequiredException(bool wrongPassword, string lockedMessage = "Архив защищён паролем.")
-    : CompressionException(wrongPassword ? "Неверный пароль." : lockedMessage)
+/// <param name="lockedMessage">Текст «защищён паролем»; null — про архив.</param>
+public sealed class PasswordRequiredException(bool wrongPassword, string? lockedMessage = null)
+    : CompressionException(wrongPassword ? Lang.T.ArchiveWrongPassword : lockedMessage ?? Lang.T.ArchiveLocked)
 {
     public bool WrongPassword { get; } = wrongPassword;
 }
@@ -123,21 +124,18 @@ public static class ArchiveSupport
         catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException)
         {
         }
-        throw new CompressionException(
-            $"В пути «{path}» есть символы, которые встроенный в Windows tar.exe не понимает. " +
-            "Переименуйте папку (только русские и латинские буквы) или используйте ZIP.");
+        throw new CompressionException(Lang.T.ArchiveTarBadPath(path));
     }
 
     /// <summary>Понятный текст для типичных ошибок распаковки.</summary>
-    public static string ExtractError(string detail) =>
-        $"Не удалось распаковать: архив повреждён, защищён паролем или формат не поддерживается. {detail}".Trim();
+    public static string ExtractError(string detail) => Lang.T.ArchiveExtractError(detail).Trim();
 
     /// <param name="workingDirectory">Рабочая папка tar (вместо -C: так путь передаётся в Unicode).</param>
     public static async Task RunTarAsync(IReadOnlyList<string> args, string failureMessage, CancellationToken ct,
         string? workingDirectory = null)
     {
         if (!TarAvailable)
-            throw new CompressionException("В Windows нет tar.exe — такие архивы не поддерживаются (нужна Windows 10 1803 или новее).");
+            throw new CompressionException(Lang.T.ArchiveNoTar);
         var result = await ProcessRunner.RunAsync(Tar, args, null, captureOutput: false, ct, workingDirectory, TarOutput)
             .ConfigureAwait(false);
         if (result.ExitCode == 0)
@@ -150,9 +148,7 @@ public static class ArchiveSupport
         if (error.Contains("Incorrect passphrase", StringComparison.OrdinalIgnoreCase))
             throw new PasswordRequiredException(wrongPassword: true);
         if (error.Contains("encrypt", StringComparison.OrdinalIgnoreCase))
-            throw new CompressionException(
-                "Архив зашифрован способом, который встроенный в Windows tar.exe не поддерживает (зашифрованные 7z и RAR). " +
-                "Откройте его в 7-Zip или WinRAR.", error);
+            throw new CompressionException(Lang.T.ArchiveTarEncryption, error);
         throw new CompressionException(failureMessage, error);
     }
 
@@ -162,7 +158,7 @@ public static class ArchiveSupport
         if (password is null)
             return [];
         if (!IsAnsiSafe(password))
-            throw new CompressionException("В пароле есть символы, которые встроенный tar.exe не передаёт. Откройте архив в 7-Zip.");
+            throw new CompressionException(Lang.T.ArchivePasswordNotAnsi);
         return ["--passphrase", password];
     }
 
@@ -216,7 +212,7 @@ public static class ArchiveSupport
                 ct.ThrowIfCancellationRequested();
                 var destination = Path.GetFullPath(Path.Combine(target, entry.FullName));
                 if (!destination.StartsWith(root, StringComparison.OrdinalIgnoreCase))
-                    throw new CompressionException($"Архив пытается записать файл за пределы папки: {entry.FullName}");
+                    throw new CompressionException(Lang.T.ArchiveOutsideFolder(entry.FullName));
 
                 if (entry.FullName.EndsWith('/') || entry.FullName.EndsWith('\\'))
                 {
@@ -236,7 +232,7 @@ public static class ArchiveSupport
         catch (NotSupportedException ex)
         {
             // Шифрование и экзотические методы сжатия .NET не поддерживает.
-            throw new CompressionException("Архив защищён паролем или сжат неподдерживаемым способом.", ex.Message);
+            throw new CompressionException(Lang.T.ArchiveLockedOrUnsupported, ex.Message);
         }
     }
 
@@ -270,5 +266,5 @@ public static class ArchiveSupport
         }
     }
 
-    public static string FilesLabel(int n) => Plural.Count(n, "файл", "файла", "файлов");
+    public static string FilesLabel(int n) => Lang.T.Files(n);
 }

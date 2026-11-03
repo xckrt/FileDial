@@ -3,6 +3,7 @@ using System.Text;
 using System.Xml;
 using System.Xml.Linq;
 using FileDial.Core.Compression;
+using FileDial.Core.Localization;
 
 namespace FileDial.Core.Documents;
 
@@ -20,8 +21,9 @@ public enum DocumentFamily
 /// </summary>
 public static class OfficeDocs
 {
-    public const string PackageOnly = "Только для DOCX, XLSX, PPTX и OpenDocument";
-    public const string Anonymous = "Автор";
+    public static string PackageOnly => Lang.T.DocPackageOnly;
+    /// <summary>Имя вместо автора комментариев и исправлений — на языке интерфейса.</summary>
+    public static string Anonymous => Lang.T.DocAnonymous;
 
     public static readonly IReadOnlySet<string> Extensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
     {
@@ -55,7 +57,7 @@ public static class OfficeDocs
         catch (InvalidDataException)
         {
             // Документ Office под паролем — это не zip, а зашифрованный контейнер.
-            throw new CompressionException($"Не удалось прочитать {Path.GetFileName(path)}: документ защищён паролем или повреждён.");
+            throw new CompressionException(Lang.T.DocCannotReadPackage(Path.GetFileName(path)));
         }
     }
 
@@ -81,7 +83,7 @@ public static class OfficeDocs
                 {
                     if (i > 0)
                         text.AppendLine();
-                    text.AppendLine($"— Слайд {i + 1} —");
+                    text.AppendLine(Lang.T.DocSlideMarker(i + 1));
                     using var stream = slides[i].Open();
                     AppendDrawingText(XDocument.Load(stream), text);
                 }
@@ -90,7 +92,7 @@ public static class OfficeDocs
                 AppendOpenDocumentText(Load(zip, "content.xml"), text, ext == ".odp");
                 break;
             default:
-                throw new CompressionException("Текст из этого формата напрямую не читается.");
+                throw new CompressionException(Lang.T.DocTextUnsupported);
         }
         return text.ToString().TrimEnd() + Environment.NewLine;
     }
@@ -103,7 +105,7 @@ public static class OfficeDocs
 
     private static XDocument Load(ZipArchive zip, string entry)
     {
-        var e = zip.GetEntry(entry) ?? throw new CompressionException("Документ повреждён: нет основной части.");
+        var e = zip.GetEntry(entry) ?? throw new CompressionException(Lang.T.DocDamaged);
         using var stream = e.Open();
         return XDocument.Load(stream);
     }
@@ -153,7 +155,7 @@ public static class OfficeDocs
             {
                 if (i > 0)
                     text.AppendLine();
-                text.AppendLine($"— Слайд {i + 1} —");
+                text.AppendLine(Lang.T.DocSlideMarker(i + 1));
             }
             foreach (var paragraph in pages[i].Descendants().Where(e => e.Name == OText + "p" || e.Name == OText + "h"))
             {
@@ -279,6 +281,8 @@ public static class OfficeDocs
 
     private static bool AnonymizeAuthors(string name, XDocument doc, ref int comments, ref int revisions)
     {
+        var anonymous = Anonymous;
+        var initials = Lang.T.DocAnonymousInitials;
         var changed = false;
         var isComments = name.Contains("comment", StringComparison.OrdinalIgnoreCase) ||
                          name.Contains("people", StringComparison.OrdinalIgnoreCase) ||
@@ -305,7 +309,7 @@ public static class OfficeDocs
             // Word: w:author и w:initials у комментариев и исправлений.
             foreach (var attribute in element.Attributes().Where(a => a.Name.LocalName is "author" or "initials").ToList())
             {
-                var replacement = attribute.Name.LocalName == "author" ? Anonymous : "А";
+                var replacement = attribute.Name.LocalName == "author" ? anonymous : initials;
                 if (attribute.Value == replacement)
                     continue;
                 attribute.Value = replacement;
@@ -321,30 +325,30 @@ public static class OfficeDocs
             {
                 // Excel: <authors><author>Имя</author></authors>; PowerPoint: commentAuthors/authors; Excel: persons.
                 case "cmAuthor" or "author" or "person" when element.Attribute("name") is { } n:
-                    if (n.Value != Anonymous)
+                    if (n.Value != anonymous)
                     {
-                        n.Value = Anonymous;
-                        if (element.Attribute("initials") is { } ini) ini.Value = "А";
+                        n.Value = anonymous;
+                        if (element.Attribute("initials") is { } ini) ini.Value = initials;
                         changed = true;
                     }
                     break;
-                case "author" when !element.HasAttributes && !element.HasElements && element.Value != Anonymous:
-                    element.Value = Anonymous;
+                case "author" when !element.HasAttributes && !element.HasElements && element.Value != anonymous:
+                    element.Value = anonymous;
                     comments++;
                     changed = true;
                     break;
-                case "person" when element.Attribute("displayName") is { } d && d.Value != Anonymous:
-                    d.Value = Anonymous;
+                case "person" when element.Attribute("displayName") is { } d && d.Value != anonymous:
+                    d.Value = anonymous;
                     changed = true;
                     break;
             }
 
             // OpenDocument: dc:creator у комментариев (office:annotation) и исправлений (office:change-info).
-            if (element.Name == Dc + "creator" && element.Value != Anonymous)
+            if (element.Name == Dc + "creator" && element.Value != anonymous)
             {
                 if (element.Parent?.Name.LocalName == "annotation") comments++;
                 else revisions++;
-                element.Value = Anonymous;
+                element.Value = anonymous;
                 changed = true;
             }
         }
