@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using FileDial.Core.Documents;
+using FileDial.Core.Localization;
 
 namespace FileDial.App.UI;
 
@@ -16,7 +17,7 @@ public partial class PagesWindow : Window
         InitializeComponent();
         _pageCount = pageCount;
         FileText.Text = fileName;
-        CountText.Text = pageCount is { } n ? $"В документе {PdfFiles.PagesLabel(n)}" : "Число страниц станет известно после открытия";
+        CountText.Text = pageCount is { } n ? Lang.T.UiPagesInDocument(PdfFiles.PagesLabel(n)) : Lang.T.UiPagesCountUnknown;
         Loaded += (_, _) => RangeBox.Focus();
     }
 
@@ -26,8 +27,8 @@ public partial class PagesWindow : Window
         _pages = FileDial.Core.Documents.PageRange.TryParse(RangeBox.Text, _pageCount ?? 99_999, out var error);
         OkButton.IsEnabled = _pages is { Count: > 0 };
         ResultText.Text = RangeBox.Text.Length == 0
-            ? "Например: 1-3, 5, 8- (до конца). Порядок сохранится как записан."
-            : _pages is { } pages ? $"Получится {PdfFiles.PagesLabel(pages.Count)}." : error;
+            ? Lang.T.UiPagesHint
+            : _pages is { } pages ? Lang.T.UiWillProduce(PdfFiles.PagesLabel(pages.Count)) : error;
         ResultText.Foreground = _pages is null && RangeBox.Text.Length > 0 ? Palette.Text : Palette.TextMuted;
     }
 

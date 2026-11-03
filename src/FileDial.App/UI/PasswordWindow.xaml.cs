@@ -1,6 +1,7 @@
 ﻿using System.Windows;
 using System.Windows.Input;
 using FileDial.Core.Archives;
+using FileDial.Core.Localization;
 using FileDial.Core.Menu;
 
 namespace FileDial.App.UI;
@@ -14,7 +15,7 @@ public partial class PasswordWindow : Window
     public const int MinLength = 6;
 
     private readonly bool _create;
-    private readonly string _subject;
+    private readonly UiPasswordSubject _subject;
 
     private PasswordWindow(string fileName, bool create, bool wrongBefore, string subjectPath)
     {
@@ -22,12 +23,12 @@ public partial class PasswordWindow : Window
         _create = create;
         _subject = Subject(subjectPath);
         FileText.Text = fileName;
-        TitleText.Text = create ? "Защитить паролем" : $"{char.ToUpperInvariant(_subject[0])}{_subject[1..]} защищён паролем";
-        OkButton.Content = create ? "Защитить" : "Открыть";
+        TitleText.Text = create ? Lang.T.ProtectWithPassword : Lang.T.UiPasswordProtected(_subject);
+        OkButton.Content = create ? Lang.T.UiProtect : Lang.T.UiOpen;
         ConfirmPanel.Visibility = create ? Visibility.Visible : Visibility.Collapsed;
         StatusText.Text = create
-            ? $"Не короче {MinLength} символов. Без пароля {_subject} не открыть — восстановить его нельзя."
-            : wrongBefore ? "Неверный пароль — попробуйте ещё раз." : "";
+            ? Lang.T.UiPasswordWarning(MinLength, _subject)
+            : wrongBefore ? Lang.T.UiWrongPassword : "";
         if (wrongBefore)
             StatusText.Foreground = Palette.Text;
         Loaded += (_, _) => PasswordBox.Focus();
@@ -44,11 +45,11 @@ public partial class PasswordWindow : Window
     public static string? AskExisting(string fileName, bool wrongBefore, Window? owner = null) =>
         Ask(fileName, create: false, wrongBefore, owner, fileName);
 
-    private static string Subject(string path) => FileKinds.Of(path) switch
+    private static UiPasswordSubject Subject(string path) => FileKinds.Of(path) switch
     {
-        FileKind.Pdf => "PDF",
-        FileKind.Document => "документ",
-        _ => "архив",
+        FileKind.Pdf => UiPasswordSubject.Pdf,
+        FileKind.Document => UiPasswordSubject.Document,
+        _ => UiPasswordSubject.Archive,
     };
 
     private static string? Ask(string fileName, bool create, bool wrongBefore, Window? owner, string subjectPath)
@@ -67,16 +68,16 @@ public partial class PasswordWindow : Window
         if (p.Length == 0)
             return "";
         // tar.exe получает пароль в ANSI-кодировке — для открытия такие символы не годятся.
-        if (!_create && _subject == "архив" && !ArchiveSupport.IsAnsiSafe(p))
-            return "В пароле есть символы, которые встроенный tar.exe не передаёт.";
+        if (!_create && _subject == UiPasswordSubject.Archive && !ArchiveSupport.IsAnsiSafe(p))
+            return Lang.T.UiPasswordTarUnsafe;
         if (!_create)
             return null;
         if (p.Length < MinLength)
-            return $"Не короче {MinLength} символов.";
+            return Lang.T.UiPasswordTooShort(MinLength);
         if (ConfirmBox.Password.Length == 0)
-            return "Повторите пароль.";
+            return Lang.T.UiPasswordRepeatPrompt;
         if (p != ConfirmBox.Password)
-            return "Пароли не совпадают.";
+            return Lang.T.UiPasswordsDiffer;
         return null;
     }
 
@@ -86,7 +87,7 @@ public partial class PasswordWindow : Window
         OkButton.IsEnabled = problem is null;
         if (_create || problem is { Length: > 0 })
         {
-            StatusText.Text = problem ?? "Пароли совпадают.";
+            StatusText.Text = problem ?? Lang.T.UiPasswordsMatch;
             StatusText.Foreground = problem is null ? Palette.Accent : Palette.TextMuted;
         }
     }

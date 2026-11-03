@@ -4,6 +4,7 @@ using System.Windows.Media;
 using FileDial.App.Interop;
 using FileDial.Core.Archives;
 using FileDial.Core.Compression;
+using FileDial.Core.Localization;
 using FileDial.Core.Text;
 
 namespace FileDial.App.UI;
@@ -45,9 +46,9 @@ public partial class ContentsWindow : Window
             EntriesList.ItemsSource = Rows(contents.Entries);
             var packed = new FileInfo(_archive).Length;
             SummaryText.Text = contents.Files == 0
-                ? "Архив пуст."
-                : $"{ArchiveSupport.FilesLabel(contents.Files)} · {SizeFormatter.Format(contents.UnpackedBytes)} после распаковки" +
-                  $" · архив {SizeFormatter.Format(packed)}";
+                ? Lang.T.UiArchiveEmpty
+                : Lang.T.UiArchiveSummary(ArchiveSupport.FilesLabel(contents.Files), SizeFormatter.Format(contents.UnpackedBytes),
+                  SizeFormatter.Format(packed));
             ExtractButton.IsEnabled = contents.Files > 0;
         }
         catch (Exception ex) when (ex is CompressionException or IOException or UnauthorizedAccessException)

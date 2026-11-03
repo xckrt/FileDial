@@ -1,28 +1,29 @@
 <Window x:Class="FileDial.App.UI.PagesWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="FileDial — извлечь страницы" Width="440" SizeToContent="Height"
+        xmlns:l="clr-namespace:FileDial.App.UI"
+        Title="{l:T UiPagesWindowTitle}" Width="440" SizeToContent="Height"
         WindowStyle="None" ResizeMode="NoResize" AllowsTransparency="True" Background="Transparent"
         ShowInTaskbar="True" UseLayoutRounding="True" WindowStartupLocation="CenterScreen">
     <Border Background="{DynamicResource BackgroundBrush}" BorderBrush="{DynamicResource SectorBrush}"
             BorderThickness="1" CornerRadius="10" Padding="20,16,20,16"
             MouseLeftButtonDown="OnDragArea">
         <StackPanel>
-            <TextBlock Text="Извлечь страницы" Foreground="{DynamicResource MutedBrush}" FontSize="12" />
+            <TextBlock Text="{l:T ExtractPages}" Foreground="{DynamicResource MutedBrush}" FontSize="12" />
             <TextBlock x:Name="FileText" Foreground="{DynamicResource TextBrush}" FontSize="15" FontWeight="SemiBold"
                        TextTrimming="CharacterEllipsis" Margin="0,2,0,2" />
             <TextBlock x:Name="CountText" Foreground="{DynamicResource MutedBrush}" FontSize="12" Margin="0,0,0,12" />
 
-            <TextBlock Text="Страницы" Foreground="{DynamicResource MutedBrush}" FontSize="12" Margin="0,0,0,4" />
+            <TextBlock Text="{l:T UiPages}" Foreground="{DynamicResource MutedBrush}" FontSize="12" Margin="0,0,0,4" />
             <TextBox x:Name="RangeBox" Style="{StaticResource FlatTextBox}" TextChanged="OnChanged" />
 
             <TextBlock x:Name="ResultText" Foreground="{DynamicResource MutedBrush}" FontSize="12" TextWrapping="Wrap"
-                       Margin="0,8,0,0" Text="Например: 1-3, 5, 8- (до конца). Порядок сохранится как записан." />
+                       Margin="0,8,0,0" Text="{l:T UiPagesHint}" />
 
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,14,0,0">
-                <Button x:Name="OkButton" Content="Извлечь" Style="{StaticResource AccentButton}" IsDefault="True"
+                <Button x:Name="OkButton" Content="{l:T UiExtract}" Style="{StaticResource AccentButton}" IsDefault="True"
                         IsEnabled="False" Click="OnOk" />
-                <Button Content="Отмена" Style="{StaticResource FlatButton}" IsCancel="True" />
+                <Button Content="{l:T UiCancel}" Style="{StaticResource FlatButton}" IsCancel="True" />
             </StackPanel>
         </StackPanel>
     </Border>

@@ -1,6 +1,7 @@
 ﻿using System.Drawing;
 using System.Drawing.Drawing2D;
 using FileDial.App.Interop;
+using FileDial.Core.Localization;
 using Forms = System.Windows.Forms;
 
 namespace FileDial.App.Tray;
@@ -11,6 +12,11 @@ internal sealed class TrayIcon : IDisposable
     private readonly Forms.NotifyIcon _icon;
     private readonly Icon _image;
     private readonly Forms.ToolStripMenuItem _header;
+    private readonly Forms.ToolStripMenuItem _settings;
+    private readonly Forms.ToolStripMenuItem _history;
+    private readonly Forms.ToolStripMenuItem _help;
+    private readonly Forms.ToolStripMenuItem _exit;
+    private string? _hotkey;
 
     public TrayIcon(string hotkey, Action openSettings, Action openHistory, Action openHelp, Action exit)
     {
@@ -19,13 +25,14 @@ internal sealed class TrayIcon : IDisposable
         _header = new Forms.ToolStripMenuItem { Enabled = false };
         menu.Items.Add(_header);
         menu.Items.Add(new Forms.ToolStripSeparator());
-        menu.Items.Add(new Forms.ToolStripMenuItem("Настройки…", null, (_, _) => openSettings())
+        _settings = new Forms.ToolStripMenuItem("", null, (_, _) => openSettings())
         {
             Font = new Font(menu.Font, FontStyle.Bold), // действие по двойному клику
-        });
-        menu.Items.Add("История…", null, (_, _) => openHistory());
-        menu.Items.Add("Справка (README)", null, (_, _) => openHelp());
-        menu.Items.Add("Выход", null, (_, _) => exit());
+        };
+        _history = new Forms.ToolStripMenuItem("", null, (_, _) => openHistory());
+        _help = new Forms.ToolStripMenuItem("", null, (_, _) => openHelp());
+        _exit = new Forms.ToolStripMenuItem("", null, (_, _) => exit());
+        menu.Items.AddRange([_settings, _history, _help, _exit]);
 
         _icon = new Forms.NotifyIcon
         {
@@ -35,6 +42,18 @@ internal sealed class TrayIcon : IDisposable
         };
         _icon.DoubleClick += (_, _) => openSettings();
         SetHotkey(hotkey);
+        Lang.Changed += ApplyTexts;
+    }
+
+    /// <summary>Подписи меню и подсказки на текущем языке.</summary>
+    private void ApplyTexts()
+    {
+        _settings.Text = Lang.T.UiTraySettings;
+        _history.Text = Lang.T.UiTrayHistory;
+        _help.Text = Lang.T.UiTrayHelp;
+        _exit.Text = Lang.T.UiTrayExit;
+        _header.Text = _hotkey is null ? Lang.T.UiTrayNoHotkey : $"FileDial — {_hotkey}";
+        _icon.Text = _hotkey is null ? Lang.T.UiTrayTipNoHotkey : Lang.T.UiTrayTip(_hotkey);
     }
 
     private Action? _balloonClick;
@@ -53,10 +72,8 @@ internal sealed class TrayIcon : IDisposable
     /// <summary>Обновить подписи после смены горячей клавиши (null — клавиша не назначена).</summary>
     public void SetHotkey(string? hotkey)
     {
-        _header.Text = hotkey is null ? "FileDial — клавиша не назначена" : $"FileDial — {hotkey}";
-        _icon.Text = hotkey is null
-            ? "FileDial — назначьте горячую клавишу в настройках"
-            : $"FileDial — выделите файл и нажмите {hotkey}";
+        _hotkey = hotkey;
+        ApplyTexts();
     }
 
     /// <summary>
@@ -95,6 +112,7 @@ internal sealed class TrayIcon : IDisposable
 
     public void Dispose()
     {
+        Lang.Changed -= ApplyTexts;
         _icon.Visible = false;
         _icon.ContextMenuStrip?.Dispose();
         _icon.Dispose();

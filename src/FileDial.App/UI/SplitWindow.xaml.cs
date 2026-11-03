@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using FileDial.Core.Archives;
+using FileDial.Core.Localization;
 using FileDial.Core.Text;
 
 namespace FileDial.App.UI;
@@ -29,7 +30,7 @@ public partial class SplitWindow : Window
                 Style = (Style)Application.Current.FindResource("SegmentRadio"),
                 Margin = new Thickness(0, 0, 6, 6),
                 IsEnabled = bytes < fileSize,
-                ToolTip = bytes < fileSize ? null : "Файл меньше части — делить нечего",
+                ToolTip = bytes < fileSize ? null : Lang.T.UiFileSmallerThanPart,
             };
             button.Checked += (_, _) => Select(bytes);
             Presets.Children.Add(button);
@@ -39,7 +40,7 @@ public partial class SplitWindow : Window
         var initial = Presets.Children.OfType<RadioButton>().Where(b => b.IsEnabled)
             .OrderBy(b => (long)b.Tag == 25_000_000 ? 0 : 1).ThenByDescending(b => (long)b.Tag).FirstOrDefault();
         if (initial is null)
-            ResultText.Text = "Файл меньше 10 МБ — делить его незачем.";
+            ResultText.Text = Lang.T.UiFileTooSmallToSplit;
         else
             initial.IsChecked = true;
     }
@@ -49,8 +50,8 @@ public partial class SplitWindow : Window
         _partSize = bytes;
         var count = FileParts.PartCount(_fileSize, bytes);
         ResultText.Text = count > 999
-            ? "Получилось бы больше 999 частей — выберите размер побольше."
-            : $"Получится {FileParts.PartsLabel(count)}.";
+            ? Lang.T.UiTooManyParts
+            : Lang.T.UiWillProduce(FileParts.PartsLabel(count));
         OkButton.IsEnabled = count is > 1 and <= 999;
     }
 

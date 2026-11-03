@@ -3,6 +3,7 @@ using System.Windows.Input;
 using FileDial.App.Interop;
 using FileDial.Core.Compression;
 using FileDial.Core.Jobs;
+using FileDial.Core.Localization;
 using FileDial.Core.Menu;
 
 namespace FileDial.App.UI;
@@ -44,8 +45,8 @@ public partial class TrimWindow : Window
         var tools = FfmpegLocator.LocateDefault(_ffmpegFolder);
         if (tools is null)
         {
-            DurationText.Text = "ffmpeg не найден";
-            StatusText.Text = "Нужен ffmpeg — установите его одной кнопкой: Трей → Настройки → ffmpeg.";
+            DurationText.Text = Lang.T.UiFfmpegNotFound;
+            StatusText.Text = Lang.T.UiTrimNeedsFfmpeg;
             return;
         }
 
@@ -56,19 +57,19 @@ public partial class TrimWindow : Window
         }
         catch (Exception ex) when (ex is CompressionException or IOException or System.ComponentModel.Win32Exception)
         {
-            DurationText.Text = "Длительность неизвестна";
+            DurationText.Text = Lang.T.UiDurationUnknown;
             StatusText.Text = ex.Message;
             return;
         }
 
         if (_duration <= 0)
         {
-            DurationText.Text = "Длительность неизвестна";
-            StatusText.Text = "ffprobe не сообщил длительность — обрезать нельзя.";
+            DurationText.Text = Lang.T.UiDurationUnknown;
+            StatusText.Text = Lang.T.UiTrimNoDuration;
             return;
         }
 
-        DurationText.Text = $"Длительность: {TimeInput.Format(TimeSpan.FromSeconds(_duration))}";
+        DurationText.Text = Lang.T.UiDuration(TimeInput.Format(TimeSpan.FromSeconds(_duration)));
         StartBox.Text = TimeInput.Format(TimeSpan.Zero);
         EndBox.Text = TimeInput.Format(TimeSpan.FromSeconds(_duration));
         StartBox.IsEnabled = EndBox.IsEnabled = true;
@@ -85,13 +86,13 @@ public partial class TrimWindow : Window
         string? error;
         TrimRequest? request = null;
         if (!TimeInput.TryParse(StartBox.Text, out var start))
-            error = "Начало: введите время, например 0:15 или 1:02:30.";
+            error = Lang.T.UiTrimStartInvalid;
         else if (!TimeInput.TryParse(EndBox.Text, out var end))
-            error = "Конец: введите время, например 0:45 или 1:05:00.";
+            error = Lang.T.UiTrimEndInvalid;
         else if (start == TimeSpan.Zero && end.TotalSeconds >= _duration - 0.05)
         {
             // Начальное состояние (весь файл) — не ошибка, а приглашение указать отрезок.
-            StatusText.Text = "Укажите, какой отрезок оставить.";
+            StatusText.Text = Lang.T.UiTrimPrompt;
             StatusText.Foreground = Palette.TextMuted;
             TrimButton.IsEnabled = false;
             return null;
@@ -103,7 +104,7 @@ public partial class TrimWindow : Window
                 request = new TrimRequest(start, end, _isVideo && PreciseBox.IsChecked == true);
         }
 
-        StatusText.Text = error ?? $"Длина отрезка: {TimeInput.Format(request!.Length)}";
+        StatusText.Text = error ?? Lang.T.UiSegmentLength(TimeInput.Format(request!.Length));
         StatusText.Foreground = error is null ? Palette.TextMuted : Palette.Text;
         TrimButton.IsEnabled = request is not null;
         return request;

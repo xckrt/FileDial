@@ -6,6 +6,7 @@ using System.Windows.Shapes;
 using System.Windows.Threading;
 using FileDial.App.Interop;
 using FileDial.Core.History;
+using FileDial.Core.Localization;
 using Path = System.IO.Path;
 
 namespace FileDial.App.UI;
@@ -49,16 +50,16 @@ public partial class HistoryWindow : Window
 
         var done = entries.Count(e => e.Status == HistoryStatus.Done);
         SummaryText.Text = entries.Count == 0
-            ? (_enabled() ? "Пока пусто" : "Запись истории выключена в настройках")
-            : $"Действий: {entries.Count}, успешно: {done}" + (_enabled() ? "" : " · запись выключена в настройках");
+            ? (_enabled() ? Lang.T.UiHistoryEmpty : Lang.T.UiHistoryDisabled)
+            : Lang.T.UiHistorySummary(entries.Count, done) + (_enabled() ? "" : Lang.T.UiHistorySummaryDisabled);
 
         if (entries.Count == 0)
         {
             ListPanel.Children.Add(new TextBlock
             {
                 Text = _enabled()
-                    ? "Здесь появятся действия, выполненные через круг: что сделано, с каким файлом и чем закончилось."
-                    : "Включите «Вести историю действий» в настройках, чтобы здесь появлялись выполненные действия.",
+                    ? Lang.T.UiHistoryEmptyHint
+                    : Lang.T.UiHistoryEnableHint,
                 Foreground = Palette.TextMuted,
                 FontSize = 13,
                 TextWrapping = TextWrapping.Wrap,
@@ -135,11 +136,11 @@ public partial class HistoryWindow : Window
         var buttons = new WrapPanel { Margin = new Thickness(16, 8, 0, 0) };
         // Файлы могли удалить или переместить после действия — кнопки только для существующих.
         if (entry.OutputPath is { } output && File.Exists(output))
-            buttons.Children.Add(SmallButton("Показать результат", () => ShellActions.ShowInFolder(output)));
+            buttons.Children.Add(SmallButton(Lang.T.UiShowResult, () => ShellActions.ShowInFolder(output)));
         else if (entry.Status == HistoryStatus.Done)
-            buttons.Children.Add(new TextBlock { Text = "Результат удалён или перемещён", Foreground = Palette.TextMuted, FontSize = 12 });
+            buttons.Children.Add(new TextBlock { Text = Lang.T.UiResultGone, Foreground = Palette.TextMuted, FontSize = 12 });
         if (File.Exists(entry.SourcePath))
-            buttons.Children.Add(SmallButton("Показать исходник", () => ShellActions.ShowInFolder(entry.SourcePath)));
+            buttons.Children.Add(SmallButton(Lang.T.UiShowSource, () => ShellActions.ShowInFolder(entry.SourcePath)));
 
         var body = new StackPanel { Children = { header, file, message } };
         if (buttons.Children.Count > 0)
@@ -168,7 +169,7 @@ public partial class HistoryWindow : Window
     {
         if (_confirmTimer is null)
         {
-            ClearButton.Content = "Точно очистить?";
+            ClearButton.Content = Lang.T.UiHistoryConfirmClear;
             _confirmTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(4) };
             _confirmTimer.Tick += (_, _) => ResetClearButton();
             _confirmTimer.Start();
@@ -184,7 +185,7 @@ public partial class HistoryWindow : Window
     {
         _confirmTimer?.Stop();
         _confirmTimer = null;
-        ClearButton.Content = "Очистить";
+        ClearButton.Content = Lang.T.UiHistoryClear;
     }
 
     private void OnClose(object sender, RoutedEventArgs e) => Close();
