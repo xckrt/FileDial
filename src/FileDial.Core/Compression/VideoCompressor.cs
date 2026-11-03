@@ -1,4 +1,6 @@
-﻿namespace FileDial.Core.Compression;
+﻿using FileDial.Core.Localization;
+
+namespace FileDial.Core.Compression;
 
 public sealed record CompressionProgress(string Stage, double Fraction);
 
@@ -45,17 +47,15 @@ public sealed class VideoCompressor(FfmpegTools tools, CompressionOptions? optio
         if (OutputFolderCheck.WhyNot(directory, _options.TargetBytes) is { } folderProblem)
             throw new CompressionException(folderProblem);
 
-        progress?.Report(new CompressionProgress("Анализ файла", 0));
+        progress?.Report(new CompressionProgress(Lang.T.JobStageAnalyzing, 0));
         var info = await ProbeAsync(sourcePath, cancellationToken).ConfigureAwait(false);
 
         var plan = BitrateCalculator.Plan(info.DurationSeconds, info.HasAudio, info.Width, info.Height,
             _options.TargetBytes);
         if (!plan.IsFeasible)
         {
-            throw new CompressionException(
-                $"Видео слишком длинное: в {Text.SizeFormatter.Format(_options.TargetBytes)} на изображение остаётся " +
-                $"{Math.Max(plan.VideoKbps, 0)} кбит/с, это меньше разумного минимума " +
-                $"{BitrateCalculator.MinVideoKbps} кбит/с.");
+            throw new CompressionException(Lang.T.JobVideoTooLong(Text.SizeFormatter.Format(_options.TargetBytes),
+                Math.Max(plan.VideoKbps, 0), BitrateCalculator.MinVideoKbps));
         }
 
         var downmix = info.AudioChannels > 2;
@@ -83,7 +83,7 @@ public sealed class VideoCompressor(FfmpegTools tools, CompressionOptions? optio
                 {
                     var retryPlan = plan with { VideoKbps = corrected, TotalKbps = corrected + plan.AudioKbps };
                     await RunPassAsync(2, FfmpegArguments.SecondPass(sourcePath, retryPlan, passLog, tempOutput, downmix),
-                        info.DurationSeconds, progress, cancellationToken, "Проход 2 из 2, уточнение")
+                        info.DurationSeconds, progress, cancellationToken, Lang.T.JobStageRefiningPass)
                         .ConfigureAwait(false);
                 }
             }
@@ -91,7 +91,7 @@ public sealed class VideoCompressor(FfmpegTools tools, CompressionOptions? optio
             var finalPath = OutputFiles.MoveToFreeName(tempOutput,
                 () => OutputNameGenerator.Generate(sourcePath, Settings.JobSettings.TargetSuffix(_options.TargetBytes), ".mp4",
                     OutputNameGenerator.PathTaken, directory));
-            progress?.Report(new CompressionProgress("Готово", 1));
+            progress?.Report(new CompressionProgress(Lang.T.JobStageDone, 1));
             return new CompressionResult(CompressionStatus.Done, sourceSize, finalPath, new FileInfo(finalPath).Length);
         }
         finally
@@ -106,16 +106,16 @@ public sealed class VideoCompressor(FfmpegTools tools, CompressionOptions? optio
         var info = await ProbeInfo.RunAsync(tools, sourcePath, ct).ConfigureAwait(false);
 
         if (!info.HasVideo)
-            throw new CompressionException("В файле нет видеодорожки.");
+            throw new CompressionException(Lang.T.JobNoVideoTrack + ".");
         if (info.DurationSeconds <= 0)
-            throw new CompressionException("ffprobe не сообщил длительность видео.");
+            throw new CompressionException(Lang.T.JobFfprobeNoDuration);
         return info;
     }
 
     private async Task RunPassAsync(int pass, IReadOnlyList<string> args, double duration,
         IProgress<CompressionProgress>? progress, CancellationToken ct, string? stageName = null)
     {
-        var stage = stageName ?? $"Проход {pass} из 2";
+        var stage = stageName ?? Lang.T.JobStagePass(pass);
         progress?.Report(new CompressionProgress(stage, FfmpegProgressParser.OverallFraction(pass, TimeSpan.Zero, duration)));
 
         var result = await ProcessRunner.RunAsync(tools.Ffmpeg, args, line =>
@@ -125,7 +125,7 @@ public sealed class VideoCompressor(FfmpegTools tools, CompressionOptions? optio
         }, captureOutput: false, ct).ConfigureAwait(false);
 
         if (result.ExitCode != 0)
-            throw new CompressionException($"ffmpeg завершился с ошибкой на проходе {pass} (код {result.ExitCode}).",
+            throw new CompressionException(Lang.T.JobFfmpegPassFailed(pass, result.ExitCode),
                 result.ErrorTail);
     }
 }

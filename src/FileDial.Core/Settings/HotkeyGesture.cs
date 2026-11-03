@@ -1,3 +1,5 @@
+using FileDial.Core.Localization;
+
 namespace FileDial.Core.Settings;
 
 [Flags]
@@ -34,10 +36,10 @@ public sealed record HotkeyGesture(HotkeyModifiers Modifiers, int VirtualKey)
     public string? Problem()
     {
         if (KeyName(VirtualKey) is null)
-            return "Используйте букву, цифру или F1–F24.";
+            return Lang.T.JobHotkeyUseKey;
         // Без Ctrl/Alt/Win сочетание будет перехватывать обычный ввод текста.
         if ((Modifiers & (HotkeyModifiers.Ctrl | HotkeyModifiers.Alt | HotkeyModifiers.Win)) == 0)
-            return "Добавьте Ctrl, Alt или Win.";
+            return Lang.T.JobHotkeyAddModifier;
         return null;
     }
 

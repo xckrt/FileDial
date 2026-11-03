@@ -1,5 +1,6 @@
 using System.Globalization;
 using FileDial.Core.Compression;
+using FileDial.Core.Localization;
 using FileDial.Core.Menu;
 
 namespace FileDial.Core.Jobs;
@@ -63,23 +64,23 @@ public sealed record TrimRequest(TimeSpan Start, TimeSpan End, bool Precise)
     public static string? Validate(TimeSpan start, TimeSpan end, double durationSeconds)
     {
         if (start < TimeSpan.Zero)
-            return "Начало не может быть отрицательным.";
+            return Lang.T.JobTrimNegativeStart;
         if (end <= start)
-            return "Конец должен быть позже начала.";
+            return Lang.T.JobTrimEndBeforeStart;
         if ((end - start).TotalSeconds < MinSeconds)
-            return "Слишком короткий отрезок.";
+            return Lang.T.JobTrimTooShort;
         // Небольшой допуск: длительность из ffprobe округлена.
         if (durationSeconds > 0 && end.TotalSeconds > durationSeconds + 0.05)
-            return $"Конец позже конца файла ({TimeInput.Format(TimeSpan.FromSeconds(durationSeconds))}).";
+            return Lang.T.JobTrimEndPastFile(TimeInput.Format(TimeSpan.FromSeconds(durationSeconds)));
         if (durationSeconds > 0 && start == TimeSpan.Zero && end.TotalSeconds >= durationSeconds - 0.05)
-            return "Выбран весь файл — обрезать нечего.";
+            return Lang.T.JobTrimWholeFile;
         return null;
     }
 }
 
 public static class TrimSpecs
 {
-    public const string Suffix = "_обрезка";
+    public static string Suffix => Lang.T.JobSuffixTrimmed;
 
     /// <summary>Отрезок того же формата, что исходник. Звук всегда перекодируется (точно до сотых),
     /// видео — либо точно (перекодирование), либо быстро без перекодирования (границы по ключевым кадрам).</summary>

@@ -1,6 +1,6 @@
-﻿using System.Globalization;
-using System.Text.Json;
+﻿using System.Text.Json;
 using System.Text.Json.Serialization;
+using FileDial.Core.Localization;
 
 namespace FileDial.Core.History;
 
@@ -85,25 +85,21 @@ public static class HistoryStore
 
 public static class HistoryText
 {
-    private static readonly CultureInfo Russian = CultureInfo.GetCultureInfo("ru-RU");
-
     /// <summary>Заголовок группы: «Сегодня», «Вчера», «28 октября», «28 октября 2025».</summary>
     public static string DayLabel(DateTime day, DateTime today)
     {
         var d = day.Date;
-        if (d == today.Date) return "Сегодня";
-        if (d == today.Date.AddDays(-1)) return "Вчера";
-        return d.Year == today.Year
-            ? d.ToString("d MMMM", Russian)
-            : d.ToString("d MMMM yyyy", Russian);
+        if (d == today.Date) return Lang.T.JobToday;
+        if (d == today.Date.AddDays(-1)) return Lang.T.JobYesterday;
+        return Lang.T.JobDayLabel(d, withYear: d.Year != today.Year);
     }
 
     public static string StatusLabel(HistoryStatus status) => status switch
     {
-        HistoryStatus.Done => "Готово",
-        HistoryStatus.NothingToDo => "Ничего не нужно",
-        HistoryStatus.Cancelled => "Отменено",
-        HistoryStatus.Failed => "Ошибка",
+        HistoryStatus.Done => Lang.T.JobStatusDone,
+        HistoryStatus.NothingToDo => Lang.T.JobStatusNothingToDo,
+        HistoryStatus.Cancelled => Lang.T.JobStatusCancelled,
+        HistoryStatus.Failed => Lang.T.JobStatusFailed,
         _ => "",
     };
 

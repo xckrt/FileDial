@@ -1,4 +1,5 @@
 ﻿using FileDial.Core.Compression;
+using FileDial.Core.Localization;
 using FileDial.Core.Text;
 
 namespace FileDial.Core.Jobs;
@@ -32,12 +33,12 @@ public sealed class ImagesToPdfJob(FfmpegTools tools, string? outputDirectory = 
             for (var i = 0; i < paths.Count; i++)
             {
                 ct.ThrowIfCancellationRequested();
-                progress?.Report(new JobProgress($"Страница {i + 1} из {paths.Count} · {Path.GetFileName(paths[i])}",
+                progress?.Report(new JobProgress(Lang.T.JobStagePage(i + 1, paths.Count, Path.GetFileName(paths[i])),
                     (double)i / paths.Count));
                 pages.Add(await ToJpegPageAsync(paths[i], Path.Combine(workDir, $"{i}.jpg"), ct).ConfigureAwait(false));
             }
 
-            progress?.Report(new JobProgress("Сборка PDF", null));
+            progress?.Report(new JobProgress(Lang.T.JobStageBuildingPdf, null));
             await using (var stream = new FileStream(tempOutput, FileMode.CreateNew, FileAccess.Write))
                 PdfWriter.Write(stream, pages);
 
@@ -45,11 +46,11 @@ public sealed class ImagesToPdfJob(FfmpegTools tools, string? outputDirectory = 
             var finalPath = OutputFiles.MoveToFreeName(tempOutput,
                 () => OutputNameGenerator.Generate(Path.Combine(directory, name + ".src"), "", ".pdf",
                     OutputNameGenerator.PathTaken, directory));
-            progress?.Report(new JobProgress("Готово", 1));
+            progress?.Report(new JobProgress(Lang.T.JobStageDone, 1));
 
-            var what = paths.Count == 1 ? Path.GetFileName(first) : Plural.Count(paths.Count, "картинка", "картинки", "картинок");
+            var what = paths.Count == 1 ? Path.GetFileName(first) : Lang.T.Images(paths.Count);
             return new JobResult(JobStatus.Done,
-                $"{what} → {SizeFormatter.Format(new FileInfo(finalPath).Length)}. Сохранено как {Path.GetFileName(finalPath)}.",
+                $"{what} → {SizeFormatter.Format(new FileInfo(finalPath).Length)}. {Lang.T.JobSavedAs(Path.GetFileName(finalPath))}",
                 finalPath);
         }
         finally
@@ -65,14 +66,14 @@ public sealed class ImagesToPdfJob(FfmpegTools tools, string? outputDirectory = 
         if (paths.Count == 1)
             return Path.GetFileNameWithoutExtension(paths[0]);
         var folder = Path.GetFileName(Path.GetDirectoryName(paths[0])?.TrimEnd('\\', '/') ?? "");
-        return string.IsNullOrWhiteSpace(folder) ? "Картинки" : folder;
+        return string.IsNullOrWhiteSpace(folder) ? Lang.T.JobDefaultPdfName : folder;
     }
 
     private async Task<PdfImagePage> ToJpegPageAsync(string source, string jpeg, CancellationToken ct)
     {
         var info = await ProbeInfo.RunAsync(tools, source, ct).ConfigureAwait(false);
         if (!info.HasVideo || info.Width <= 0 || info.Height <= 0)
-            throw new CompressionException($"Не удалось прочитать изображение {Path.GetFileName(source)}.");
+            throw new CompressionException(Lang.T.JobCannotReadImageNamed(Path.GetFileName(source)));
 
         var flatten = ConversionSpecs.FlattenOnWhite(info, null);
         IReadOnlyList<string> map = flatten.Contains("-filter_complex") ? [] : ["-map", "0:v:0"];
@@ -83,7 +84,7 @@ public sealed class ImagesToPdfJob(FfmpegTools tools, string? outputDirectory = 
 
         var result = await ProcessRunner.RunAsync(tools.Ffmpeg, args, null, captureOutput: false, ct).ConfigureAwait(false);
         if (result.ExitCode != 0 || !File.Exists(jpeg))
-            throw new CompressionException($"ffmpeg не смог обработать {Path.GetFileName(source)}.", result.ErrorTail);
+            throw new CompressionException(Lang.T.JobFfmpegFailedOn(Path.GetFileName(source)), result.ErrorTail);
 
         return new PdfImagePage(await File.ReadAllBytesAsync(jpeg, ct).ConfigureAwait(false), info.Width, info.Height);
     }

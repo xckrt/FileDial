@@ -1,4 +1,5 @@
 ﻿using FileDial.Core.Compression;
+using FileDial.Core.Localization;
 using FileDial.Core.Menu;
 using FileDial.Core.Settings;
 
@@ -10,10 +11,10 @@ namespace FileDial.Core.Jobs;
 /// </summary>
 public static class Speech
 {
-    public static readonly IReadOnlyList<(string Code, string Label)> Languages =
-        [("auto", "Авто"), ("ru", "Русский"), ("en", "English")];
+    public static IReadOnlyList<(string Code, string Label)> Languages =>
+        [("auto", Lang.T.JobSpeechAuto), ("ru", "Русский"), ("en", "English")];
 
-    public const string NoModel = "Нужна модель распознавания речи";
+    public static string NoModel => Lang.T.JobNeedsSpeechModel;
 
     /// <summary>Не хватает именно модели — это поправимо одной кнопкой «Скачать».</summary>
     public static bool NeedsModel(JobSettings settings) =>
@@ -25,9 +26,9 @@ public static class Speech
         if (string.IsNullOrWhiteSpace(settings.WhisperModel))
             return NoModel;
         if (!File.Exists(settings.WhisperModel))
-            return "Файл модели whisper не найден";
+            return Lang.T.JobWhisperModelMissing;
         if (!settings.SpeechFilterAvailable)
-            return "Ваш ffmpeg собран без whisper";
+            return Lang.T.JobFfmpegWithoutWhisper;
         return null;
     }
 
@@ -93,7 +94,7 @@ public static class Speech
             Arguments = (_, _) => [],
             EstimateBytes = (_, _) => 10_000_000,
             Timed = true,
-            EmptyOutputMessage = "Речь не найдена — файл не создан.",
+            EmptyOutputMessage = Lang.T.JobNoSpeechFound,
             PostProcess = format == "srt" ? RenumberSrtFile : null,
         };
     }

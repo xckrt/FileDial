@@ -1,3 +1,4 @@
+using FileDial.Core.Localization;
 using FileDial.Core.Text;
 
 namespace FileDial.Core.Compression;
@@ -23,14 +24,13 @@ public static class OutputFolderCheck
         }
         catch (Exception ex) when (ex is UnauthorizedAccessException or IOException)
         {
-            return "Нет прав на запись в папку с файлом. Результат сохраняется рядом с исходником — " +
-                   "скопируйте видео в папку, где можно создавать файлы.";
+            return Lang.T.JobNoWriteAccess;
         }
 
         var free = FreeBytes(directory);
         var required = RequiredFreeBytes(targetBytes);
         if (free is { } f && f < required)
-            return $"На диске мало места: свободно {SizeFormatter.Format(f)}, нужно не меньше {SizeFormatter.Format(required)}.";
+            return Lang.T.JobLowDiskSpace(SizeFormatter.Format(f), SizeFormatter.Format(required));
         return null;
     }
 

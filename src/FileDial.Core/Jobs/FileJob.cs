@@ -1,6 +1,7 @@
 ﻿using FileDial.Core.Archives;
 using FileDial.Core.Compression;
 using FileDial.Core.Documents;
+using FileDial.Core.Localization;
 using FileDial.Core.Menu;
 using FileDial.Core.Settings;
 using FileDial.Core.Text;
@@ -125,7 +126,7 @@ public static class FileJobs
 
     internal static string DoneMessage(long sourceSize, string outputPath) =>
         $"{SizeFormatter.Format(sourceSize)} → {SizeFormatter.Format(new FileInfo(outputPath).Length)}. " +
-        $"Сохранено как {Path.GetFileName(outputPath)}.";
+        Lang.T.JobSavedAs(Path.GetFileName(outputPath));
 }
 
 /// <summary>«Сжать до 25 МБ» поверх <see cref="VideoCompressor"/>.</summary>
@@ -138,11 +139,11 @@ public sealed class CompressJob(FfmpegTools tools, CompressionOptions? options =
 
         if (result.Status == CompressionStatus.AlreadySmall)
             return new JobResult(JobStatus.NothingToDo,
-                $"Файл уже меньше {SizeFormatter.Format(options?.TargetBytes ?? BitrateCalculator.DefaultTargetBytes)} " +
-                $"({SizeFormatter.Format(result.SourceSize)}), сжимать не нужно.");
+                Lang.T.JobAlreadySmallNoNeed(SizeFormatter.Format(options?.TargetBytes ?? BitrateCalculator.DefaultTargetBytes),
+                    SizeFormatter.Format(result.SourceSize)));
 
         var target = options?.TargetBytes ?? BitrateCalculator.DefaultTargetBytes;
-        var over = result.OutputSize > target ? " Чуть больше цели: кодер не попал точно." : string.Empty;
+        var over = result.OutputSize > target ? " " + Lang.T.JobSlightlyOverTarget : string.Empty;
         return new JobResult(JobStatus.Done, FileJobs.DoneMessage(result.SourceSize, result.OutputPath!) + over,
             result.OutputPath);
     }

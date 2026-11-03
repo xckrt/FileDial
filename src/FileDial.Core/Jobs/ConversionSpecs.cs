@@ -1,5 +1,6 @@
 ﻿using System.Globalization;
 using FileDial.Core.Compression;
+using FileDial.Core.Localization;
 using FileDial.Core.Menu;
 
 namespace FileDial.Core.Jobs;
@@ -39,7 +40,7 @@ public static class ConversionSpecs
             },
             ActionIds.Mute => new()
             {
-                Suffix = "_без_звука",
+                Suffix = Lang.T.JobSuffixMuted,
                 Needs = MediaNeeds.Picture,
                 OutputExtension = (src, _) => Path.GetExtension(src).ToLowerInvariant(),
                 // Видео копируется без перекодирования — быстро и без потерь.
@@ -49,7 +50,7 @@ public static class ConversionSpecs
             },
             ActionIds.Frame => new()
             {
-                Suffix = "_кадр",
+                Suffix = Lang.T.JobSuffixFrame,
                 Needs = MediaNeeds.Picture,
                 OutputExtension = (_, _) => ".png",
                 // Первый кадр часто чёрный (затемнение), берём кадр на трети длительности.
@@ -69,17 +70,17 @@ public static class ConversionSpecs
 
             // --- Изображения ---
             ActionIds.Resize1920 => ImageFilter($"_{ActionCatalog.ResizeLongSide}px", ResizeFilter(ActionCatalog.ResizeLongSide)),
-            ActionIds.RotateRight => ImageFilter("_повернуто", "transpose=clock"),
-            ActionIds.RotateLeft => ImageFilter("_повернуто_влево", "transpose=cclock"),
-            ActionIds.Mirror => ImageFilter("_отражено", "hflip"),
+            ActionIds.RotateRight => ImageFilter(Lang.T.JobSuffixRotated, "transpose=clock"),
+            ActionIds.RotateLeft => ImageFilter(Lang.T.JobSuffixRotatedLeft, "transpose=cclock"),
+            ActionIds.Mirror => ImageFilter(Lang.T.JobSuffixMirrored, "hflip"),
 
             // --- Звук ---
             // loudnorm внутри работает на 192 кГц, поэтому частоту возвращаем к исходной (см. AudioEncoder).
-            ActionIds.Normalize => SameFormatAudio("_выровнено", "loudnorm=I=-16:TP=-1.5:LRA=11"),
-            ActionIds.SpeedUp => SameFormatAudio("_x1,5", "atempo=1.5"),
-            ActionIds.SlowDown => SameFormatAudio("_x0,75", "atempo=0.75"),
-            ActionIds.Denoise => SameFormatAudio("_без_шума", "afftdn=nf=-25"),
-            ActionIds.ToMono => SameFormatAudio("_моно", "aformat=channel_layouts=mono"),
+            ActionIds.Normalize => SameFormatAudio(Lang.T.JobSuffixNormalized, "loudnorm=I=-16:TP=-1.5:LRA=11"),
+            ActionIds.SpeedUp => SameFormatAudio(Lang.T.JobSuffixSpedUp, "atempo=1.5"),
+            ActionIds.SlowDown => SameFormatAudio(Lang.T.JobSuffixSlowedDown, "atempo=0.75"),
+            ActionIds.Denoise => SameFormatAudio(Lang.T.JobSuffixDenoised, "afftdn=nf=-25"),
+            ActionIds.ToMono => SameFormatAudio(Lang.T.JobSuffixMono, "aformat=channel_layouts=mono"),
             _ => null,
         };
     }
@@ -206,7 +207,7 @@ public static class ConversionSpecs
     {
         Suffix = suffix,
         Needs = MediaNeeds.Picture,
-        MissingPictureMessage = "Не удалось прочитать изображение.",
+        MissingPictureMessage = Lang.T.JobCannotReadImage,
         OutputExtension = extension,
         // Первый кадр: у GIF и WebP может быть анимация, берём одно изображение.
         Arguments = (src, info) =>

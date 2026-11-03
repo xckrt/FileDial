@@ -3,7 +3,7 @@
 /// <summary>Имя результата рядом с исходником: имя_25мб.mp4, имя.png, имя_2.png, ...</summary>
 public static class OutputNameGenerator
 {
-    public const string Suffix = "_25мб";
+    public static string Suffix => Settings.JobSettings.TargetSuffix(BitrateCalculator.DefaultTargetBytes);
 
     /// <summary>Имя для сжатия до 25 МБ.</summary>
     public static string Generate(string sourcePath, Func<string, bool> exists) =>
@@ -51,7 +51,7 @@ public static class OutputFiles
             }
         }
 
-        throw new CompressionException("Не удалось подобрать свободное имя для результата.");
+        throw new CompressionException(Localization.Lang.T.JobNoFreeName);
     }
 
     public static void TryDeleteFile(string path)

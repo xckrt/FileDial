@@ -1,4 +1,5 @@
-﻿
+﻿using FileDial.Core.Localization;
+
 namespace FileDial.Core.Jobs;
 
 /// <summary>Модель whisper.cpp, которую программа умеет скачать и проверить сама.</summary>
@@ -10,13 +11,13 @@ public sealed record SpeechModelInfo(string Id, string Label, string FileName, l
 public static class SpeechModels
 {
     // Размеры и SHA-256 — из официального репозитория whisper.cpp (Hugging Face, заголовки X-Linked-Size/X-Linked-ETag).
-    public static readonly SpeechModelInfo Base = new("base", "Базовая", "ggml-base.bin", 147_951_465,
+    public static SpeechModelInfo Base => new("base", Lang.T.JobModelBase, "ggml-base.bin", 147_951_465,
         "60ed5bc3dd14eea856493d334349b405782ddcaf0028d4b5df4088345fba2efe");
 
-    public static readonly SpeechModelInfo Small = new("small", "Точная", "ggml-small.bin", 487_601_967,
+    public static SpeechModelInfo Small => new("small", Lang.T.JobModelAccurate, "ggml-small.bin", 487_601_967,
         "1be3a9b2063867b937e64e2ec7483364a79917e157fa98c5d94b5c1fffea987b");
 
-    public static readonly IReadOnlyList<SpeechModelInfo> Downloadable = [Base, Small];
+    public static IReadOnlyList<SpeechModelInfo> Downloadable => [Base, Small];
 
     /// <summary>Куда программа скачивает модели: %LOCALAPPDATA%\FileDial\models.</summary>
     public static string DataFolder { get; } = Path.Combine(

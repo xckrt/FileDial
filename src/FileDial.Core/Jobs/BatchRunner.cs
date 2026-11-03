@@ -1,5 +1,6 @@
 ﻿using FileDial.Core.Compression;
 using FileDial.Core.History;
+using FileDial.Core.Localization;
 using FileDial.Core.Menu;
 using FileDial.Core.Text;
 
@@ -19,13 +20,13 @@ public sealed record BatchSummary(IReadOnlyList<FileOutcome> Outcomes)
     {
         get
         {
-            var parts = new List<string> { $"Готово: {Done} из {Outcomes.Count}." };
+            var parts = new List<string> { Lang.T.JobBatchDone(Done, Outcomes.Count) };
             if (Skipped > 0)
-                parts.Add($"Пропущено: {Skipped} (делать нечего).");
+                parts.Add(Lang.T.JobBatchSkipped(Skipped));
             if (Failed > 0)
             {
                 var first = Outcomes.First(o => o.Status == HistoryStatus.Failed);
-                parts.Add($"Ошибок: {Failed}. {Path.GetFileName(first.SourcePath)}: {first.Message}");
+                parts.Add(Lang.T.JobBatchFailed(Failed, Path.GetFileName(first.SourcePath), first.Message));
             }
             return string.Join(" ", parts);
         }
@@ -54,7 +55,7 @@ public static class BatchRunner
         {
             ct.ThrowIfCancellationRequested();
             var path = paths[i];
-            var prefix = $"{i + 1} из {paths.Count} · {Path.GetFileName(path)}";
+            var prefix = $"{Lang.T.JobItemOf(i + 1, paths.Count)} · {Path.GetFileName(path)}";
 
             FileOutcome outcome;
             if (skipReason?.Invoke(path) is { } reason)
@@ -67,7 +68,7 @@ public static class BatchRunner
                 var inner = progress is null ? null : new Relay(p => progress.Report(new JobProgress(
                     $"{prefix} · {p.Stage}",
                     (index + (p.Fraction ?? 0)) / paths.Count)));
-                inner?.Report(new JobProgress("Подготовка", 0));
+                inner?.Report(new JobProgress(Lang.T.JobStagePreparing, 0));
                 try
                 {
                     var result = await jobFor(path).RunAsync(path, inner, ct).ConfigureAwait(false);
@@ -86,7 +87,7 @@ public static class BatchRunner
                 catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
                 {
                     outcome = new FileOutcome(path, HistoryStatus.Failed,
-                        ex is FileNotFoundException or DirectoryNotFoundException ? "Файл не найден." : "Нет доступа к файлу.");
+                        ex is FileNotFoundException or DirectoryNotFoundException ? Lang.T.JobFileNotFound : Lang.T.JobNoFileAccess);
                 }
             }
 
@@ -108,7 +109,7 @@ public static class BatchRunner
         if (target is null)
             return null;
         return path => ActionCatalog.NormalizeExtension(Path.GetExtension(path)) == target
-            ? $"Уже в формате {target.TrimStart('.').ToUpperInvariant()}."
+            ? Lang.T.JobAlreadyInFormat(target.TrimStart('.').ToUpperInvariant())
             : null;
     }
 

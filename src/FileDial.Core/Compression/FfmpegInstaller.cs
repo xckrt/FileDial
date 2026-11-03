@@ -3,6 +3,7 @@ using System.IO.Compression;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using FileDial.Core.Jobs;
+using FileDial.Core.Localization;
 
 namespace FileDial.Core.Compression;
 
@@ -137,7 +138,7 @@ public static partial class FfmpegInstaller
             }
         }
         return await FindBtbNAsync(http, ct).ConfigureAwait(false)
-               ?? throw new InvalidDataException("Не нашёлся подходящий архив ffmpeg для Windows.");
+               ?? throw new InvalidDataException(Lang.T.JobFfmpegArchiveNotFound);
     }
 
     // --- Установка ---
@@ -151,11 +152,11 @@ public static partial class FfmpegInstaller
         var staging = Path.Combine(folder, ".staging");
         try
         {
-            stage?.Report($"Скачивание ffmpeg {package.Version}");
+            stage?.Report(Lang.T.JobStageDownloadingFfmpeg(package.Version));
             await VerifiedDownload.DownloadAsync(http, package.Url, package.SizeBytes, package.Sha256, archive, progress, ct)
                 .ConfigureAwait(false);
 
-            stage?.Report("Распаковка");
+            stage?.Report(Lang.T.JobStageUnpacking);
             OutputFiles.TryDeleteDirectory(staging);
             Directory.CreateDirectory(staging);
             if (package.Kind == ArchiveKind.SevenZip)
@@ -184,7 +185,7 @@ public static partial class FfmpegInstaller
             ct.ThrowIfCancellationRequested();
             var entry = archive.Entries.FirstOrDefault(e =>
                             e.FullName.Replace('\\', '/').EndsWith("/bin/" + exe, StringComparison.OrdinalIgnoreCase))
-                        ?? throw new InvalidDataException($"В архиве нет {exe}.");
+                        ?? throw new InvalidDataException(Lang.T.JobArchiveLacks(exe));
             // Пишем под своим именем, путь из архива не используем — никаких «../» за пределы папки.
             entry.ExtractToFile(Path.Combine(targetFolder, exe), overwrite: true);
         }
@@ -203,13 +204,13 @@ public static partial class FfmpegInstaller
             ["-x", "-f", Archives.ArchiveSupport.TarPath(archivePath), "*/bin/ffmpeg.exe", "*/bin/ffprobe.exe"],
             null, captureOutput: false, ct, workingDirectory: raw).ConfigureAwait(false);
         if (result.ExitCode != 0)
-            throw new InvalidDataException($"Не удалось распаковать архив ffmpeg (tar, код {result.ExitCode}).");
+            throw new InvalidDataException(Lang.T.JobFfmpegTarFailed(result.ExitCode));
 
         foreach (var exe in new[] { "ffmpeg.exe", "ffprobe.exe" })
         {
             var found = Directory.GetFiles(raw, exe, SearchOption.AllDirectories)
                             .FirstOrDefault(p => Path.GetFileName(Path.GetDirectoryName(p)) == "bin")
-                        ?? throw new InvalidDataException($"В архиве нет {exe}.");
+                        ?? throw new InvalidDataException(Lang.T.JobArchiveLacks(exe));
             File.Move(found, Path.Combine(targetFolder, exe), overwrite: true);
         }
         OutputFiles.TryDeleteDirectory(raw);

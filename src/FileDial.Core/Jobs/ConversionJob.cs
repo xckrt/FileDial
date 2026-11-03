@@ -1,4 +1,5 @@
 ﻿using FileDial.Core.Compression;
+using FileDial.Core.Localization;
 
 namespace FileDial.Core.Jobs;
 
@@ -20,7 +21,7 @@ public sealed record ConversionSpec
     public required MediaNeeds Needs { get; init; }
 
     /// <summary>Текст, если изображения нет (для картинок и видео он разный).</summary>
-    public string MissingPictureMessage { get; init; } = "В файле нет видеодорожки.";
+    public string MissingPictureMessage { get; init; } = Lang.T.JobNoVideoTrack + ".";
 
     /// <summary>Расширение результата: по пути исходника и сведениям ffprobe (например, кодеку звука).</summary>
     public required Func<string, ProbeInfo, string> OutputExtension { get; init; }
@@ -62,13 +63,13 @@ public sealed class ConversionJob(FfmpegTools tools, ConversionSpec spec, string
     public async Task<JobResult> RunAsync(string sourcePath, IProgress<JobProgress>? progress, CancellationToken ct)
     {
         var sourceSize = new FileInfo(sourcePath).Length;
-        progress?.Report(new JobProgress("Анализ файла", null));
+        progress?.Report(new JobProgress(Lang.T.JobStageAnalyzing, null));
         var info = await ProbeInfo.RunAsync(tools, sourcePath, ct).ConfigureAwait(false);
 
         if (spec.Needs.HasFlag(MediaNeeds.Picture) && !info.HasVideo)
             throw new CompressionException(spec.MissingPictureMessage);
         if (spec.Needs.HasFlag(MediaNeeds.Sound) && !info.HasAudio)
-            throw new CompressionException("В файле нет звуковой дорожки.");
+            throw new CompressionException(Lang.T.JobNoAudioTrack);
 
         var directory = outputDirectory ?? Path.GetDirectoryName(sourcePath)!;
         if (OutputFolderCheck.WhyNot(directory, spec.EstimateBytes(sourceSize, info)) is { } folderProblem)
@@ -96,25 +97,25 @@ public sealed class ConversionJob(FfmpegTools tools, ConversionSpec spec, string
 
             var duration = spec.OutputDuration?.Invoke(info) ?? info.DurationSeconds;
             var timed = spec.Timed && duration > 0;
-            progress?.Report(new JobProgress("Обработка", timed ? 0 : null));
+            progress?.Report(new JobProgress(Lang.T.JobStageProcessing, timed ? 0 : null));
 
             var result = await ProcessRunner.RunAsync(tools.Ffmpeg, args, line =>
             {
                 if (timed && FfmpegProgressParser.TryParseOutTime(line, out var t))
-                    progress?.Report(new JobProgress("Обработка", Math.Clamp(t.TotalSeconds / duration, 0, 1)));
+                    progress?.Report(new JobProgress(Lang.T.JobStageProcessing, Math.Clamp(t.TotalSeconds / duration, 0, 1)));
             }, captureOutput: false, ct).ConfigureAwait(false);
 
             if (result.ExitCode != 0)
-                throw new CompressionException($"ffmpeg не смог обработать файл (код {result.ExitCode}).", result.ErrorTail);
+                throw new CompressionException(Lang.T.JobFfmpegFailed(result.ExitCode), result.ErrorTail);
             if (spec.EmptyOutputMessage is { } empty && (!File.Exists(tempOutput) || new FileInfo(tempOutput).Length == 0))
                 return new JobResult(JobStatus.NothingToDo, empty);
             if (!File.Exists(tempOutput))
-                throw new CompressionException("ffmpeg не создал результат.", result.ErrorTail);
+                throw new CompressionException(Lang.T.JobFfmpegNoOutput, result.ErrorTail);
             spec.PostProcess?.Invoke(tempOutput);
 
             var finalPath = OutputFiles.MoveToFreeName(tempOutput,
                 () => OutputNameGenerator.Generate(sourcePath, spec.Suffix, extension, OutputNameGenerator.PathTaken, directory));
-            progress?.Report(new JobProgress("Готово", 1));
+            progress?.Report(new JobProgress(Lang.T.JobStageDone, 1));
             return new JobResult(JobStatus.Done, FileJobs.DoneMessage(sourceSize, finalPath), finalPath);
         }
         finally

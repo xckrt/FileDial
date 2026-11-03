@@ -21,14 +21,14 @@ public sealed record ProbeInfo(double DurationSeconds, bool HasVideo, bool HasAu
         var result = await ProcessRunner.RunAsync(tools.Ffprobe, Arguments(input), null,
             captureOutput: true, ct).ConfigureAwait(false);
         if (result.ExitCode != 0)
-            throw new CompressionException("ffprobe не смог прочитать файл. Возможно, он повреждён.", result.ErrorTail);
+            throw new CompressionException(Localization.Lang.T.JobFfprobeCannotRead, result.ErrorTail);
         try
         {
             return Parse(result.StandardOutput);
         }
         catch (JsonException ex)
         {
-            throw new CompressionException("Не удалось разобрать ответ ffprobe.", ex.Message);
+            throw new CompressionException(Localization.Lang.T.JobFfprobeBadOutput, ex.Message);
         }
     }
 

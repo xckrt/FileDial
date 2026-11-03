@@ -1,4 +1,5 @@
 ﻿using System.Security.Cryptography;
+using FileDial.Core.Localization;
 
 namespace FileDial.Core.Jobs;
 
@@ -48,7 +49,7 @@ public static class VerifiedDownload
             var total = expectedSize ?? response.Content.Headers.ContentLength ?? 0;
             // Архиву нужно место и на себя, и на распакованное.
             if (total > 0 && FreeBytes(folder) is { } free && free < total * 3 + 50_000_000)
-                throw new IOException($"Мало места на диске: нужно около {total * 3 / 1_000_000 + 50} МБ.");
+                throw new IOException(Lang.T.JobDownloadNoSpace(total * 3 / 1_000_000 + 50));
 
             using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
             await using (var input = await response.Content.ReadAsStreamAsync(ct).ConfigureAwait(false))
@@ -69,7 +70,7 @@ public static class VerifiedDownload
             var actual = Convert.ToHexStringLower(hash.GetHashAndReset());
             if ((expectedSize is { } size && new FileInfo(partPath).Length != size) ||
                 !actual.Equals(expectedSha256.Trim(), StringComparison.OrdinalIgnoreCase))
-                throw new InvalidDataException("Скачанный файл повреждён (не совпала контрольная сумма). Попробуйте ещё раз.");
+                throw new InvalidDataException(Lang.T.JobDownloadCorrupted);
             ok = true;
         }
         finally
@@ -90,7 +91,7 @@ public static class VerifiedDownload
         }
         catch (OperationCanceledException) when (!ct.IsCancellationRequested)
         {
-            throw new IOException("Загрузка остановилась: сервер перестал присылать данные. Попробуйте ещё раз позже.");
+            throw new IOException(Lang.T.JobDownloadStalled);
         }
     }
 

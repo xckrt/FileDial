@@ -1,5 +1,6 @@
 ﻿using System.ComponentModel;
 using System.Text.Json;
+using FileDial.Core.Localization;
 
 namespace FileDial.Core.Compression;
 
@@ -31,10 +32,10 @@ public sealed class FfprobeMediaProbe(FfmpegTools tools, TimeSpan timeout) : IMe
 /// <summary>Можно ли осмысленно сжать файл до цели; если нет — причина для пользователя.</summary>
 public static class CompressionCheck
 {
-    public const string AlreadySmall = "Файл уже меньше 25 МБ";
+    public static string AlreadySmall => AlreadySmallFor(BitrateCalculator.DefaultTargetBytes);
 
-    public static string AlreadySmallFor(long targetBytes) => $"Файл уже меньше {Text.SizeFormatter.Format(targetBytes)}";
-    public const string NoVideo = "В файле нет видеодорожки";
+    public static string AlreadySmallFor(long targetBytes) => Lang.T.JobAlreadySmallerThan(Text.SizeFormatter.Format(targetBytes));
+    public static string NoVideo => Lang.T.JobNoVideoTrack;
 
     public static string? WhyNot(long sizeBytes, ProbeInfo? info, long targetBytes = BitrateCalculator.DefaultTargetBytes)
     {
@@ -52,6 +53,6 @@ public static class CompressionCheck
             return null;
 
         var minutes = (int)Math.Floor(BitrateCalculator.MaxDurationSeconds(info.HasAudio, targetBytes) / 60);
-        return $"Видео длиннее {minutes} мин в {Text.SizeFormatter.Format(targetBytes)} не уместить";
+        return Lang.T.JobVideoTooLongFor(minutes, Text.SizeFormatter.Format(targetBytes));
     }
 }

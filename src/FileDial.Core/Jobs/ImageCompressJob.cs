@@ -1,4 +1,5 @@
 ﻿using FileDial.Core.Compression;
+using FileDial.Core.Localization;
 using FileDial.Core.Text;
 
 namespace FileDial.Core.Jobs;
@@ -25,12 +26,12 @@ public sealed class ImageCompressJob(FfmpegTools tools, long targetBytes = Image
         var sourceSize = new FileInfo(sourcePath).Length;
         if (sourceSize <= targetBytes)
             return new JobResult(JobStatus.NothingToDo,
-                $"Файл уже меньше {SizeFormatter.Format(targetBytes)} ({SizeFormatter.Format(sourceSize)}), сжимать не нужно.");
+                Lang.T.JobAlreadySmallNoNeed(SizeFormatter.Format(targetBytes), SizeFormatter.Format(sourceSize)));
 
-        progress?.Report(new JobProgress("Анализ файла", null));
+        progress?.Report(new JobProgress(Lang.T.JobStageAnalyzing, null));
         var info = await ProbeInfo.RunAsync(tools, sourcePath, ct).ConfigureAwait(false);
         if (!info.HasVideo)
-            throw new CompressionException("Не удалось прочитать изображение.");
+            throw new CompressionException(Lang.T.JobCannotReadImage);
 
         var directory = outputDirectory ?? Path.GetDirectoryName(sourcePath)!;
         if (OutputFolderCheck.WhyNot(directory, targetBytes) is { } folderProblem)
@@ -44,14 +45,14 @@ public sealed class ImageCompressJob(FfmpegTools tools, long targetBytes = Image
             {
                 int? target = scale < 1 && longSide > 0 ? EvenSide(longSide * scale) : null;
                 if (target is < 64)
-                    throw new CompressionException($"Не удалось уложить картинку в {SizeFormatter.Format(targetBytes)}.");
+                    throw new CompressionException(Lang.T.JobCannotFitImage(SizeFormatter.Format(targetBytes)));
 
-                progress?.Report(new JobProgress(target is null ? "Подбор качества" : $"Уменьшение до {target} px", null));
+                progress?.Report(new JobProgress(target is null ? Lang.T.JobStageTuningQuality : Lang.T.JobStageDownscaling(target.Value), null));
                 var quality = await FindQualityAsync(sourcePath, info, target, tempOutput, ct).ConfigureAwait(false);
                 if (quality is null)
                 {
                     if (longSide <= 0)
-                        throw new CompressionException($"Не удалось уложить картинку в {SizeFormatter.Format(targetBytes)}.");
+                        throw new CompressionException(Lang.T.JobCannotFitImage(SizeFormatter.Format(targetBytes)));
                     continue;
                 }
 
@@ -63,7 +64,7 @@ public sealed class ImageCompressJob(FfmpegTools tools, long targetBytes = Image
             var finalPath = OutputFiles.MoveToFreeName(tempOutput,
                 () => OutputNameGenerator.Generate(sourcePath, Settings.JobSettings.TargetSuffix(targetBytes), ".jpg",
                     OutputNameGenerator.PathTaken, directory));
-            progress?.Report(new JobProgress("Готово", 1));
+            progress?.Report(new JobProgress(Lang.T.JobStageDone, 1));
             return new JobResult(JobStatus.Done, FileJobs.DoneMessage(sourceSize, finalPath), finalPath);
         }
         finally
@@ -95,7 +96,7 @@ public sealed class ImageCompressJob(FfmpegTools tools, long targetBytes = Image
 
         var result = await ProcessRunner.RunAsync(tools.Ffmpeg, args, null, captureOutput: false, ct).ConfigureAwait(false);
         if (result.ExitCode != 0 || !File.Exists(output))
-            throw new CompressionException($"ffmpeg не смог обработать файл (код {result.ExitCode}).", result.ErrorTail);
+            throw new CompressionException(Lang.T.JobFfmpegFailed(result.ExitCode), result.ErrorTail);
         return new FileInfo(output).Length;
     }
 
