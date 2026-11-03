@@ -90,7 +90,7 @@ public class ArchiveMenuTests
         }
         Assert.NotNull(FileJobs.Create(ActionIds.ExtractHere, tools: null));
         Assert.True(FileJobs.NeedsFfmpeg(ActionIds.Gif));
-        Assert.False(FileJobs.IsImplemented(ActionIds.ArchiveSplit));
+        Assert.False(FileJobs.IsImplemented(ActionIds.RemoveBackground)); // последняя заглушка
     }
 }
 

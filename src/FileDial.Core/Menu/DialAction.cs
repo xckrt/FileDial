@@ -71,6 +71,8 @@ public static class ActionIds
     public const string ArchiveContents = "archive-contents";
     /// <summary>Сжать выбранные файлы и папки в ZIP (для всего, у чего нет своего круга).</summary>
     public const string CompressToZip = "compress-to-zip";
+    /// <summary>Собрать файл из частей .001, .002, … (компактный круг для частей).</summary>
+    public const string JoinParts = "join-parts";
     public const string ArchiveToPrefix = "archive-to:";
     public static string ArchiveTo(string extension) => ArchiveToPrefix + extension;
 

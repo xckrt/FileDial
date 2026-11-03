@@ -46,6 +46,7 @@ public static class FileJobs
             case ActionIds.ExtractToFolder: return new ArchiveExtractJob(ExtractMode.ToFolder, output);
             case ActionIds.TestArchive: return new ArchiveTestJob();
             case ActionIds.CompressToZip: return new ArchiveCreateJob(ArchiveFormat.Zip, output);
+            case ActionIds.JoinParts: return new FileJoinJob(output);
         }
         if (ActionIds.TargetExtension(actionId, ActionIds.ArchiveToPrefix) is { } archiveTarget)
             return archiveTarget switch
@@ -72,8 +73,12 @@ public static class FileJobs
     /// <summary>Нужен ли ffmpeg для действия (архивы обходятся без него).</summary>
     public static bool NeedsFfmpeg(string actionId) =>
         actionId is not (ActionIds.ExtractHere or ActionIds.ExtractToFolder or ActionIds.ExtractTo
-            or ActionIds.TestArchive or ActionIds.CompressToZip or ActionIds.ArchivePassword)
+            or ActionIds.TestArchive or ActionIds.CompressToZip or ActionIds.ArchivePassword
+            or ActionIds.ArchiveSplit or ActionIds.JoinParts)
         && ActionIds.TargetExtension(actionId, ActionIds.ArchiveToPrefix) is null;
+
+    /// <summary>Перед запуском нужно спросить размер части («Разбить на части»).</summary>
+    public static bool NeedsPartSize(string actionId) => actionId == ActionIds.ArchiveSplit;
 
     /// <summary>Перед запуском нужно спросить новый пароль («Защитить паролем»).</summary>
     public static bool NeedsNewPassword(string actionId) => actionId == ActionIds.ArchivePassword;

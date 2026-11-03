@@ -158,7 +158,8 @@ public static class ActionCatalog
             DialAction.Group(ActionIds.ArchiveConvert, "Формат", noTar is null ? formats
                 : formats.Select(c => c with { IsEnabled = false, DisabledReason = noTar }).ToList()),
             Action(ActionIds.ArchivePassword, "Защитить паролем", noTar),
-            Stub(ActionIds.ArchiveSplit, "Разбить на части"),
+            // Деление — по байтам, tar.exe не нужен.
+            Action(ActionIds.ArchiveSplit, "Разбить на части", null),
             Action(ActionIds.ArchiveContents, "Содержимое", noTar),
         ];
     }

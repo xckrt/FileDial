@@ -75,6 +75,11 @@ public static class SelectionInterpreter
 
         var name = Path.GetFileName(path);
         var size = SizeFormatter.Format(state.Size);
+
+        // Часть файла (.001, .002, …) — предлагаем собрать целиком.
+        if (PartsMenu(path) is { } parts)
+            return parts;
+
         var kind = FileKinds.Of(path);
         if (kind == FileKind.Other)
             return Unsupported(name, path, size, [path]);
@@ -125,6 +130,11 @@ public static class SelectionInterpreter
             sizes.Add(state.Size);
         }
 
+        // Выделены части одного набора — это тоже «собрать».
+        var bases = paths.Select(Archives.FileParts.BaseOf).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        if (bases is [{ } commonBase] && PartsMenu(commonBase + ".001") is { } partsMenu)
+            return partsMenu;
+
         var kinds = paths.Select(FileKinds.Of).Distinct().ToList();
         if (kinds.Count > 1)
             return Unsupported($"Выделено {count}", null, "Файлы разных типов", paths);
@@ -138,6 +148,25 @@ public static class SelectionInterpreter
             {
                 SourcePaths = paths,
             });
+    }
+
+    /// <summary>Компактный круг для частей: «имя.zip · 3 части · 52 МБ», Enter — собрать.</summary>
+    private static HotkeyOutcome? PartsMenu(string path)
+    {
+        if (Archives.FileParts.BaseOf(path) is not { } basePath)
+            return null;
+        var parts = Archives.FileParts.Find(basePath);
+        if (parts.Count < 2)
+            return null;
+        var total = parts.Sum(p => new FileInfo(p).Length);
+        return new HotkeyOutcome.ShowMenu(new DialMenu(DialMenuKind.Unsupported,
+            NameShortener.Middle(Path.GetFileName(basePath), MaxTitleLength),
+            $"{Archives.FileParts.PartsLabel(parts.Count)} · {SizeFormatter.Format(total)}",
+            [], parts[0])
+        {
+            SourcePaths = [parts[0]],
+            QuickAction = new DialAction(ActionIds.JoinParts, "Собрать из частей", true) { Caption = "Собрать из частей" },
+        });
     }
 
     /// <summary>«5 картинок», «2 аудиофайла», «3 видео».</summary>

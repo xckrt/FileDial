@@ -273,11 +273,24 @@ public partial class App : Application
                 AskExtractFolder(action, menu.SourcePaths);
             else if (FileJobs.NeedsNewPassword(action.Id))
                 AskNewPassword(action, menu.SourcePaths);
+            else if (FileJobs.NeedsPartSize(action.Id))
+                AskPartSize(action, menu.SourcePaths);
             else
                 StartJob(action, menu.SourcePaths);
         };
         _radial = radial;
         radial.Show();
+    }
+
+    /// <summary>«Разбить на части»: выбор размера части (для пакета — по самому большому архиву), затем окно выполнения.</summary>
+    private void AskPartSize(DialAction action, IReadOnlyList<string> files)
+    {
+        var largest = files.Max(f => new FileInfo(f).Length);
+        var title = files.Count == 1 ? Path.GetFileName(files[0]) : $"Архивов: {files.Count}";
+        if (SplitWindow.Ask(title, largest) is not { } partSize)
+            return;
+        var output = _settings.Jobs.OutputFolder;
+        StartJob(action, files, _ => new FileSplitJob(partSize, output));
     }
 
     /// <summary>«Защитить паролем»: пароль вводится дважды, затем обычное окно выполнения.</summary>
