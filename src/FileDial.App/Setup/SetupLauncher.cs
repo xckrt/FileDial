@@ -83,7 +83,7 @@ internal static class SetupLauncher
             }
             RunningCopies.StopAsync(TimeSpan.FromSeconds(10)).GetAwaiter().GetResult();
             installer.InstallAsync(exe, Version, new InstallOptions(directory, Autostart: !Has(args, "--no-autostart"))
-                    { ReadmePath = UI.ShellActions.ReadmePath() },
+                    { ReadmePaths = UI.ShellActions.AllReadmes() },
                 null, CancellationToken.None).GetAwaiter().GetResult();
             return 0;
         }

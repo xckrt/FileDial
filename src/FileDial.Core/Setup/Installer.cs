@@ -43,8 +43,8 @@ public sealed record InstallOptions(
     bool DesktopShortcut = false,
     string? Theme = null)
 {
-    /// <summary>Справка для папки программы; по умолчанию — README.md рядом с установщиком.</summary>
-    public string? ReadmePath { get; init; }
+    /// <summary>Справка на всех языках для папки программы; по умолчанию — README*.md рядом с установщиком.</summary>
+    public IReadOnlyList<string>? ReadmePaths { get; init; }
 }
 
 [SupportedOSPlatform("windows")]
@@ -64,7 +64,8 @@ public sealed class Installer(InstallEnvironment environment)
 {
     public const string ExeName = "FileDial.exe";
     public const string ShortcutName = "FileDial.lnk";
-    private const string ReadmeName = "README.md";
+    /// <summary>Справка: английская и русская.</summary>
+    private static readonly string[] ReadmeNames = ["README.md", "README.ru.md"];
     private const long Margin = 50_000_000;
 
     public static string DefaultDirectory { get; } = Path.Combine(
@@ -185,9 +186,13 @@ public sealed class Installer(InstallEnvironment environment)
         }
         ct.ThrowIfCancellationRequested();
 
-        var readme = options.ReadmePath ?? Path.Combine(Path.GetDirectoryName(sourceExe)!, ReadmeName);
-        if (File.Exists(readme) && !SamePath(readme, Path.Combine(directory, ReadmeName)))
-            File.Copy(readme, Path.Combine(directory, ReadmeName), overwrite: true);
+        var readmes = options.ReadmePaths ?? ReadmeNames.Select(n => Path.Combine(Path.GetDirectoryName(sourceExe)!, n)).ToList();
+        foreach (var readme in readmes.Where(File.Exists))
+        {
+            var target = Path.Combine(directory, Path.GetFileName(readme));
+            if (!SamePath(readme, target))
+                File.Copy(readme, target, overwrite: true);
+        }
 
         // 2. Запись в «Приложениях»: оттуда же — удаление.
         progress?.Report(new InstallProgress(Lang.T.InstallStageRegistering, 0.9));
@@ -311,7 +316,7 @@ public sealed class Installer(InstallEnvironment environment)
         progress?.Report(new InstallProgress(Lang.T.InstallStageFiles, 0.8));
         // Удаляем только своё: в папке, выбранной пользователем, могут лежать и чужие файлы.
         var leftovers = new List<string>();
-        foreach (var file in new[] { app.ExePath, Path.Combine(app.Directory, ReadmeName) })
+        foreach (var file in ReadmeNames.Select(n => Path.Combine(app.Directory, n)).Prepend(app.ExePath))
         {
             try
             {

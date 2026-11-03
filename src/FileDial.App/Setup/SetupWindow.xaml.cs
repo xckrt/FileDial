@@ -247,7 +247,7 @@ public partial class SetupWindow : Window
     private async Task InstallAsync()
     {
         var options = new InstallOptions(_directory, AutostartBox.IsChecked == true, StartMenuBox.IsChecked == true,
-            DesktopBox.IsChecked == true, ChosenTheme) { ReadmePath = ShellActions.ReadmePath() };
+            DesktopBox.IsChecked == true, ChosenTheme) { ReadmePaths = ShellActions.AllReadmes() };
         BeginWork(_installed is null ? () => Lang.T.SetupInstalling : () => Lang.T.SetupUpdating);
         _cts = new CancellationTokenSource();
         var started = DateTime.UtcNow;
