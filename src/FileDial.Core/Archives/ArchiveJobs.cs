@@ -81,7 +81,7 @@ public sealed class ArchiveTestJob : IFileJob
         if (ArchiveSupport.TarAvailable)
         {
             // -O: содержимое в stdout (мы его отбрасываем) — tar читает всё и проверяет CRC каждого файла.
-            await ArchiveSupport.RunTarAsync(["-x", "-O", "-f", archive],
+            await ArchiveSupport.RunTarAsync(["-x", "-O", "-f", ArchiveSupport.TarPath(archive)],
                 "Архив повреждён или защищён паролем — прочитать его целиком не удалось.", ct).ConfigureAwait(false);
             files = ArchiveSupport.CountFiles(archive, TimeSpan.FromMinutes(5)) ?? 0;
         }
@@ -232,9 +232,18 @@ public sealed class ArchiveCreateJob(ArchiveFormat format, string? outputDirecto
     {
         progress?.Report(new JobProgress("Сжатие в 7z", null));
         var root = Path.GetDirectoryName(paths[0].TrimEnd('\\', '/'))!;
-        var names = paths.Select(p => Path.GetFileName(p.TrimEnd('\\', '/')));
-        await ArchiveSupport.RunTarAsync(["--format", "7zip", "-c", "-f", temp, "-C", root, .. names],
-            "Не удалось создать архив 7z.", ct).ConfigureAwait(false);
+        var names = paths.Select(p => Path.GetFileName(p.TrimEnd('\\', '/'))).ToList();
+        // Имена верхнего уровня идут аргументами — им нужен ANSI; вложенные tar читает с диска в Unicode.
+        if (names.FirstOrDefault(n => !ArchiveSupport.IsAnsiSafe(n)) is { } bad)
+            throw new CompressionException(
+                $"В имени «{bad}» есть символы, которые встроенный tar.exe не передаёт в 7z. Сожмите в ZIP — там такой проблемы нет.");
+        // Временный файл: относительно рабочей папки, если он там же, иначе — по короткому пути папки.
+        var tempDir = Path.GetDirectoryName(temp)!;
+        var tempArg = string.Equals(Path.GetFullPath(tempDir), Path.GetFullPath(root), StringComparison.OrdinalIgnoreCase)
+            ? Path.GetFileName(temp)
+            : Path.Combine(ArchiveSupport.TarPath(tempDir), Path.GetFileName(temp));
+        await ArchiveSupport.RunTarAsync(["--format", "7zip", "-c", "-f", tempArg, .. names],
+            "Не удалось создать архив 7z.", ct, workingDirectory: root).ConfigureAwait(false);
     }
 }
 

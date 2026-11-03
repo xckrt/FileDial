@@ -256,6 +256,15 @@ public partial class App : Application
                 OpenSettings(SettingsSection.Speech);
                 return;
             }
+            if (radial.Chosen is { Id: ActionIds.ArchiveContents } && menu.SourcePath is { } archive)
+            {
+                // «Содержимое» — не задача над файлом, а окно просмотра; оттуда можно сразу распаковать.
+                var contents = new ContentsWindow(archive, WindowPlacement.CursorPosition(), () => StartJob(
+                    new DialAction(ActionIds.ExtractHere, "Распаковать сюда", true), [archive]));
+                contents.Show();
+                contents.Activate();
+                return;
+            }
             if (radial.Chosen is not { } action || menu.SourcePaths.Count == 0 || !FileJobs.IsImplemented(action.Id))
                 return;
             if (FileJobs.NeedsTrimInput(action.Id) && !menu.IsBatch)

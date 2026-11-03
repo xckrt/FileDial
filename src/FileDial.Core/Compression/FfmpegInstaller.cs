@@ -198,9 +198,10 @@ public static partial class FfmpegInstaller
     {
         var raw = Path.Combine(targetFolder, "raw");
         Directory.CreateDirectory(raw);
+        // Рабочая папка вместо -C и короткий путь к архиву: имя пользователя Windows может быть не в ANSI.
         var result = await ProcessRunner.RunAsync(SystemTar,
-            ["-x", "-f", archivePath, "-C", raw, "*/bin/ffmpeg.exe", "*/bin/ffprobe.exe"],
-            null, captureOutput: false, ct).ConfigureAwait(false);
+            ["-x", "-f", Archives.ArchiveSupport.TarPath(archivePath), "*/bin/ffmpeg.exe", "*/bin/ffprobe.exe"],
+            null, captureOutput: false, ct, workingDirectory: raw).ConfigureAwait(false);
         if (result.ExitCode != 0)
             throw new InvalidDataException($"Не удалось распаковать архив ffmpeg (tar, код {result.ExitCode}).");
 

@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using System.IO.Compression;
 using System.Text;
 using FileDial.Core.Compression;
@@ -63,15 +63,70 @@ public static class ArchiveSupport
         }
     }
 
+    // --- tar.exe и не-ANSI пути ---
+    //
+    // tar.exe из Windows получает аргументы командной строки в ANSI-кодировке системы (для русской Windows — cp1251).
+    // Имена внутри архива и на диске он читает и пишет через Unicode-API, поэтому вложенные «Ünïcödé» и «日本»
+    // в порядке. Но путь-аргумент с символами вне cp1251 он открыть не может. Поэтому:
+    //  • папку назначения задаём рабочим каталогом процесса (это Unicode), а не аргументом -C;
+    //  • путь к архиву, не помещающийся в ANSI, заменяем коротким именем 8.3 (если они включены на диске);
+    //  • если и это не помогло — честно говорим, что делать.
+
+    /// <summary>ANSI-кодировка системы без «похожих замен» (Ü→U): непредставимый символ — исключение.</summary>
+    private static Encoding StrictAnsi =>
+        Encoding.GetEncoding(CultureInfo.CurrentCulture.TextInfo.ANSICodePage,
+            EncoderFallback.ExceptionFallback, DecoderFallback.ExceptionFallback);
+
+    /// <summary>Кодировка вывода tar.exe (имена в списке) — ANSI-кодировка системы.</summary>
+    public static Encoding TarOutput => Encoding.GetEncoding(CultureInfo.CurrentCulture.TextInfo.ANSICodePage);
+
+    public static bool IsAnsiSafe(string text)
+    {
+        try
+        {
+            StrictAnsi.GetByteCount(text);
+            return true;
+        }
+        catch (EncoderFallbackException)
+        {
+            return false;
+        }
+    }
+
+    [System.Runtime.InteropServices.DllImport("kernel32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode)]
+    private static extern uint GetShortPathName(string longPath, StringBuilder shortPath, uint size);
+
+    /// <summary>Путь существующего файла или папки в виде, понятном tar.exe.</summary>
+    public static string TarPath(string path)
+    {
+        if (IsAnsiSafe(path))
+            return path;
+        try
+        {
+            var buffer = new StringBuilder(1024);
+            if (GetShortPathName(path, buffer, (uint)buffer.Capacity) > 0 && IsAnsiSafe(buffer.ToString()))
+                return buffer.ToString();
+        }
+        catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException)
+        {
+        }
+        throw new CompressionException(
+            $"В пути «{path}» есть символы, которые встроенный в Windows tar.exe не понимает. " +
+            "Переименуйте папку (только русские и латинские буквы) или используйте ZIP.");
+    }
+
     /// <summary>Понятный текст для типичных ошибок распаковки.</summary>
     public static string ExtractError(string detail) =>
         $"Не удалось распаковать: архив повреждён, защищён паролем или формат не поддерживается. {detail}".Trim();
 
-    public static async Task RunTarAsync(IReadOnlyList<string> args, string failureMessage, CancellationToken ct)
+    /// <param name="workingDirectory">Рабочая папка tar (вместо -C: так путь передаётся в Unicode).</param>
+    public static async Task RunTarAsync(IReadOnlyList<string> args, string failureMessage, CancellationToken ct,
+        string? workingDirectory = null)
     {
         if (!TarAvailable)
             throw new CompressionException("В Windows нет tar.exe — такие архивы не поддерживаются (нужна Windows 10 1803 или новее).");
-        var result = await ProcessRunner.RunAsync(Tar, args, null, captureOutput: false, ct).ConfigureAwait(false);
+        var result = await ProcessRunner.RunAsync(Tar, args, null, captureOutput: false, ct, workingDirectory, TarOutput)
+            .ConfigureAwait(false);
         if (result.ExitCode != 0)
             throw new CompressionException(failureMessage, result.ErrorTail);
     }
@@ -87,7 +142,7 @@ public static class ArchiveSupport
         {
             progress?.Report(new JobProgress(stage, null));
             // bsdtar сам не пускает абсолютные пути и «..» за пределы папки.
-            await RunTarAsync(["-x", "-f", archive, "-C", target], ExtractError(""), ct).ConfigureAwait(false);
+            await RunTarAsync(["-x", "-f", TarPath(archive)], ExtractError(""), ct, workingDirectory: target).ConfigureAwait(false);
         }
     }
 
@@ -143,7 +198,8 @@ public static class ArchiveSupport
             if (!TarAvailable)
                 return null;
             using var cts = new CancellationTokenSource(timeout);
-            var result = ProcessRunner.RunAsync(Tar, ["-t", "-f", archive], null, captureOutput: true, cts.Token)
+            var result = ProcessRunner.RunAsync(Tar, ["-t", "-f", TarPath(archive)], null, captureOutput: true, cts.Token,
+                    outputEncoding: TarOutput)
                 .GetAwaiter().GetResult();
             if (result.ExitCode != 0)
                 return null;
@@ -152,7 +208,8 @@ public static class ArchiveSupport
                 .Count(l => !l.TrimEnd('\r').EndsWith('/'));
         }
         catch (Exception ex) when (ex is IOException or InvalidDataException or OperationCanceledException
-                                       or UnauthorizedAccessException or System.ComponentModel.Win32Exception)
+                                       or UnauthorizedAccessException or System.ComponentModel.Win32Exception
+                                       or CompressionException)
         {
             return null;
         }

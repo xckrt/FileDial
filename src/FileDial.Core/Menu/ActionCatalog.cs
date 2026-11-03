@@ -66,6 +66,7 @@ public static class ActionCatalog
                 };
             }).ToList()),
             { Id: ActionIds.Trim or ActionIds.AudioTrim } => a with { IsEnabled = false, DisabledReason = "Обрезка — по одному файлу" },
+            { Id: ActionIds.ArchiveContents } => a with { IsEnabled = false, DisabledReason = "Содержимое — по одному архиву" },
             { Id: ActionIds.ImageToPdf } => a with { Label = "Собрать в PDF", Caption = "Собрать в PDF" },
             { IsEnabled: false, DisabledReason: { } reason } when reason.StartsWith("Файл уже меньше", StringComparison.Ordinal) =>
                 a with { DisabledReason = "Все файлы" + reason["Файл".Length..] },
@@ -158,7 +159,7 @@ public static class ActionCatalog
                 : formats.Select(c => c with { IsEnabled = false, DisabledReason = noTar }).ToList()),
             Stub(ActionIds.ArchivePassword, "Защитить паролем"),
             Stub(ActionIds.ArchiveSplit, "Разбить на части"),
-            Stub(ActionIds.ArchiveContents, "Содержимое"),
+            Action(ActionIds.ArchiveContents, "Содержимое", noTar),
         ];
     }
 

@@ -15,7 +15,9 @@ public static class ProcessRunner
         IReadOnlyList<string> arguments,
         Action<string>? onOutputLine,
         bool captureOutput,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        string? workingDirectory = null,
+        Encoding? outputEncoding = null)
     {
         var psi = new ProcessStartInfo(executable)
         {
@@ -23,9 +25,12 @@ public static class ProcessRunner
             CreateNoWindow = true,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
-            StandardOutputEncoding = Encoding.UTF8,
-            StandardErrorEncoding = Encoding.UTF8,
+            // ffmpeg пишет UTF-8; tar.exe — в ANSI-кодировке системы (вызывающий передаёт свою).
+            StandardOutputEncoding = outputEncoding ?? Encoding.UTF8,
+            StandardErrorEncoding = outputEncoding ?? Encoding.UTF8,
         };
+        if (workingDirectory is not null)
+            psi.WorkingDirectory = workingDirectory;
         foreach (var argument in arguments)
             psi.ArgumentList.Add(argument);
 
