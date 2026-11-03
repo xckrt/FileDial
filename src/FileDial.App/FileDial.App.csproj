@@ -43,7 +43,8 @@
     <EmbeddedResource Include="FileDial.ico" LogicalName="FileDial.ico" />
     <!-- Справка и внутри exe: установщик кладёт её в папку программы, даже если рядом с ним README нет. -->
     <EmbeddedResource Include="..\..\README.md" LogicalName="README.md" />
-    <EmbeddedResource Include="..\..\README.ru.md" LogicalName="README.ru.md" />
+    <!-- WithCulture=false: иначе по «.ru» в имени MSBuild унесёт файл в отдельную сборку для русского языка. -->
+    <EmbeddedResource Include="..\..\README.ru.md" LogicalName="README.ru.md" WithCulture="false" />
   </ItemGroup>
 
   <ItemGroup>

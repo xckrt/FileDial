@@ -82,8 +82,14 @@ internal static class SetupLauncher
                 return 2;
             }
             RunningCopies.StopAsync(TimeSpan.FromSeconds(10)).GetAwaiter().GetResult();
-            installer.InstallAsync(exe, Version, new InstallOptions(directory, Autostart: !Has(args, "--no-autostart"))
-                    { ReadmePaths = UI.ShellActions.AllReadmes() },
+            // Обновление сохраняет то, что пользователь уже выбрал (автозапуск, ярлыки); новая установка — по умолчанию.
+            var options = installed is { } current
+                ? new InstallOptions(directory,
+                    Autostart: installer.AutostartPointsTo(current.ExePath) && !Has(args, "--no-autostart"),
+                    StartMenuShortcut: installer.ShortcutExists(desktop: false, current.ExePath),
+                    DesktopShortcut: installer.ShortcutExists(desktop: true, current.ExePath))
+                : new InstallOptions(directory, Autostart: !Has(args, "--no-autostart"));
+            installer.InstallAsync(exe, Version, options with { ReadmePaths = UI.ShellActions.AllReadmes() },
                 null, CancellationToken.None).GetAwaiter().GetResult();
             return 0;
         }
