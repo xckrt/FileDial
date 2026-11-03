@@ -6,6 +6,7 @@ using FileDial.Core.Archives;
 using FileDial.Core.Compression;
 using FileDial.Core.History;
 using FileDial.Core.Jobs;
+using FileDial.Core.Localization;
 using FileDial.Core.Menu;
 using FileDial.Core.Settings;
 
@@ -44,7 +45,7 @@ public partial class JobWindow : Window
             : Path.GetFileName(sourcePath);
         FileNameText.ToolTip = string.Join(Environment.NewLine, sourcePaths.Take(20)) +
                                (sourcePaths.Count > 20 ? Environment.NewLine + "…" : "");
-        StageText.Text = "Подготовка";
+        StageText.Text = Lang.T.UiJobPreparing;
         Opacity = 0;
 
         var placement = new WindowPlacement(this, cursor, PlacementMode.NearCursor, Width, Height);
@@ -83,7 +84,7 @@ public partial class JobWindow : Window
         if (tools is null && FileJobs.NeedsFfmpeg(_actionId))
         {
             ShowFinished(
-                "Для этого действия нужен ffmpeg — его ещё нет на компьютере.",
+                Lang.T.UiJobNeedsFfmpeg,
                 HistoryStatus.Failed, showHelp: true);
             return;
         }
@@ -91,7 +92,7 @@ public partial class JobWindow : Window
         var job = _jobFactory?.Invoke(tools) ?? FileJobs.Create(_actionId, tools, _settings.Jobs);
         if (job is null)
         {
-            ShowFinished("Это действие пока не реализовано.", HistoryStatus.Failed);
+            ShowFinished(Lang.T.UiJobNotImplemented, HistoryStatus.Failed);
             return;
         }
 
@@ -126,7 +127,7 @@ public partial class JobWindow : Window
                 if (summary.Done == 0 && summary.Failed > 0)
                 {
                     _running = false;
-                    StageText.Text = "Ошибка";
+                    StageText.Text = Lang.T.UiJobError;
                     ResetProgress();
                     ShowFinished(summary.Message, HistoryStatus.Failed, record: false);
                     return;
@@ -142,14 +143,14 @@ public partial class JobWindow : Window
 
             if (result.Status == JobStatus.NothingToDo)
             {
-                StageText.Text = "Ничего делать не нужно";
+                StageText.Text = Lang.T.UiJobNothingToDo;
                 ResetProgress();
                 ShowFinished(result.Message, HistoryStatus.NothingToDo, record: !perFileHistory);
                 return;
             }
 
             _resultPath = result.OutputPath;
-            StageText.Text = "Готово";
+            StageText.Text = Lang.T.UiJobDone;
             SetProgress(1);
             ShowFinished(result.Message, HistoryStatus.Done, record: !perFileHistory);
             if (_resultPath is null)
@@ -164,18 +165,18 @@ public partial class JobWindow : Window
             _running = false;
             if (_closeWhenStopped)
             {
-                Record(HistoryStatus.Cancelled, "Отменено при выходе из программы.");
+                Record(HistoryStatus.Cancelled, Lang.T.UiJobCancelledOnExit);
                 Close();
                 return;
             }
-            StageText.Text = "Отменено";
+            StageText.Text = Lang.T.UiJobCancelled;
             ResetProgress();
-            ShowFinished("Отменено. Исходный файл не изменён, временные файлы удалены.", HistoryStatus.Cancelled);
+            ShowFinished(Lang.T.UiJobCancelledDetails, HistoryStatus.Cancelled);
         }
         catch (CompressionException ex)
         {
             _running = false;
-            StageText.Text = "Ошибка";
+            StageText.Text = Lang.T.UiJobError;
             ResetProgress();
             ShowFinished(ex.Details is { Length: > 0 } d ? $"{ex.Message}\n{LastLine(d)}" : ex.Message, HistoryStatus.Failed);
             if (ex.Details is not null)
@@ -184,24 +185,24 @@ public partial class JobWindow : Window
         catch (Exception ex) when (ex is FileNotFoundException or DirectoryNotFoundException)
         {
             _running = false;
-            StageText.Text = "Ошибка";
+            StageText.Text = Lang.T.UiJobError;
             ResetProgress();
-            ShowFinished("Исходный файл не найден: его переместили, переименовали или удалили.", HistoryStatus.Failed);
+            ShowFinished(Lang.T.UiJobSourceNotFound, HistoryStatus.Failed);
         }
         catch (UnauthorizedAccessException)
         {
             _running = false;
-            StageText.Text = "Ошибка";
+            StageText.Text = Lang.T.UiJobError;
             ResetProgress();
-            ShowFinished("Нет доступа к исходному файлу.", HistoryStatus.Failed);
+            ShowFinished(Lang.T.UiJobNoAccess, HistoryStatus.Failed);
         }
         catch (Exception ex)
         {
             _running = false;
             ErrorLog.Write("Действие над файлом", ex);
-            StageText.Text = "Ошибка";
+            StageText.Text = Lang.T.UiJobError;
             ResetProgress();
-            ShowFinished($"Не удалось обработать файл: {ex.Message}", HistoryStatus.Failed);
+            ShowFinished(Lang.T.UiJobFailed(ex.Message), HistoryStatus.Failed);
         }
     }
 
@@ -219,7 +220,7 @@ public partial class JobWindow : Window
             }
             catch (PasswordRequiredException ex) when (job is IPasswordAware aware)
             {
-                StageText.Text = "Нужен пароль";
+                StageText.Text = Lang.T.UiJobNeedsPassword;
                 ProgressIndicator.IsIndeterminate = false;
                 var password = PasswordWindow.AskExisting(Path.GetFileName(_sourcePath), ex.WrongPassword, this)
                                ?? throw new OperationCanceledException();
@@ -290,7 +291,7 @@ public partial class JobWindow : Window
         CloseButton.IsCancel = true;
         if (showHelp)
         {
-            StageText.Text = "ffmpeg не найден";
+            StageText.Text = Lang.T.UiFfmpegNotFound;
             PercentText.Text = string.Empty;
         }
         CloseButton.Focus();
@@ -300,7 +301,7 @@ public partial class JobWindow : Window
     {
         if (!_running || _cts.IsCancellationRequested)
             return;
-        StageText.Text = "Отмена…";
+        StageText.Text = Lang.T.UiJobCancelling;
         CancelButton.IsEnabled = false;
         _cts.Cancel();
     }

@@ -8,6 +8,7 @@ using System.Windows.Shapes;
 using System.Windows.Threading;
 using FileDial.App.Interop;
 using FileDial.Core.Geometry;
+using FileDial.Core.Localization;
 using FileDial.Core.Menu;
 using Path = System.Windows.Shapes.Path;
 
@@ -598,16 +599,16 @@ internal sealed class RadialWindow : Window
     private string HintText()
     {
         if (_selectedChild is { } c && ChildAt(c) is { } child)
-            return child.IsEnabled ? $"Enter — {LowerFirst(child.Title)}" : child.DisabledReason ?? ActionCatalog.NotInPrototype;
+            return child.IsEnabled ? Lang.T.UiDialEnterAction(LowerFirst(child.Title)) : child.DisabledReason ?? ActionCatalog.NotInPrototype;
 
         var current = _selected is { } s ? ActionAt(s) : null;
         return current switch
         {
             null => DefaultHint(),
-            { IsGroup: true } => "Выберите формат снаружи или Enter",
-            { IsEnabled: false, FixActionId: not null } => $"{current.DisabledReason} — Enter: скачать",
+            { IsGroup: true } => Lang.T.UiDialChooseFormat,
+            { IsEnabled: false, FixActionId: not null } => Lang.T.UiDialEnterDownload(current.DisabledReason ?? ""),
             { IsEnabled: false } => current.DisabledReason ?? ActionCatalog.NotInPrototype,
-            _ => "Enter — запустить",
+            _ => Lang.T.UiDialEnterRun,
         };
     }
 
@@ -619,12 +620,12 @@ internal sealed class RadialWindow : Window
     private string DefaultHint()
     {
         if (_menu.Kind == DialMenuKind.Unsupported)
-            return _menu.QuickAction is { } quick ? $"Enter или клик — {LowerFirst(quick.Title)}" : "Esc — закрыть";
+            return _menu.QuickAction is { } quick ? Lang.T.UiDialEnterOrClick(LowerFirst(quick.Title)) : Lang.T.UiDialEscClose;
         if (_menu.Actions.Any(a => a.IsEnabled))
-            return "1–8, Enter · Esc";
+            return Lang.T.UiDialKeys;
         return _menu.Actions.FirstOrDefault(a => a.DisabledReason is { } reason && reason != ActionCatalog.NotInPrototype)
                    ?.DisabledReason
-               ?? "Нет доступных действий";
+               ?? Lang.T.UiDialNoActions;
     }
 
     /// <summary>Выбор сектора основного круга. Группа раскрывает веер, любой другой сектор его сворачивает.</summary>

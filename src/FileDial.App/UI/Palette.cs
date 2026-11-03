@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Media;
+using FileDial.Core.Localization;
 using Microsoft.Win32;
 
 namespace FileDial.App.UI;
@@ -7,7 +8,6 @@ namespace FileDial.App.UI;
 /// <summary>Цвета одной темы. Только плоские цвета, без градиентов.</summary>
 internal sealed record Theme(
     string Id,
-    string Name,
     Color Background,
     Color Sector,
     Color SectorHover,
@@ -17,18 +17,26 @@ internal sealed record Theme(
     Color TextMuted,
     Color Rim)
 {
+    /// <summary>Название на текущем языке интерфейса.</summary>
+    public string Name => Id switch
+    {
+        "brass" => Lang.T.UiThemeBrass,
+        "paper" => Lang.T.UiThemePaper,
+        _ => Lang.T.UiThemeGraphite,
+    };
+
     private static Color C(uint rgb) => Color.FromRgb((byte)(rgb >> 16), (byte)(rgb >> 8), (byte)rgb);
 
     /// <summary>Палитра из исходного брифа: графит и салатовый акцент.</summary>
-    public static readonly Theme Graphite = new("graphite", "Графит",
+    public static readonly Theme Graphite = new("graphite",
         C(0x15161A), C(0x2B2D34), C(0x383A42), C(0xC8F250), C(0x15161A), C(0xF2F2EE), C(0x8A8C93), C(0x3A3C44));
 
     /// <summary>Как старый измерительный прибор: тёмный орех и латунь.</summary>
-    public static readonly Theme Brass = new("brass", "Латунь",
+    public static readonly Theme Brass = new("brass",
         C(0x1A1611), C(0x2A241C), C(0x3A3227), C(0xD9A646), C(0x1A1611), C(0xF3E9D7), C(0x9C8F7A), C(0x4A3F30));
 
     /// <summary>Светлая: прохладный серый и кобальт.</summary>
-    public static readonly Theme Paper = new("paper", "Бумага",
+    public static readonly Theme Paper = new("paper",
         C(0xE6E8EC), C(0xF7F8FA), C(0xD9DCE2), C(0x2F5BD3), C(0xFFFFFF), C(0x1C1F26), C(0x6B7080), C(0xB9BDC7));
 
     public static readonly IReadOnlyList<Theme> All = [Graphite, Brass, Paper];
