@@ -43,10 +43,12 @@
     <EmbeddedResource Include="FileDial.ico" LogicalName="FileDial.ico" />
     <!-- Справка и внутри exe: установщик кладёт её в папку программы, даже если рядом с ним README нет. -->
     <EmbeddedResource Include="..\..\README.md" LogicalName="README.md" />
+    <EmbeddedResource Include="..\..\README.ru.md" LogicalName="README.ru.md" />
   </ItemGroup>
 
   <ItemGroup>
     <None Include="..\..\README.md" Link="README.md" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\README.ru.md" Link="README.ru.md" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

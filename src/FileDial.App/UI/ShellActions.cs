@@ -1,5 +1,6 @@
 ﻿using System.Diagnostics;
 using FileDial.App.Interop;
+using FileDial.Core.Localization;
 
 namespace FileDial.App.UI;
 
@@ -29,17 +30,19 @@ internal static class ShellActions
     /// README рядом с программой, а если его нет (exe скопировали отдельно) — копия справки, вшитой в exe,
     /// в папке данных. null — справку взять неоткуда.
     /// </summary>
-    public static string? ReadmePath()
+    /// <param name="name">Имя файла справки; по умолчанию — на языке интерфейса (README.md или README.ru.md).</param>
+    public static string? ReadmePath(string? name = null)
     {
-        var nearby = Path.Combine(AppContext.BaseDirectory, "README.md");
+        name ??= ReadmeName;
+        var nearby = Path.Combine(AppContext.BaseDirectory, name);
         if (File.Exists(nearby))
             return nearby;
         try
         {
-            using var embedded = typeof(ShellActions).Assembly.GetManifestResourceStream("README.md");
+            using var embedded = typeof(ShellActions).Assembly.GetManifestResourceStream(name);
             if (embedded is null)
                 return null;
-            var copy = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "FileDial", "README.md");
+            var copy = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "FileDial", name);
             Directory.CreateDirectory(Path.GetDirectoryName(copy)!);
             using (var file = File.Create(copy))
                 embedded.CopyTo(file);
@@ -51,6 +54,13 @@ internal static class ShellActions
             return null;
         }
     }
+
+    /// <summary>Справка на языке интерфейса.</summary>
+    public static string ReadmeName => Lang.T.Code == "ru" ? "README.ru.md" : "README.md";
+
+    /// <summary>Все переводы справки — их кладёт в папку программы установщик.</summary>
+    public static IReadOnlyList<string> AllReadmes() =>
+        new[] { "README.md", "README.ru.md" }.Select(ReadmePath).OfType<string>().ToList();
 
     public static void OpenReadme()
     {

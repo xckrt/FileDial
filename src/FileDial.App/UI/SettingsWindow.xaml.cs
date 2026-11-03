@@ -358,7 +358,7 @@ public partial class SettingsWindow : Window
         {
             stageText = s;
             FfmpegInstallText.Text = s;
-            if (s == "Распаковка") FfmpegProgress.IsIndeterminate = true;
+            if (s == Lang.T.JobStageUnpacking) FfmpegProgress.IsIndeterminate = true;
         });
         var progress = new Progress<(long Done, long Total)>(p =>
         {
