@@ -6,3 +6,6 @@ TestResults/
 # Локальные копии ffmpeg рядом с программой не коммитим
 ffmpeg.exe
 ffprobe.exe
+
+# Сборка для раздачи (publish.ps1)
+dist/

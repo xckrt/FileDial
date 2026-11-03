@@ -59,9 +59,16 @@ internal sealed class TrayIcon : IDisposable
             : $"FileDial — выделите файл и нажмите {hotkey}";
     }
 
-    /// <summary>Рисуем значок кодом, чтобы не возить с собой .ico: кольцо с выделенным сектором.</summary>
+    /// <summary>
+    /// Значок из ресурсов (FileDial.ico, несколько размеров) — нужного размера для текущего DPI.
+    /// Если ресурса нет, рисуем тот же знак кодом: кольцо с выделенным сектором.
+    /// </summary>
     private static Icon CreateIcon()
     {
+        using var stream = typeof(TrayIcon).Assembly.GetManifestResourceStream("FileDial.ico");
+        if (stream is not null)
+            return new Icon(stream, Forms.SystemInformation.SmallIconSize);
+
         using var bitmap = new Bitmap(32, 32);
         using (var g = Graphics.FromImage(bitmap))
         {

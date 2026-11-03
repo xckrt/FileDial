@@ -13,6 +13,16 @@
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <!-- DPI задан в app.manifest (PerMonitorV2) для всего процесса, включая меню трея. -->
     <NoWarn>$(NoWarn);WFO0003</NoWarn>
+    <ApplicationIcon>FileDial.ico</ApplicationIcon>
+
+    <!-- Сведения о файле (свойства exe → «Подробно»). -->
+    <Version>0.1.0</Version>
+    <Product>FileDial</Product>
+    <Company>FileDial</Company>
+    <!-- AssemblyTitle — то, что Windows показывает как «Описание файла». -->
+    <AssemblyTitle>FileDial — круговое меню действий для файлов</AssemblyTitle>
+    <Description>FileDial — круговое меню действий для файлов</Description>
+    <Copyright>FileDial, 2026</Copyright>
   </PropertyGroup>
 
   <ItemGroup>
@@ -24,6 +34,11 @@
 
   <ItemGroup>
     <ProjectReference Include="..\FileDial.Core\FileDial.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Тот же значок — для трея: из него берётся размер под текущий DPI. -->
+    <EmbeddedResource Include="FileDial.ico" LogicalName="FileDial.ico" />
   </ItemGroup>
 
   <ItemGroup>
