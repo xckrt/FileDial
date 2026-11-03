@@ -1,4 +1,5 @@
-﻿using System.Runtime.InteropServices;
+﻿using FileDial.Core.Localization;
+using System.Runtime.InteropServices;
 using FileDial.App.Interop;
 using FileDial.Core.Selection;
 using IServiceProvider = FileDial.App.Interop.IServiceProvider;
@@ -14,15 +15,15 @@ internal static class ShellSelectionReader
     public static SelectionResult Read(IntPtr foreground)
     {
         if (foreground == IntPtr.Zero)
-            return SelectionResult.Fail("Не удалось определить активное окно");
+            return SelectionResult.Fail(Lang.T.ShellNoActiveWindow);
 
         var className = NativeMethods.GetClassName(foreground);
         var kind = ClassifyWindow(foreground, className);
         if (kind == WindowKind.Other)
-            return SelectionResult.Fail("Активное окно — не Проводник");
+            return SelectionResult.Fail(Lang.T.ShellNotExplorer);
 
         if (ProcessElevation.IsWindowElevatedAboveUs(foreground))
-            return SelectionResult.Fail("Окно запущено с правами администратора — выделение недоступно");
+            return SelectionResult.Fail(Lang.T.ShellElevatedWindow);
 
         try
         {
@@ -30,12 +31,12 @@ internal static class ShellSelectionReader
         }
         catch (COMException ex) when (ex.HResult == unchecked((int)0x80070005))
         {
-            return SelectionResult.Fail("Нет доступа к окну Проводника");
+            return SelectionResult.Fail(Lang.T.ShellNoExplorerAccess);
         }
         catch (Exception ex)
         {
             ErrorLog.Write("Чтение выделения", ex);
-            return SelectionResult.Fail("Не удалось прочитать выделение");
+            return SelectionResult.Fail(Lang.T.ShellSelectionReadFailed);
         }
     }
 
@@ -108,10 +109,10 @@ internal static class ShellSelectionReader
         }
 
         if (sameHwnd == 0)
-            return SelectionResult.Fail("Окно Проводника не найдено в списке окон оболочки");
+            return SelectionResult.Fail(Lang.T.ShellExplorerWindowNotFound);
         // Без вкладок (Windows 10) подходит единственный кандидат; иначе — только активная вкладка.
         if (match is null || (activeTab == IntPtr.Zero && sameHwnd > 1))
-            return SelectionResult.Fail("Не удалось определить активную вкладку Проводника");
+            return SelectionResult.Fail(Lang.T.ShellNoActiveTab);
 
         object document = com.Track((object?)((dynamic)match).Document)
                            ?? throw new InvalidOperationException("У вкладки нет документа");
@@ -130,7 +131,7 @@ internal static class ShellSelectionReader
             ShellGuids.SWFO_NEEDDISPATCH, out var desktopDispatch);
         com.Track(desktopDispatch);
         if (hr != 0 || desktopDispatch is null)
-            return SelectionResult.Fail("Рабочий стол недоступен");
+            return SelectionResult.Fail(Lang.T.ShellDesktopUnavailable);
 
         var browser = QueryTopLevelBrowser(desktopDispatch, com)
                       ?? throw new InvalidOperationException("IShellBrowser рабочего стола недоступен");

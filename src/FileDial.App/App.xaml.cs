@@ -62,7 +62,8 @@ public partial class App : Application
         _singleInstance = new Mutex(true, @"Local\FileDial.Prototype", out var created);
         if (!created)
         {
-            MessageBox.Show("FileDial уже запущен — значок в области уведомлений.", "FileDial",
+            Lang.Set(SettingsStore.Load(SettingsStore.DefaultPath).Language);
+            MessageBox.Show(Lang.T.ShellAlreadyRunning, "FileDial",
                 MessageBoxButton.OK, MessageBoxImage.Information);
             Shutdown();
             return;
@@ -87,7 +88,7 @@ public partial class App : Application
         _tray = new TrayIcon(gesture.Format(), OpenSettings, OpenHistory, ShellActions.OpenReadme, ExitApp);
         // Первый запуск без ffmpeg: сразу подсказываем, что его можно поставить одной кнопкой.
         if (noFfmpeg)
-            _tray.Notify("FileDial: нужен ffmpeg", "Нажмите, чтобы установить его одной кнопкой (около 170 МБ, один раз).",
+            _tray.Notify(Lang.T.ShellNeedsFfmpegTitle, Lang.T.ShellNeedsFfmpegText,
                 OpenFfmpegSetup);
 
         if (error != 0)
@@ -95,8 +96,7 @@ public partial class App : Application
             // Без клавиши программа бесполезна, но выходить не нужно: даём сразу выбрать другое сочетание.
             _tray.SetHotkey(null);
             MessageBox.Show(
-                $"{HotkeyManager.Describe(error, gesture)}\n\nВыберите другое сочетание в настройках " +
-                "или закройте программу, которая его использует.",
+                Lang.T.ShellHotkeyStartupProblem(HotkeyManager.Describe(error, gesture)),
                 "FileDial", MessageBoxButton.OK, MessageBoxImage.Warning);
             OpenSettings();
         }
@@ -180,7 +180,7 @@ public partial class App : Application
         var gesture = settings.HotkeyGesture;
         var error = _hotkey!.Register(gesture);
         if (error != 0)
-            return HotkeyManager.Describe(error, gesture) + " Выберите другое.";
+            return Lang.T.ShellHotkeyChooseAnother(HotkeyManager.Describe(error, gesture));
 
         if (autostart != Autostart.IsEnabled() && Autostart.Set(autostart) is { } autostartError)
             return autostartError;
@@ -192,7 +192,7 @@ public partial class App : Application
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             ErrorLog.Write("Сохранение настроек", ex);
-            return "Не удалось сохранить настройки: нет доступа к папке настроек.";
+            return Lang.T.ShellSettingsSaveFailed;
         }
 
         _settings = settings.Normalized();
@@ -226,7 +226,7 @@ public partial class App : Application
             var selection = await StaRunner.RunAsync(
                 () => ShellSelectionReader.Read(foreground),
                 SelectionTimeout,
-                () => SelectionResult.Fail("Проводник не отвечает"));
+                () => SelectionResult.Fail(Lang.T.ShellExplorerNotResponding));
 
             // Проверка файла и ffprobe могут занять время (сетевой диск, процесс) — не в UI-потоке.
             var settings = _settings;
@@ -257,7 +257,7 @@ public partial class App : Application
         catch (Exception ex)
         {
             ErrorLog.Write("Горячая клавиша", ex);
-            ToastWindow.ShowAt("Что-то пошло не так. Подробности в журнале ошибок.", cursor);
+            ToastWindow.ShowAt(Lang.T.ShellSomethingWrong, cursor);
         }
         finally
         {
@@ -280,7 +280,7 @@ public partial class App : Application
             {
                 // «Содержимое» — не задача над файлом, а окно просмотра; оттуда можно сразу распаковать.
                 var contents = new ContentsWindow(archive, WindowPlacement.CursorPosition(), () => StartJob(
-                    new DialAction(ActionIds.ExtractHere, "Распаковать сюда", true), [archive]));
+                    new DialAction(ActionIds.ExtractHere, Lang.T.ExtractHere, true), [archive]));
                 contents.Show();
                 contents.Activate();
                 return;
@@ -313,7 +313,7 @@ public partial class App : Application
     private void AskPartSize(DialAction action, IReadOnlyList<string> files)
     {
         var largest = files.Max(f => new FileInfo(f).Length);
-        var title = files.Count == 1 ? Path.GetFileName(files[0]) : $"Архивов: {files.Count}";
+        var title = files.Count == 1 ? Path.GetFileName(files[0]) : Lang.T.ShellArchivesCount(files.Count);
         if (SplitWindow.Ask(title, largest) is not { } partSize)
             return;
         var output = _settings.Jobs.OutputFolder;
@@ -350,7 +350,7 @@ public partial class App : Application
     {
         var dialog = new Microsoft.Win32.OpenFolderDialog
         {
-            Title = "Куда распаковать",
+            Title = Lang.T.ShellExtractWhere,
             InitialDirectory = Path.GetDirectoryName(archives[0]),
         };
         if (dialog.ShowDialog() != true)
@@ -379,7 +379,7 @@ public partial class App : Application
         if (running is not null)
         {
             running.Activate();
-            ToastWindow.ShowAt("Это уже выполняется для этого файла", WindowPlacement.CursorPosition());
+            ToastWindow.ShowAt(Lang.T.ShellAlreadyRunningForFile, WindowPlacement.CursorPosition());
             return;
         }
 

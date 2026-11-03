@@ -1,3 +1,4 @@
+using FileDial.Core.Localization;
 using System.Runtime.InteropServices;
 using System.Windows.Interop;
 using FileDial.App.Interop;
@@ -72,8 +73,8 @@ internal sealed class HotkeyManager : IDisposable
 
     public static string Describe(int error, HotkeyGesture gesture) =>
         error == NativeMethods.ERROR_HOTKEY_ALREADY_REGISTERED
-            ? $"Сочетание {gesture} уже занято другой программой."
-            : $"Не удалось зарегистрировать {gesture} (код ошибки {error}).";
+            ? Lang.T.ShellHotkeyTaken(gesture.Format())
+            : Lang.T.ShellHotkeyFailed(gesture.Format(), error);
 
     private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
     {
