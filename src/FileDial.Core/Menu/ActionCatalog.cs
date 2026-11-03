@@ -1,4 +1,5 @@
 ﻿using FileDial.Core.Compression;
+using FileDial.Core.Documents;
 using FileDial.Core.Jobs;
 using FileDial.Core.Settings;
 
@@ -33,14 +34,17 @@ public static class ActionCatalog
     /// </summary>
     /// <param name="media">Сведения ffprobe, если удалось получить; без них проверяем только то, что знаем.</param>
     /// <param name="settings">Цели сжатия из настроек; по умолчанию 25 МБ и 1 МБ.</param>
+    /// <param name="pages">Число страниц PDF, если известно.</param>
     public static IReadOnlyList<DialAction> ForFile(string path, long sizeBytes, ProbeInfo? media = null,
-        JobSettings? settings = null) =>
+        JobSettings? settings = null, int? pages = null) =>
         FileKinds.Of(path) switch
         {
             FileKind.Video => ForVideo(path, sizeBytes, media, settings ?? JobSettings.Default),
             FileKind.Image => ForImage(path, sizeBytes, media, settings ?? JobSettings.Default),
             FileKind.Audio => ForAudio(path, media, settings ?? JobSettings.Default),
             FileKind.Archive => ForArchive(path),
+            FileKind.Pdf => ForPdf(pages),
+            FileKind.Document => ForDocument(path),
             _ => [],
         };
 
@@ -67,6 +71,9 @@ public static class ActionCatalog
             }).ToList()),
             { Id: ActionIds.Trim or ActionIds.AudioTrim } => a with { IsEnabled = false, DisabledReason = "Обрезка — по одному файлу" },
             { Id: ActionIds.ArchiveContents } => a with { IsEnabled = false, DisabledReason = "Содержимое — по одному архиву" },
+            { Id: ActionIds.PdfExtract } => a with { IsEnabled = false, DisabledReason = "Страницы — по одному файлу" },
+            { Id: ActionIds.PdfMerge } => a with { IsEnabled = true, DisabledReason = null },
+            { Id: ActionIds.DocsToPdf } => DocumentsToPdf(paths),
             { Id: ActionIds.ImageToPdf } => a with { Label = "Собрать в PDF", Caption = "Собрать в PDF" },
             { IsEnabled: false, DisabledReason: { } reason } when reason.StartsWith("Файл уже меньше", StringComparison.Ordinal) =>
                 a with { DisabledReason = "Все файлы" + reason["Файл".Length..] },
@@ -78,7 +85,8 @@ public static class ActionCatalog
         ActionIds.TargetExtension(actionId, ActionIds.ImageToPrefix)
         ?? ActionIds.TargetExtension(actionId, ActionIds.AudioToPrefix)
         ?? ActionIds.TargetExtension(actionId, ActionIds.VideoToPrefix)
-        ?? ActionIds.TargetExtension(actionId, ActionIds.ArchiveToPrefix);
+        ?? ActionIds.TargetExtension(actionId, ActionIds.ArchiveToPrefix)
+        ?? ActionIds.TargetExtension(actionId, ActionIds.DocToPrefix);
 
     /// <summary>Все запускаемые действия, включая вложенные в группы.</summary>
     public static IEnumerable<DialAction> Flatten(IEnumerable<DialAction> actions) =>
@@ -162,6 +170,69 @@ public static class ActionCatalog
             Action(ActionIds.ArchiveSplit, "Разбить на части", null),
             Action(ActionIds.ArchiveContents, "Содержимое", noTar),
         ];
+    }
+
+    private static IReadOnlyList<DialAction> ForPdf(int? pages)
+    {
+        var single = pages == 1 ? "В документе одна страница" : null;
+        return
+        [
+            Action(ActionIds.PdfSplit, "Разделить по страницам", single),
+            Action(ActionIds.PdfExtract, "Извлечь страницы", single) with { Caption = "Извлечь страницы" },
+            Action(ActionIds.PdfRotateRight, "Повернуть вправо", null),
+            Action(ActionIds.PdfRotateLeft, "Повернуть влево", null),
+            Action(ActionIds.PdfToImages, "Страницы в картинки", null),
+            Action(ActionIds.PdfOcr, "Распознать текст", null),
+            Action(ActionIds.PdfProtect, "Защитить паролем", null),
+            Action(ActionIds.PdfMerge, "Объединить", "Выделите несколько PDF") with { Caption = "Объединить PDF" },
+        ];
+    }
+
+    /// <summary>Форматы для «Формат» у документа — по его виду.</summary>
+    public static IReadOnlyList<(string Label, string Extension)> DocumentFormats(DocumentFamily family) => family switch
+    {
+        DocumentFamily.Sheet => [("XLSX", ".xlsx"), ("ODS", ".ods"), ("CSV", ".csv")],
+        DocumentFamily.Slides => [("PPTX", ".pptx"), ("ODP", ".odp")],
+        _ => [("DOCX", ".docx"), ("ODT", ".odt"), ("RTF", ".rtf")],
+    };
+
+    private static IReadOnlyList<DialAction> ForDocument(string path)
+    {
+        var family = OfficeDocs.FamilyOf(path);
+        string? Needs(string extension) => DocumentConverters.For(family, extension) is null ? DocumentConverters.NoConverter : null;
+        var package = OfficeDocs.IsPackage(path) ? null : OfficeDocs.PackageOnly;
+
+        var formats = Formats(path, DocumentFormats(family), ActionIds.DocTo)
+            .Select(c => c.IsEnabled && Needs(TargetOf(c.Id)!) is { } reason ? c with { IsEnabled = false, DisabledReason = reason } : c)
+            .ToList();
+        var text = family == DocumentFamily.Sheet ? "Для таблиц — «Формат» → CSV"
+            : OfficeDocs.IsPackage(path) ? null
+            : Needs(family == DocumentFamily.Slides ? ".pptx" : ".docx");
+        var password = !OfficeDocs.IsMicrosoftFormat(path) ? "Пароль — для форматов Microsoft Office"
+            : DocumentConverters.OfficeFor(family) is null ? DocumentConverters.NoOffice
+            : null;
+
+        return
+        [
+            Action(ActionIds.DocToPdf, "В PDF", Needs(".pdf")),
+            DialAction.Group(ActionIds.DocConvert, "Формат", formats),
+            Action(ActionIds.DocText, "В текст", text),
+            Action(ActionIds.DocImages, "Извлечь картинки", package),
+            Action(ActionIds.DocCompress, "Сжать картинки", package),
+            Action(ActionIds.DocStrip, "Убрать личные данные", package),
+            Action(ActionIds.DocProtect, "Защитить паролем", password),
+            Action(ActionIds.DocsToPdf, "Собрать в PDF", "Выделите несколько документов"),
+        ];
+    }
+
+    private static DialAction DocumentsToPdf(IReadOnlyList<string> paths)
+    {
+        var missing = paths.Select(OfficeDocs.FamilyOf).Distinct()
+            .Any(family => DocumentConverters.For(family, ".pdf") is null);
+        return new DialAction(ActionIds.DocsToPdf, "Собрать в PDF", !missing, missing ? DocumentConverters.NoConverter : null)
+        {
+            Caption = "Собрать в PDF",
+        };
     }
 
     /// <summary>Вложенные секторы форматов; свой же формат неактивен.</summary>

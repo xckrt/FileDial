@@ -7,6 +7,9 @@ public enum FileKind
     Image,
     Audio,
     Archive,
+    Pdf,
+    /// <summary>Документы Office и OpenDocument: тексты, таблицы, презентации.</summary>
+    Document,
 }
 
 public static class FileKinds
@@ -25,6 +28,8 @@ public static class FileKinds
         if (Image.Contains(ext)) return FileKind.Image;
         if (Audio.Contains(ext)) return FileKind.Audio;
         if (Archive.Contains(ext)) return FileKind.Archive;
+        if (ext.Equals(".pdf", StringComparison.OrdinalIgnoreCase)) return FileKind.Pdf;
+        if (Documents.OfficeDocs.Extensions.Contains(ext)) return FileKind.Document;
         return FileKind.Other;
     }
 

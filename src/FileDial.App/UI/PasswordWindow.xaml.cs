@@ -1,11 +1,12 @@
-using System.Windows;
+﻿using System.Windows;
 using System.Windows.Input;
 using FileDial.Core.Archives;
+using FileDial.Core.Menu;
 
 namespace FileDial.App.UI;
 
 /// <summary>
-/// Пароль к архиву. Режим «новый» — дважды, с проверкой длины и совпадения; режим «ввести» — один раз
+/// Пароль к архиву, PDF или документу. Режим «новый» — дважды, с проверкой длины и совпадения; режим «ввести» — один раз
 /// (с подсказкой «неверный пароль» при повторе). Пароль никуда не сохраняется.
 /// </summary>
 public partial class PasswordWindow : Window
@@ -13,17 +14,19 @@ public partial class PasswordWindow : Window
     public const int MinLength = 6;
 
     private readonly bool _create;
+    private readonly string _subject;
 
-    private PasswordWindow(string fileName, bool create, bool wrongBefore)
+    private PasswordWindow(string fileName, bool create, bool wrongBefore, string subjectPath)
     {
         InitializeComponent();
         _create = create;
+        _subject = Subject(subjectPath);
         FileText.Text = fileName;
-        TitleText.Text = create ? "Защитить паролем" : "Архив защищён паролем";
+        TitleText.Text = create ? "Защитить паролем" : $"{char.ToUpperInvariant(_subject[0])}{_subject[1..]} защищён паролем";
         OkButton.Content = create ? "Защитить" : "Открыть";
         ConfirmPanel.Visibility = create ? Visibility.Visible : Visibility.Collapsed;
         StatusText.Text = create
-            ? $"Не короче {MinLength} символов. Без пароля архив не открыть — восстановить его нельзя."
+            ? $"Не короче {MinLength} символов. Без пароля {_subject} не открыть — восстановить его нельзя."
             : wrongBefore ? "Неверный пароль — попробуйте ещё раз." : "";
         if (wrongBefore)
             StatusText.Foreground = Palette.Text;
@@ -33,15 +36,24 @@ public partial class PasswordWindow : Window
     public string? Password { get; private set; }
 
     /// <summary>Спросить новый пароль; null — отказались.</summary>
-    public static string? AskNew(string fileName, Window? owner = null) => Ask(fileName, create: true, false, owner);
+    /// <param name="subjectPath">Какой файл защищаем (по расширению — «архив», «PDF», «документ»).</param>
+    public static string? AskNew(string fileName, string subjectPath, Window? owner = null) =>
+        Ask(fileName, create: true, false, owner, subjectPath);
 
-    /// <summary>Спросить пароль от архива; null — отказались.</summary>
+    /// <summary>Спросить пароль от архива или PDF; null — отказались.</summary>
     public static string? AskExisting(string fileName, bool wrongBefore, Window? owner = null) =>
-        Ask(fileName, create: false, wrongBefore, owner);
+        Ask(fileName, create: false, wrongBefore, owner, fileName);
 
-    private static string? Ask(string fileName, bool create, bool wrongBefore, Window? owner)
+    private static string Subject(string path) => FileKinds.Of(path) switch
     {
-        var dialog = new PasswordWindow(fileName, create, wrongBefore);
+        FileKind.Pdf => "PDF",
+        FileKind.Document => "документ",
+        _ => "архив",
+    };
+
+    private static string? Ask(string fileName, bool create, bool wrongBefore, Window? owner, string subjectPath)
+    {
+        var dialog = new PasswordWindow(fileName, create, wrongBefore, subjectPath);
         if (owner is { IsLoaded: true })
             dialog.Owner = owner;
         else
@@ -55,7 +67,7 @@ public partial class PasswordWindow : Window
         if (p.Length == 0)
             return "";
         // tar.exe получает пароль в ANSI-кодировке — для открытия такие символы не годятся.
-        if (!_create && !ArchiveSupport.IsAnsiSafe(p))
+        if (!_create && _subject == "архив" && !ArchiveSupport.IsAnsiSafe(p))
             return "В пароле есть символы, которые встроенный tar.exe не передаёт.";
         if (!_create)
             return null;

@@ -1,5 +1,6 @@
 ﻿using System.Windows;
 using System.Windows.Threading;
+using FileDial.App.Documents;
 using FileDial.App.Hotkey;
 using FileDial.App.Interop;
 using FileDial.App.Selection;
@@ -8,6 +9,7 @@ using FileDial.App.Tray;
 using FileDial.App.UI;
 using FileDial.Core.Archives;
 using FileDial.Core.Compression;
+using FileDial.Core.Documents;
 using FileDial.Core.History;
 using FileDial.Core.Jobs;
 using FileDial.Core.Menu;
@@ -277,6 +279,13 @@ public partial class App : Application
                 AskNewPassword(action, menu.SourcePaths);
             else if (FileJobs.NeedsPartSize(action.Id))
                 AskPartSize(action, menu.SourcePaths);
+            else if (FileJobs.NeedsPageRange(action.Id))
+                AskPageRange(action, menu.SourcePaths[0]);
+            // Отрисовка и распознавание PDF — средствами Windows, поэтому задачи живут здесь, а не в ядре.
+            else if (action.Id == ActionIds.PdfToImages)
+                StartJob(action, menu.SourcePaths, _ => new PdfImagesJob(_settings.Jobs.OutputFolder));
+            else if (action.Id == ActionIds.PdfOcr)
+                StartJob(action, menu.SourcePaths, _ => new PdfOcrJob(_settings.Jobs.OutputFolder));
             else
                 StartJob(action, menu.SourcePaths);
         };
@@ -295,14 +304,29 @@ public partial class App : Application
         StartJob(action, files, _ => new FileSplitJob(partSize, output));
     }
 
-    /// <summary>«Защитить паролем»: пароль вводится дважды, затем обычное окно выполнения.</summary>
-    private void AskNewPassword(DialAction action, IReadOnlyList<string> archives)
+    /// <summary>«Защитить паролем» (архив, PDF, документ): пароль вводится дважды, затем обычное окно выполнения.</summary>
+    private void AskNewPassword(DialAction action, IReadOnlyList<string> files)
     {
-        var name = archives.Count == 1 ? Path.GetFileName(archives[0]) : $"Архивов: {archives.Count}";
-        if (PasswordWindow.AskNew(name) is not { } password)
+        var name = files.Count == 1 ? Path.GetFileName(files[0]) : SelectionInterpreter.KindCount(FileKinds.Of(files[0]), files.Count);
+        if (PasswordWindow.AskNew(name, files[0]) is not { } password)
             return;
         var output = _settings.Jobs.OutputFolder;
-        StartJob(action, archives, _ => new ArchiveProtectJob(password, output));
+        StartJob(action, files, _ => action.Id switch
+        {
+            ActionIds.PdfProtect => new PdfProtectJob(password, output),
+            ActionIds.DocProtect => new DocumentProtectJob(password, output),
+            _ => new ArchiveProtectJob(password, output),
+        });
+    }
+
+    /// <summary>«Извлечь страницы»: запись страниц, затем обычное окно выполнения.</summary>
+    private void AskPageRange(DialAction action, string pdf)
+    {
+        var count = PdfFiles.TryPageCount(pdf, TimeSpan.FromSeconds(5));
+        if (PagesWindow.Ask(Path.GetFileName(pdf), count) is not { } pages)
+            return;
+        var output = _settings.Jobs.OutputFolder;
+        StartJob(action, [pdf], _ => new PdfExtractJob(pages, output));
     }
 
     /// <summary>«Распаковать в…»: сначала выбор папки, потом обычное окно выполнения (для пакета — одна папка на всех).</summary>

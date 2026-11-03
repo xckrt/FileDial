@@ -1,4 +1,4 @@
-using FileDial.Core.Compression;
+﻿using FileDial.Core.Compression;
 using FileDial.Core.Menu;
 using FileDial.Core.Selection;
 using FileDial.Core.Text;
@@ -121,7 +121,7 @@ public class MenuWithMediaProbeTests
     public void NonVideo_IsNotProbed()
     {
         var media = new FakeMedia(null);
-        SelectionInterpreter.Interpret(SelectionResult.Success([@"C:\v\doc.pdf"]), new FakeFile(1000), media);
+        SelectionInterpreter.Interpret(SelectionResult.Success([@"C:\v\doc.txt"]), new FakeFile(1000), media);
         Assert.Equal(0, media.Calls);
     }
 

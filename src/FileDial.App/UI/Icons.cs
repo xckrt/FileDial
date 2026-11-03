@@ -22,6 +22,9 @@ internal static class Icons
     private static readonly string Convert = "M4,8 H18 M15,5 L18,8 L15,11 M20,16 H6 M9,13 L6,16 L9,19";
     private static readonly string Lines = "M4,6 H15 M4,10 H19 M4,14 H13 M4,18 H17";
     private static readonly string Folder = "M3,6.5 H9 L11,8.5 H21 V19 H3 Z";
+    private static readonly string Page = "M6,3 H14 L19,8 V21 H6 Z M14,3 V8 H19 ";
+    private static readonly string Lock = "M6,11 H18 V20.5 H6 Z M8.5,11 V8 A3.5,3.5 0 0 1 15.5,8 V11 M12,14.5 V17";
+    private static readonly string Merge = "M3,4 H9 V11 H3 Z M15,4 H21 V11 H15 Z M6,11 V14 H18 V11 M12,14 V20 M9,17 L12,20 L15,17";
 
     private static readonly Dictionary<string, string> Data = new()
     {
@@ -64,6 +67,26 @@ internal static class Icons
         [ActionIds.ArchiveContents] = "M9,6 H20 M9,12 H20 M9,18 H20 M4.5,6 H4.51 M4.5,12 H4.51 M4.5,18 H4.51",
         [ActionIds.ArchivePassword] = "M6,11 H18 V20.5 H6 Z M8.5,11 V8 A3.5,3.5 0 0 1 15.5,8 V11 M12,14.5 V17",
         [ActionIds.ArchiveSplit] = "M4,4 H10 V20 H4 Z M14,4 H20 V20 H14 Z",
+
+        // PDF
+        [ActionIds.PdfSplit] = "M6,3 H18 V21 H6 Z M3,12 H5 M8,12 H10 M14,12 H16 M19,12 H21",
+        [ActionIds.PdfExtract] = Page + "M9,14 H21 M18,11 L21,14 L18,17",
+        [ActionIds.PdfRotateRight] = "M19,12 A7,7 0 1 1 15.5,5.9 M15,2.5 L15.8,6 L12.3,6.8",
+        [ActionIds.PdfRotateLeft] = "M5,12 A7,7 0 1 0 8.5,5.9 M9,2.5 L8.2,6 L11.7,6.8",
+        [ActionIds.PdfToImages] = "M4,5 H20 V19 H4 Z M4,16 L9,11 L13,15 L16,12 L20,16 " + Circle(15.5, 8.5, 1.4),
+        [ActionIds.PdfOcr] = "M4,8 V4 H8 M16,4 H20 V8 M20,16 V20 H16 M8,20 H4 V16 M8,10 H16 M8,14 H14",
+        [ActionIds.PdfProtect] = Lock,
+        [ActionIds.PdfMerge] = Merge,
+
+        // Документы
+        [ActionIds.DocToPdf] = Page + "M8,13 H15 M8,17 H13",
+        [ActionIds.DocConvert] = Convert,
+        [ActionIds.DocText] = Lines,
+        [ActionIds.DocImages] = "M4,5 H20 V19 H4 Z M4,16 L9,11 L13,15 L16,12 L20,16 " + Circle(15.5, 8.5, 1.4),
+        [ActionIds.DocCompress] = Compress,
+        [ActionIds.DocStrip] = Circle(12, 8, 3.5) + "M5,20 C5,14.5 19,14.5 19,20 M4,4 L20,20",
+        [ActionIds.DocProtect] = Lock,
+        [ActionIds.DocsToPdf] = Merge,
 
         // Компактный круг
         [ActionIds.CompressToZip] = "M4,7.5 L12,3.5 L20,7.5 V16.5 L12,20.5 L4,16.5 Z M4,7.5 L12,11.5 L20,7.5 M12,11.5 V20.5",

@@ -76,6 +76,29 @@ public static class ActionIds
     public const string ArchiveToPrefix = "archive-to:";
     public static string ArchiveTo(string extension) => ArchiveToPrefix + extension;
 
+    // PDF
+    public const string PdfMerge = "pdf-merge";
+    public const string PdfSplit = "pdf-split";
+    public const string PdfExtract = "pdf-extract";
+    public const string PdfRotateRight = "pdf-rotate-right";
+    public const string PdfRotateLeft = "pdf-rotate-left";
+    public const string PdfToImages = "pdf-to-images";
+    public const string PdfOcr = "pdf-ocr";
+    public const string PdfProtect = "pdf-password";
+
+    // Документы
+    public const string DocToPdf = "doc-to-pdf";
+    /// <summary>Группа «Формат» у документа.</summary>
+    public const string DocConvert = "doc-convert";
+    public const string DocText = "doc-text";
+    public const string DocImages = "doc-images";
+    public const string DocCompress = "doc-compress-images";
+    public const string DocStrip = "doc-strip-personal";
+    public const string DocProtect = "doc-password";
+    public const string DocsToPdf = "doc-merge-pdf";
+    public const string DocToPrefix = "doc-to:";
+    public static string DocTo(string extension) => DocToPrefix + extension;
+
     /// <summary>Открыть настройки распознавания речи (скачать модель).</summary>
     public const string SetupSpeech = "setup-speech";
 

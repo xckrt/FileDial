@@ -13,9 +13,9 @@ public enum ArchiveFormat
     SevenZip,
 }
 
-/// <summary>Архиву нужен пароль (или введённый неверен) — окно спросит пароль и повторит действие.</summary>
-public sealed class PasswordRequiredException(bool wrongPassword)
-    : CompressionException(wrongPassword ? "Неверный пароль." : "Архив защищён паролем.")
+/// <summary>Архиву (или PDF) нужен пароль, либо введённый неверен — окно спросит пароль и повторит действие.</summary>
+public sealed class PasswordRequiredException(bool wrongPassword, string lockedMessage = "Архив защищён паролем.")
+    : CompressionException(wrongPassword ? "Неверный пароль." : lockedMessage)
 {
     public bool WrongPassword { get; } = wrongPassword;
 }

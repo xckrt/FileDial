@@ -103,7 +103,8 @@ public static class BatchRunner
         var target = ActionIds.TargetExtension(actionId, ActionIds.ImageToPrefix)
                      ?? ActionIds.TargetExtension(actionId, ActionIds.AudioToPrefix)
                      ?? ActionIds.TargetExtension(actionId, ActionIds.VideoToPrefix)
-                     ?? ActionIds.TargetExtension(actionId, ActionIds.ArchiveToPrefix);
+                     ?? ActionIds.TargetExtension(actionId, ActionIds.ArchiveToPrefix)
+                     ?? ActionIds.TargetExtension(actionId, ActionIds.DocToPrefix);
         if (target is null)
             return null;
         return path => ActionCatalog.NormalizeExtension(Path.GetExtension(path)) == target

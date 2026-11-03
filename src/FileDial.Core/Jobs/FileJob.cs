@@ -1,5 +1,6 @@
 ﻿using FileDial.Core.Archives;
 using FileDial.Core.Compression;
+using FileDial.Core.Documents;
 using FileDial.Core.Menu;
 using FileDial.Core.Settings;
 using FileDial.Core.Text;
@@ -47,7 +48,20 @@ public static class FileJobs
             case ActionIds.TestArchive: return new ArchiveTestJob();
             case ActionIds.CompressToZip: return new ArchiveCreateJob(ArchiveFormat.Zip, output);
             case ActionIds.JoinParts: return new FileJoinJob(output);
+
+            // PDF и документы — PDFsharp, Office или LibreOffice, без ffmpeg.
+            case ActionIds.PdfSplit: return new PdfSplitJob(output);
+            case ActionIds.PdfRotateRight: return new PdfRotateJob(90, output);
+            case ActionIds.PdfRotateLeft: return new PdfRotateJob(-90, output);
+            case ActionIds.PdfMerge: return new PdfMergeJob(output);
+            case ActionIds.DocToPdf: return new DocumentConvertJob(".pdf", output);
+            case ActionIds.DocText: return new DocumentTextJob(output);
+            case ActionIds.DocImages: return new DocumentImagesJob(output);
+            case ActionIds.DocStrip: return new DocumentStripJob(output);
+            case ActionIds.DocsToPdf: return new DocumentsToPdfJob(output);
         }
+        if (ActionIds.TargetExtension(actionId, ActionIds.DocToPrefix) is { } documentTarget)
+            return new DocumentConvertJob(documentTarget, output);
         if (ActionIds.TargetExtension(actionId, ActionIds.ArchiveToPrefix) is { } archiveTarget)
             return archiveTarget switch
             {
@@ -64,30 +78,41 @@ public static class FileJobs
                 new CompressionOptions { TargetBytes = settings.VideoTargetBytes, OutputDirectory = output }),
             ActionIds.ImageCompress1Mb => new ImageCompressJob(tools, settings.ImageTargetBytes, output),
             ActionIds.ImageToPdf => new ImagesToPdfJob(tools, output),
+            ActionIds.DocCompress => new DocumentCompressJob(tools, output),
             ActionIds.Subtitles or ActionIds.SpeechToText =>
                 Speech.For(actionId, settings) is { } speech ? new ConversionJob(tools, speech, output) : null,
             _ => ConversionSpecs.For(actionId) is { } spec ? new ConversionJob(tools, spec, output) : null,
         };
     }
 
-    /// <summary>Нужен ли ffmpeg для действия (архивы обходятся без него).</summary>
+    /// <summary>Нужен ли ffmpeg для действия (архивы, PDF и документы обходятся без него — кроме сжатия картинок).</summary>
     public static bool NeedsFfmpeg(string actionId) =>
         actionId is not (ActionIds.ExtractHere or ActionIds.ExtractToFolder or ActionIds.ExtractTo
             or ActionIds.TestArchive or ActionIds.CompressToZip or ActionIds.ArchivePassword
-            or ActionIds.ArchiveSplit or ActionIds.JoinParts)
-        && ActionIds.TargetExtension(actionId, ActionIds.ArchiveToPrefix) is null;
+            or ActionIds.ArchiveSplit or ActionIds.JoinParts
+            or ActionIds.PdfMerge or ActionIds.PdfSplit or ActionIds.PdfExtract or ActionIds.PdfRotateRight
+            or ActionIds.PdfRotateLeft or ActionIds.PdfToImages or ActionIds.PdfOcr or ActionIds.PdfProtect
+            or ActionIds.DocToPdf or ActionIds.DocText or ActionIds.DocImages or ActionIds.DocStrip
+            or ActionIds.DocProtect or ActionIds.DocsToPdf)
+        && ActionIds.TargetExtension(actionId, ActionIds.ArchiveToPrefix) is null
+        && ActionIds.TargetExtension(actionId, ActionIds.DocToPrefix) is null;
+
+    /// <summary>Перед запуском нужно спросить, какие страницы взять («Извлечь страницы»).</summary>
+    public static bool NeedsPageRange(string actionId) => actionId == ActionIds.PdfExtract;
 
     /// <summary>Перед запуском нужно спросить размер части («Разбить на части»).</summary>
     public static bool NeedsPartSize(string actionId) => actionId == ActionIds.ArchiveSplit;
 
     /// <summary>Перед запуском нужно спросить новый пароль («Защитить паролем»).</summary>
-    public static bool NeedsNewPassword(string actionId) => actionId == ActionIds.ArchivePassword;
+    public static bool NeedsNewPassword(string actionId) =>
+        actionId is ActionIds.ArchivePassword or ActionIds.PdfProtect or ActionIds.DocProtect;
 
     /// <summary>Перед запуском нужно спросить папку назначения.</summary>
     public static bool NeedsFolderInput(string actionId) => actionId == ActionIds.ExtractTo;
 
     public static bool IsImplemented(string actionId) =>
         !NeedsFfmpeg(actionId) || actionId is ActionIds.Compress25 or ActionIds.ImageCompress1Mb or ActionIds.ImageToPdf
+            or ActionIds.DocCompress
             or ActionIds.Subtitles or ActionIds.SpeechToText || NeedsTrimInput(actionId) ||
         ConversionSpecs.For(actionId) is not null;
 

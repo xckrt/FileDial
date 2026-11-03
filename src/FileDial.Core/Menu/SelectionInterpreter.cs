@@ -93,6 +93,18 @@ public static class SelectionInterpreter
                 ActionCatalog.ForFile(path, state.Size, null, settings), path));
         }
 
+        if (kind == FileKind.Pdf)
+        {
+            // Число страниц — для подписи и чтобы не предлагать «Разделить» одностраничному файлу.
+            var pages = Documents.PdfFiles.TryPageCount(path, TimeSpan.FromSeconds(2));
+            return new HotkeyOutcome.ShowMenu(new DialMenu(DialMenuKind.Actions, NameShortener.Middle(name, MaxTitleLength),
+                pages is { } p ? $"{size} · {Documents.PdfFiles.PagesLabel(p)}" : size,
+                ActionCatalog.ForFile(path, state.Size, null, settings, pages), path));
+        }
+        if (kind == FileKind.Document)
+            return new HotkeyOutcome.ShowMenu(new DialMenu(DialMenuKind.Actions, NameShortener.Middle(name, MaxTitleLength),
+                size, ActionCatalog.ForFile(path, state.Size, null, settings), path));
+
         // Длительность и размер кадра нужны, чтобы не предлагать заведомо ненужное или невозможное;
         // без ffprobe обходимся тем, что знаем по имени и размеру файла.
         var info = media?.TryProbe(path);
@@ -175,6 +187,8 @@ public static class SelectionInterpreter
         FileKind.Video => $"{n} видео",
         FileKind.Image => Plural.Count(n, "картинка", "картинки", "картинок"),
         FileKind.Audio => Plural.Count(n, "аудиофайл", "аудиофайла", "аудиофайлов"),
+        FileKind.Pdf => $"{n} PDF",
+        FileKind.Document => Plural.Count(n, "документ", "документа", "документов"),
         _ => Plural.Count(n, "файл", "файла", "файлов"),
     };
 

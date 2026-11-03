@@ -14,7 +14,7 @@ public class FileKindTests
     [InlineData(@"C:\a.gif", FileKind.Image)]
     [InlineData(@"C:\a.flac", FileKind.Audio)]
     [InlineData(@"C:\a.Opus", FileKind.Audio)]
-    [InlineData(@"C:\a.pdf", FileKind.Other)]
+    [InlineData(@"C:\a.pdf", FileKind.Pdf)]
     [InlineData(@"C:\a", FileKind.Other)]
     public void DetectsKindByExtension(string path, FileKind expected)
     {
