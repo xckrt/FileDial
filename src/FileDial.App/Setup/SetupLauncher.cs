@@ -1,5 +1,6 @@
 ﻿using System.Windows;
 using FileDial.App.UI;
+using FileDial.Core.Localization;
 using FileDial.Core.Settings;
 using FileDial.Core.Setup;
 
@@ -49,6 +50,7 @@ internal static class SetupLauncher
         var settings = SettingsStore.Load(SettingsStore.DefaultPath);
         Motion.UserEnabled = settings.Animations;
         Palette.Apply(Theme.Resolve(settings.Theme));
+        Lang.Set(settings.Language);
 
         // Удаление, запущенное не из «Приложений» (например, из папки рядом), — удаляем ту копию, из которой запущены.
         var target = mode == Mode.Uninstall

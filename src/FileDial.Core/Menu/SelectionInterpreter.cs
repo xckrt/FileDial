@@ -1,4 +1,5 @@
 ﻿using FileDial.Core.Compression;
+using FileDial.Core.Localization;
 using FileDial.Core.Selection;
 using FileDial.Core.Text;
 
@@ -40,7 +41,7 @@ public abstract record HotkeyOutcome
 /// <summary>Превращает результат чтения выделения в меню или уведомление.</summary>
 public static class SelectionInterpreter
 {
-    public const string UnsupportedText = "Пока не поддерживается";
+    public static string UnsupportedText => Lang.T.Unsupported;
 
     /// <summary>Длина имени в центре круга: две строки текста.</summary>
     public const int MaxTitleLength = 34;
@@ -56,7 +57,7 @@ public static class SelectionInterpreter
 
         var paths = selection.Paths;
         if (paths.Count == 0)
-            return new HotkeyOutcome.ShowToast("Ничего не выделено");
+            return new HotkeyOutcome.ShowToast(Lang.T.NothingSelected);
 
         if (paths.Count > 1)
             return InterpretBatch(paths, probe, settings);
@@ -66,9 +67,9 @@ public static class SelectionInterpreter
         switch (state.Kind)
         {
             case FileStateKind.Missing:
-                return new HotkeyOutcome.ShowToast("Файл недоступен: это не обычный файл на диске");
+                return new HotkeyOutcome.ShowToast(Lang.T.NotRegularFile);
             case FileStateKind.Unavailable:
-                return new HotkeyOutcome.ShowToast("Файл недоступен: нет доступа или он занят");
+                return new HotkeyOutcome.ShowToast(Lang.T.FileBusy);
             case FileStateKind.Directory:
                 return Unsupported(Path.GetFileName(path.TrimEnd('\\', '/')), path, null, [path]);
         }
@@ -127,18 +128,18 @@ public static class SelectionInterpreter
     /// </summary>
     private static HotkeyOutcome InterpretBatch(IReadOnlyList<string> paths, IFileProbe probe, Settings.JobSettings? settings)
     {
-        var count = Plural.Count(paths.Count, "объект", "объекта", "объектов");
+        var selected = Lang.T.SelectedCount(paths.Count);
         if (paths.Count > MaxBatch)
-            return Unsupported($"Выделено {count}", null, $"Не больше {MaxBatch} за раз");
+            return Unsupported(selected, null, Lang.T.AtMostAtOnce(MaxBatch));
 
         var sizes = new List<long>(paths.Count);
         foreach (var path in paths)
         {
             var state = probe.Probe(path);
             if (state.Kind == FileStateKind.Directory)
-                return Unsupported($"Выделено {count}", null, "Среди выделенного есть папки", paths);
+                return Unsupported(selected, null, Lang.T.HasFolders, paths);
             if (state.Kind != FileStateKind.File)
-                return new HotkeyOutcome.ShowToast($"Файл недоступен: {Path.GetFileName(path)}");
+                return new HotkeyOutcome.ShowToast(Lang.T.FileUnavailable(Path.GetFileName(path)));
             sizes.Add(state.Size);
         }
 
@@ -149,9 +150,9 @@ public static class SelectionInterpreter
 
         var kinds = paths.Select(FileKinds.Of).Distinct().ToList();
         if (kinds.Count > 1)
-            return Unsupported($"Выделено {count}", null, "Файлы разных типов", paths);
+            return Unsupported(selected, null, Lang.T.MixedTypes, paths);
         if (kinds[0] == FileKind.Other)
-            return Unsupported($"Выделено {count}", null, null, paths);
+            return Unsupported(selected, null, null, paths);
 
         var title = KindCount(kinds[0], paths.Count);
         var actions = ActionCatalog.ForBatch(kinds[0], paths, sizes, settings);
@@ -177,19 +178,19 @@ public static class SelectionInterpreter
             [], parts[0])
         {
             SourcePaths = [parts[0]],
-            QuickAction = new DialAction(ActionIds.JoinParts, "Собрать из частей", true) { Caption = "Собрать из частей" },
+            QuickAction = new DialAction(ActionIds.JoinParts, Lang.T.JoinParts, true) { Caption = Lang.T.JoinParts },
         });
     }
 
     /// <summary>«5 картинок», «2 аудиофайла», «3 видео».</summary>
     public static string KindCount(FileKind kind, int n) => kind switch
     {
-        FileKind.Video => $"{n} видео",
-        FileKind.Image => Plural.Count(n, "картинка", "картинки", "картинок"),
-        FileKind.Audio => Plural.Count(n, "аудиофайл", "аудиофайла", "аудиофайлов"),
-        FileKind.Pdf => $"{n} PDF",
-        FileKind.Document => Plural.Count(n, "документ", "документа", "документов"),
-        _ => Plural.Count(n, "файл", "файла", "файлов"),
+        FileKind.Video => Lang.T.Videos(n),
+        FileKind.Image => Lang.T.Images(n),
+        FileKind.Audio => Lang.T.AudioFiles(n),
+        FileKind.Pdf => Lang.T.Pdfs(n),
+        FileKind.Document => Lang.T.Documents(n),
+        _ => Lang.T.Files(n),
     };
 
     /// <param name="zipPaths">Что можно сжать в ZIP прямо из компактного круга; null — ничего.</param>
@@ -207,7 +208,7 @@ public static class SelectionInterpreter
         {
             SourcePaths = zipPaths ?? (path is null ? [] : [path]),
             QuickAction = zipPaths is { Count: > 0 }
-                ? new DialAction(ActionIds.CompressToZip, "Сжать в ZIP", true) { Caption = "Сжать в ZIP" }
+                ? new DialAction(ActionIds.CompressToZip, Lang.T.CompressToZip, true) { Caption = Lang.T.CompressToZip }
                 : null,
         });
 }

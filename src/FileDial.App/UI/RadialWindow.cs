@@ -622,7 +622,7 @@ internal sealed class RadialWindow : Window
             return _menu.QuickAction is { } quick ? $"Enter или клик — {LowerFirst(quick.Title)}" : "Esc — закрыть";
         if (_menu.Actions.Any(a => a.IsEnabled))
             return "1–8, Enter · Esc";
-        return _menu.Actions.FirstOrDefault(a => a.DisabledReason is not null and not ActionCatalog.NotInPrototype)
+        return _menu.Actions.FirstOrDefault(a => a.DisabledReason is { } reason && reason != ActionCatalog.NotInPrototype)
                    ?.DisabledReason
                ?? "Нет доступных действий";
     }

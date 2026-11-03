@@ -19,6 +19,9 @@ public sealed record AppSettings
 
     public static readonly IReadOnlyList<string> Themes = ["auto", "graphite", "brass", "paper"];
 
+    /// <summary>Язык интерфейса: auto (по языку Windows), ru или en.</summary>
+    public string Language { get; init; } = "auto";
+
     public bool OpenFolderWhenDone { get; init; }
 
     /// <summary>Записывать выполненные действия в историю (хранится только на этом компьютере).</summary>
@@ -59,6 +62,7 @@ public sealed record AppSettings
     {
         Hotkey = HotkeyGesture.Format(),
         Theme = Themes.Contains(Theme) ? Theme : "graphite",
+        Language = Localization.Lang.Settings.Contains(Language) ? Language : "auto",
         VideoTargetBytes = Nearest(VideoTargets, VideoTargetBytes),
         ImageTargetBytes = Nearest(ImageTargets, ImageTargetBytes),
         FfmpegFolder = string.IsNullOrWhiteSpace(FfmpegFolder) ? null : FfmpegFolder.Trim(),

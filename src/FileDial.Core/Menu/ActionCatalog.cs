@@ -1,5 +1,6 @@
 ﻿using FileDial.Core.Compression;
 using FileDial.Core.Documents;
+using FileDial.Core.Localization;
 using FileDial.Core.Jobs;
 using FileDial.Core.Settings;
 
@@ -12,8 +13,8 @@ namespace FileDial.Core.Menu;
 public static class ActionCatalog
 {
     public const int SectorCount = 8;
-    public const string NotInPrototype = "Недоступно в прототипе";
-    public const string AlreadySmall = CompressionCheck.AlreadySmall;
+    public static string NotInPrototype => Lang.T.NotInPrototype;
+    public static string AlreadySmall => CompressionCheck.AlreadySmall;
     public const int ResizeLongSide = 1920;
 
     /// <summary>Форматы для конвертации: подпись и расширение. Порядок = порядок во внешнем кольце.</summary>
@@ -66,17 +67,20 @@ public static class ActionCatalog
                 return c with
                 {
                     IsEnabled = !allThere,
-                    DisabledReason = allThere ? $"Все файлы уже в {c.Label}" : null,
+                    DisabledReason = allThere ? Lang.T.AllAlreadyIn(c.Label) : null,
                 };
             }).ToList()),
-            { Id: ActionIds.Trim or ActionIds.AudioTrim } => a with { IsEnabled = false, DisabledReason = "Обрезка — по одному файлу" },
-            { Id: ActionIds.ArchiveContents } => a with { IsEnabled = false, DisabledReason = "Содержимое — по одному архиву" },
-            { Id: ActionIds.PdfExtract } => a with { IsEnabled = false, DisabledReason = "Страницы — по одному файлу" },
+            { Id: ActionIds.Trim or ActionIds.AudioTrim } => a with { IsEnabled = false, DisabledReason = Lang.T.TrimOneFile },
+            { Id: ActionIds.ArchiveContents } => a with { IsEnabled = false, DisabledReason = Lang.T.ContentsOneArchive },
+            { Id: ActionIds.PdfExtract } => a with { IsEnabled = false, DisabledReason = Lang.T.PagesOneFile },
             { Id: ActionIds.PdfMerge } => a with { IsEnabled = true, DisabledReason = null },
             { Id: ActionIds.DocsToPdf } => DocumentsToPdf(paths),
-            { Id: ActionIds.ImageToPdf } => a with { Label = "Собрать в PDF", Caption = "Собрать в PDF" },
-            { IsEnabled: false, DisabledReason: { } reason } when reason.StartsWith("Файл уже меньше", StringComparison.Ordinal) =>
-                a with { DisabledReason = "Все файлы" + reason["Файл".Length..] },
+            { Id: ActionIds.ImageToPdf } => a with { Label = Lang.T.CombineIntoPdf, Caption = Lang.T.CombineIntoPdf },
+            // «Сжать до…» неактивно, только если меньше цели все файлы.
+            { Id: ActionIds.Compress25, IsEnabled: false } =>
+                a with { DisabledReason = Lang.T.AllSmallerThan(Text.SizeFormatter.Format((settings ?? JobSettings.Default).VideoTargetBytes)) },
+            { Id: ActionIds.ImageCompress1Mb, IsEnabled: false } =>
+                a with { DisabledReason = Lang.T.AllSmallerThan(Text.SizeFormatter.Format((settings ?? JobSettings.Default).ImageTargetBytes)) },
             _ => a,
         }).ToList();
     }
@@ -100,16 +104,15 @@ public static class ActionCatalog
 
         return
         [
-            Action(ActionIds.Compress25, $"Сжать до {JobSettings.TargetLabel(settings.VideoTargetBytes)}",
+            Action(ActionIds.Compress25, Lang.T.CompressTo(JobSettings.TargetLabel(settings.VideoTargetBytes)),
                 CompressionCheck.WhyNot(sizeBytes, media, settings.VideoTargetBytes)),
-            Action(ActionIds.Trim, "Обрезать", null),
-            Action(ActionIds.Gif, "Сделать GIF",
-                tooLongForGif ? $"GIF — только для роликов до {ConversionSpecs.GifMaxSeconds} с" : null),
-            Action(ActionIds.ExtractAudio, "Извлечь звук", noSound ? "В видео нет звука" : null),
-            Action(ActionIds.Frame, "Кадр в картинку", null),
-            SpeechAction(ActionIds.Subtitles, "Субтитры", settings, noSound ? "В видео нет звука" : null),
-            Action(ActionIds.Mute, "Убрать звук", noSound ? "В видео и так нет звука" : null),
-            DialAction.Group(ActionIds.Convert, "Формат", Formats(path, VideoFormats, ActionIds.VideoTo)),
+            Action(ActionIds.Trim, Lang.T.Trim, null),
+            Action(ActionIds.Gif, Lang.T.MakeGif, tooLongForGif ? Lang.T.GifTooLong(ConversionSpecs.GifMaxSeconds) : null),
+            Action(ActionIds.ExtractAudio, Lang.T.ExtractAudio, noSound ? Lang.T.NoSoundInVideo : null),
+            Action(ActionIds.Frame, Lang.T.FrameToImage, null),
+            SpeechAction(ActionIds.Subtitles, Lang.T.Subtitles, settings, noSound ? Lang.T.NoSoundInVideo : null),
+            Action(ActionIds.Mute, Lang.T.RemoveSound, noSound ? Lang.T.AlreadySilent : null),
+            DialAction.Group(ActionIds.Convert, Lang.T.Format, Formats(path, VideoFormats, ActionIds.VideoTo)),
         ];
     }
 
@@ -117,32 +120,32 @@ public static class ActionCatalog
     {
         string? resizeWhyNot = null;
         if (media is { Width: > 0, Height: > 0 } && Math.Max(media.Width, media.Height) <= ResizeLongSide)
-            resizeWhyNot = $"Уже не больше {ResizeLongSide} px ({media.Width}×{media.Height})";
+            resizeWhyNot = Lang.T.AlreadyNoBigger(ResizeLongSide, media.Width, media.Height);
 
         return
         [
-            DialAction.Group(ActionIds.ImageConvert, "Формат", Formats(path, ImageFormats, ActionIds.ImageTo)),
-            Action(ActionIds.Resize1920, $"Уменьшить до {ResizeLongSide} px", resizeWhyNot),
-            Action(ActionIds.RotateRight, "Повернуть вправо", null),
-            Action(ActionIds.RotateLeft, "Повернуть влево", null),
-            Action(ActionIds.Mirror, "Отразить", null),
-            Action(ActionIds.ImageCompress1Mb, $"Сжать до {JobSettings.TargetLabel(settings.ImageTargetBytes)}",
+            DialAction.Group(ActionIds.ImageConvert, Lang.T.Format, Formats(path, ImageFormats, ActionIds.ImageTo)),
+            Action(ActionIds.Resize1920, Lang.T.ResizeTo(ResizeLongSide), resizeWhyNot),
+            Action(ActionIds.RotateRight, Lang.T.RotateRight, null),
+            Action(ActionIds.RotateLeft, Lang.T.RotateLeft, null),
+            Action(ActionIds.Mirror, Lang.T.Mirror, null),
+            Action(ActionIds.ImageCompress1Mb, Lang.T.CompressTo(JobSettings.TargetLabel(settings.ImageTargetBytes)),
                 sizeBytes <= settings.ImageTargetBytes ? CompressionCheck.AlreadySmallFor(settings.ImageTargetBytes) : null),
-            Stub(ActionIds.RemoveBackground, "Убрать фон"),
-            Action(ActionIds.ImageToPdf, "В PDF", null),
+            Stub(ActionIds.RemoveBackground, Lang.T.RemoveBackground),
+            Action(ActionIds.ImageToPdf, Lang.T.ToPdf, null),
         ];
     }
 
     private static IReadOnlyList<DialAction> ForAudio(string path, ProbeInfo? media, JobSettings settings) =>
     [
-        DialAction.Group(ActionIds.AudioConvert, "Формат", Formats(path, AudioFormats, ActionIds.AudioTo)),
-        Action(ActionIds.Normalize, "Выровнять громкость", null),
-        Action(ActionIds.Denoise, "Убрать шум", null),
-        Action(ActionIds.SpeedUp, "Ускорить ×1,5", null),
-        Action(ActionIds.SlowDown, "Замедлить ×0,75", null),
-        Action(ActionIds.ToMono, "В моно", media is { AudioChannels: 1 } ? "Звук уже моно" : null),
-        Action(ActionIds.AudioTrim, "Обрезать", null),
-        SpeechAction(ActionIds.SpeechToText, "В текст", settings, null),
+        DialAction.Group(ActionIds.AudioConvert, Lang.T.Format, Formats(path, AudioFormats, ActionIds.AudioTo)),
+        Action(ActionIds.Normalize, Lang.T.NormalizeVolume, null),
+        Action(ActionIds.Denoise, Lang.T.RemoveNoise, null),
+        Action(ActionIds.SpeedUp, Lang.T.SpeedUp, null),
+        Action(ActionIds.SlowDown, Lang.T.SlowDown, null),
+        Action(ActionIds.ToMono, Lang.T.ToMono, media is { AudioChannels: 1 } ? Lang.T.AlreadyMono : null),
+        Action(ActionIds.AudioTrim, Lang.T.Trim, null),
+        SpeechAction(ActionIds.SpeechToText, Lang.T.ToText, settings, null),
     ];
 
     public static readonly IReadOnlyList<(string Label, string Extension)> ArchiveFormats = [("ZIP", ".zip"), ("7z", ".7z")];
@@ -150,41 +153,40 @@ public static class ActionCatalog
     private static IReadOnlyList<DialAction> ForArchive(string path)
     {
         // zip распаковывает .NET; остальное — встроенный в Windows tar.exe (есть с Windows 10 1803).
-        string? noTar = !Archives.ArchiveSupport.IsZip(path) && !Archives.ArchiveSupport.TarAvailable
-            ? "Нужен tar.exe из Windows 10 1803 или новее" : null;
+        string? noTar = !Archives.ArchiveSupport.IsZip(path) && !Archives.ArchiveSupport.TarAvailable ? Lang.T.NeedsTar : null;
         var formats = Formats(path, ArchiveFormats, ActionIds.ArchiveTo)
             .Select(c => c.Id == ActionIds.ArchiveTo(".7z") && !Archives.ArchiveSupport.TarAvailable
-                ? c with { IsEnabled = false, DisabledReason = "Нужен tar.exe из Windows 10 1803 или новее" }
+                ? c with { IsEnabled = false, DisabledReason = Lang.T.NeedsTar }
                 : c)
             .ToList();
         return
         [
-            Action(ActionIds.ExtractHere, "Распаковать сюда", noTar),
-            Action(ActionIds.ExtractToFolder, "Распаковать в папку", noTar),
-            Action(ActionIds.ExtractTo, "Распаковать в…", noTar),
-            Action(ActionIds.TestArchive, "Проверить архив", noTar),
-            DialAction.Group(ActionIds.ArchiveConvert, "Формат", noTar is null ? formats
+            Action(ActionIds.ExtractHere, Lang.T.ExtractHere, noTar),
+            Action(ActionIds.ExtractToFolder, Lang.T.ExtractToFolder, noTar),
+            Action(ActionIds.ExtractTo, Lang.T.ExtractTo, noTar),
+            Action(ActionIds.TestArchive, Lang.T.TestArchive, noTar),
+            DialAction.Group(ActionIds.ArchiveConvert, Lang.T.Format, noTar is null ? formats
                 : formats.Select(c => c with { IsEnabled = false, DisabledReason = noTar }).ToList()),
-            Action(ActionIds.ArchivePassword, "Защитить паролем", noTar),
+            Action(ActionIds.ArchivePassword, Lang.T.ProtectWithPassword, noTar),
             // Деление — по байтам, tar.exe не нужен.
-            Action(ActionIds.ArchiveSplit, "Разбить на части", null),
-            Action(ActionIds.ArchiveContents, "Содержимое", noTar),
+            Action(ActionIds.ArchiveSplit, Lang.T.SplitIntoParts, null),
+            Action(ActionIds.ArchiveContents, Lang.T.Contents, noTar),
         ];
     }
 
     private static IReadOnlyList<DialAction> ForPdf(int? pages)
     {
-        var single = pages == 1 ? "В документе одна страница" : null;
+        var single = pages == 1 ? Lang.T.SinglePage : null;
         return
         [
-            Action(ActionIds.PdfSplit, "Разделить по страницам", single),
-            Action(ActionIds.PdfExtract, "Извлечь страницы", single) with { Caption = "Извлечь страницы" },
-            Action(ActionIds.PdfRotateRight, "Повернуть вправо", null),
-            Action(ActionIds.PdfRotateLeft, "Повернуть влево", null),
-            Action(ActionIds.PdfToImages, "Страницы в картинки", null),
-            Action(ActionIds.PdfOcr, "Распознать текст", null),
-            Action(ActionIds.PdfProtect, "Защитить паролем", null),
-            Action(ActionIds.PdfMerge, "Объединить", "Выделите несколько PDF") with { Caption = "Объединить PDF" },
+            Action(ActionIds.PdfSplit, Lang.T.SplitPages, single),
+            Action(ActionIds.PdfExtract, Lang.T.ExtractPages, single),
+            Action(ActionIds.PdfRotateRight, Lang.T.RotateRight, null),
+            Action(ActionIds.PdfRotateLeft, Lang.T.RotateLeft, null),
+            Action(ActionIds.PdfToImages, Lang.T.PagesToImages, null),
+            Action(ActionIds.PdfOcr, Lang.T.RecognizeText, null),
+            Action(ActionIds.PdfProtect, Lang.T.ProtectWithPassword, null),
+            Action(ActionIds.PdfMerge, Lang.T.Merge, Lang.T.SelectSeveralPdfs) with { Caption = Lang.T.MergePdfs },
         ];
     }
 
@@ -205,23 +207,23 @@ public static class ActionCatalog
         var formats = Formats(path, DocumentFormats(family), ActionIds.DocTo)
             .Select(c => c.IsEnabled && Needs(TargetOf(c.Id)!) is { } reason ? c with { IsEnabled = false, DisabledReason = reason } : c)
             .ToList();
-        var text = family == DocumentFamily.Sheet ? "Для таблиц — «Формат» → CSV"
+        var text = family == DocumentFamily.Sheet ? Lang.T.SheetsUseCsv
             : OfficeDocs.IsPackage(path) ? null
             : Needs(family == DocumentFamily.Slides ? ".pptx" : ".docx");
-        var password = !OfficeDocs.IsMicrosoftFormat(path) ? "Пароль — для форматов Microsoft Office"
+        var password = !OfficeDocs.IsMicrosoftFormat(path) ? Lang.T.PasswordOfficeOnly
             : DocumentConverters.OfficeFor(family) is null ? DocumentConverters.NoOffice
             : null;
 
         return
         [
-            Action(ActionIds.DocToPdf, "В PDF", Needs(".pdf")),
-            DialAction.Group(ActionIds.DocConvert, "Формат", formats),
-            Action(ActionIds.DocText, "В текст", text),
-            Action(ActionIds.DocImages, "Извлечь картинки", package),
-            Action(ActionIds.DocCompress, "Сжать картинки", package),
-            Action(ActionIds.DocStrip, "Убрать личные данные", package),
-            Action(ActionIds.DocProtect, "Защитить паролем", password),
-            Action(ActionIds.DocsToPdf, "Собрать в PDF", "Выделите несколько документов"),
+            Action(ActionIds.DocToPdf, Lang.T.ToPdf, Needs(".pdf")),
+            DialAction.Group(ActionIds.DocConvert, Lang.T.Format, formats),
+            Action(ActionIds.DocText, Lang.T.ToText, text),
+            Action(ActionIds.DocImages, Lang.T.ExtractImages, package),
+            Action(ActionIds.DocCompress, Lang.T.CompressImages, package),
+            Action(ActionIds.DocStrip, Lang.T.RemovePersonalData, package),
+            Action(ActionIds.DocProtect, Lang.T.ProtectWithPassword, password),
+            Action(ActionIds.DocsToPdf, Lang.T.CombineIntoPdf, Lang.T.SelectSeveralDocuments),
         ];
     }
 
@@ -229,9 +231,9 @@ public static class ActionCatalog
     {
         var missing = paths.Select(OfficeDocs.FamilyOf).Distinct()
             .Any(family => DocumentConverters.For(family, ".pdf") is null);
-        return new DialAction(ActionIds.DocsToPdf, "Собрать в PDF", !missing, missing ? DocumentConverters.NoConverter : null)
+        return new DialAction(ActionIds.DocsToPdf, Lang.T.CombineIntoPdf, !missing, missing ? DocumentConverters.NoConverter : null)
         {
-            Caption = "Собрать в PDF",
+            Caption = Lang.T.CombineIntoPdf,
         };
     }
 
@@ -242,7 +244,7 @@ public static class ActionCatalog
         var own = NormalizeExtension(Path.GetExtension(path));
         return formats
             .Select(f => new DialAction(id(f.Extension), f.Label, own != f.Extension,
-                own == f.Extension ? $"Файл уже в {f.Label}" : null) { Caption = $"В {f.Label}" })
+                own == f.Extension ? Lang.T.AlreadyIn(f.Label) : null) { Caption = Lang.T.ConvertTo(f.Label) })
             .ToList();
     }
 

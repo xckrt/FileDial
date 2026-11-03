@@ -10,6 +10,7 @@ using FileDial.App.Tray;
 using FileDial.App.UI;
 using FileDial.Core.Archives;
 using FileDial.Core.Compression;
+using FileDial.Core.Localization;
 using FileDial.Core.Documents;
 using FileDial.Core.History;
 using FileDial.Core.Jobs;
@@ -74,6 +75,7 @@ public partial class App : Application
         _settings = SettingsStore.Load(SettingsStore.DefaultPath);
         Motion.UserEnabled = _settings.Animations;
         Palette.Apply(Theme.Resolve(_settings.Theme));
+        Lang.Set(_settings.Language);
 
         _ = RefreshSpeechSupportAsync();
         var noFfmpeg = FfmpegLocator.LocateDefault(_settings.FfmpegFolder) is null;
@@ -196,6 +198,7 @@ public partial class App : Application
         _settings = settings.Normalized();
         Motion.UserEnabled = _settings.Animations;
         Palette.Apply(Theme.Resolve(_settings.Theme));
+        Lang.Set(_settings.Language);
         _tray?.SetHotkey(_hotkey.Current?.Format());
         _ = RefreshSpeechSupportAsync(); // могла смениться папка ffmpeg
         return null;
