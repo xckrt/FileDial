@@ -2,6 +2,7 @@ using System.Buffers.Binary;
 using System.IO.Compression;
 using System.Security.Cryptography;
 using System.Text;
+using FileDial.Core.Localization;
 
 namespace FileDial.Core.Archives;
 
@@ -36,7 +37,7 @@ public sealed class ZipAesWriter : IDisposable
     public ZipAesWriter(Stream output, string password)
     {
         if (string.IsNullOrEmpty(password))
-            throw new ArgumentException("Пустой пароль.", nameof(password));
+            throw new ArgumentException(Lang.T.ArchiveEmptyPassword, nameof(password));
         _output = output;
         _password = Encoding.UTF8.GetBytes(password);
     }
@@ -56,7 +57,7 @@ public sealed class ZipAesWriter : IDisposable
         var info = new FileInfo(sourcePath);
         // Без Zip64 размеры ограничены 4 ГБ — честно отказываем, чем писать битый архив.
         if (info.Length >= uint.MaxValue)
-            throw new IOException($"Файл {info.Name} больше 4 ГБ — для архива с паролем это пока не поддерживается.");
+            throw new IOException(Lang.T.ArchiveFileTooBig(info.Name));
 
         var name = Encoding.UTF8.GetBytes(entryName);
         var offset = _output.Position;

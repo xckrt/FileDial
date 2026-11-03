@@ -1,4 +1,5 @@
 using System.Globalization;
+using FileDial.Core.Localization;
 
 namespace FileDial.Core.Documents;
 
@@ -16,7 +17,7 @@ public static class PageRange
         var parts = text.Replace(';', ',').Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
         if (parts.Length == 0)
         {
-            error = "Укажите страницы, например 1-3, 5";
+            error = Lang.T.PdfRangeEmpty;
             return null;
         }
 
@@ -29,7 +30,7 @@ public static class PageRange
             if (dash < 0)
             {
                 if (!TryNumber(normalized, out from))
-                    return Fail(out error, $"Непонятно: «{part}»");
+                    return Fail(out error, Lang.T.PdfRangeUnclear(part));
                 to = from;
             }
             else
@@ -38,15 +39,15 @@ public static class PageRange
                 var right = normalized[(dash + 1)..];
                 if (!TryNumber(left.Length == 0 ? "1" : left, out from) ||
                     !TryNumber(right.Length == 0 ? pageCount.ToString(CultureInfo.InvariantCulture) : right, out to))
-                    return Fail(out error, $"Непонятно: «{part}»");
+                    return Fail(out error, Lang.T.PdfRangeUnclear(part));
             }
 
             if (from < 1 || to < 1)
-                return Fail(out error, "Страницы считаются с 1");
+                return Fail(out error, Lang.T.PdfRangeFromOne);
             if (from > pageCount || to > pageCount)
-                return Fail(out error, $"В документе {Text.Plural.Count(pageCount, "страница", "страницы", "страниц")}");
+                return Fail(out error, Lang.T.PdfRangeTooFar(pageCount));
             if (from > to)
-                return Fail(out error, $"«{part}»: начало больше конца");
+                return Fail(out error, Lang.T.PdfRangeReversed(part));
 
             for (var p = from; p <= to; p++)
                 if (seen.Add(p))

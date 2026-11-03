@@ -3,6 +3,7 @@ using System.IO.Compression;
 using System.Text;
 using System.Text.RegularExpressions;
 using FileDial.Core.Compression;
+using FileDial.Core.Localization;
 
 namespace FileDial.Core.Archives;
 
@@ -26,13 +27,13 @@ public static partial class ArchiveListing
             return await Task.Run(() => ReadZip(archive), ct).ConfigureAwait(false);
 
         if (!ArchiveSupport.TarAvailable)
-            throw new CompressionException("Для просмотра такого архива нужен tar.exe (Windows 10 1803 или новее).");
+            throw new CompressionException(Lang.T.ArchiveListNeedsTar);
 
         // Байты как есть (Latin-1 — один в один), чтобы сначала раскрыть экранирование tar, потом декодировать ANSI.
         var result = await ProcessRunner.RunAsync(ArchiveSupport.Tar, ["-t", "-v", "-f", ArchiveSupport.TarPath(archive)],
             null, captureOutput: true, ct, outputEncoding: Encoding.Latin1).ConfigureAwait(false);
         if (result.ExitCode != 0)
-            throw new CompressionException("Не удалось прочитать список файлов: архив повреждён или защищён паролем.", result.ErrorTail);
+            throw new CompressionException(Lang.T.ArchiveListFailed, result.ErrorTail);
 
         var entries = result.StandardOutput.Split('\n', StringSplitOptions.RemoveEmptyEntries)
             .Select(l => ParseTarLine(l.TrimEnd('\r'), ArchiveSupport.TarOutput))
@@ -52,7 +53,7 @@ public static partial class ArchiveListing
         }
         catch (InvalidDataException ex)
         {
-            throw new CompressionException("Не удалось прочитать список файлов: архив повреждён.", ex.Message);
+            throw new CompressionException(Lang.T.ArchiveListDamaged, ex.Message);
         }
     }
 
