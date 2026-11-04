@@ -629,8 +629,12 @@ Name: `name_trimmed.ext`.
   password so it does not hang on a hidden prompt, and FileDial reports that the document is password-protected.
 - "Remove personal data" and "Extract images" work only for the newer formats (DOCX, XLSX, PPTX, OpenDocument).
 - **SVG needs ffmpeg with librsvg.** Not every build has it: the gyan.dev "full" build 9.0.1 checked on the
-  development machine has no SVG decoder, so the SVG sectors are inactive there. Use an ffmpeg that lists `librsvg` in `ffmpeg -decoders` and point Settings →
-  ffmpeg to it.
+  development machine has no SVG decoder, so the SVG sectors are inactive there. Use an ffmpeg that lists `librsvg`
+  in `ffmpeg -decoders` — for example a BtbN "gpl" build (checked with 9.0: SVG works, but it has no whisper, so
+  subtitles and speech-to-text need the gyan.dev build) — and point Settings → ffmpeg to it. The dial checks the
+  ffmpeg chosen in Settings. Rendering is vector: a 16 px icon drawn at 1024 px stays sharp; an SVG with neither
+  width/height nor viewBox is drawn at librsvg's default size and scaled up, so its edges are softer. The first SVG
+  with text after installing ffmpeg can take several seconds while the font cache is built.
 - **Encoding detection is a heuristic.** Files with a BOM, UTF-16 and UTF-8 are detected reliably; for single-byte
   text FileDial only distinguishes Windows-1251, CP866 and Windows-1252, and a short or unusual text can be guessed
   wrong. Other code pages (KOI8-R, Windows-1250…) are not recognized.

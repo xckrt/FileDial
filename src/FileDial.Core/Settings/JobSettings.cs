@@ -26,6 +26,9 @@ public sealed record JobSettings
     /// <summary>В найденном ffmpeg есть фильтр whisper (проверяется программой при запуске).</summary>
     public bool SpeechFilterAvailable { get; init; }
 
+    /// <summary>Папка ffmpeg из настроек; null — искать рядом с программой и в PATH.</summary>
+    public string? FfmpegFolder { get; init; }
+
     /// <summary>Свои действия пользователя (добавляются в круг поверх встроенных).</summary>
     public IReadOnlyList<Custom.CustomAction> CustomActions { get; init; } = Custom.CustomActionList.Empty;
     /// <summary>Файл модели для «Убрать фон» (находит программа); null — модели нет.</summary>

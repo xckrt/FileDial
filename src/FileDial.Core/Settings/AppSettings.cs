@@ -61,6 +61,7 @@ public sealed record AppSettings
         WhisperModel = string.IsNullOrWhiteSpace(WhisperModel) ? null : WhisperModel,
         WhisperLanguage = WhisperLanguage,
         CustomActions = CustomActions,
+        FfmpegFolder = string.IsNullOrWhiteSpace(FfmpegFolder) ? null : FfmpegFolder,
     };
 
     /// <summary>Приводит значения к допустимым: цели — к ближайшим из списка, сочетание — к рабочему.</summary>

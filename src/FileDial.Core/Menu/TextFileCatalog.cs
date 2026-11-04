@@ -74,9 +74,10 @@ public static class TextFileCatalog
             minText!.TrimEnd() == text.TrimEnd() ? Lang.T.TxtJsonAlreadyMinified : null);
     }
 
-    public static IReadOnlyList<DialAction> ForSvg(string path)
+    /// <param name="ffmpegFolder">Папка ffmpeg из настроек — декодер SVG проверяем у того ffmpeg, который и будет рисовать.</param>
+    public static IReadOnlyList<DialAction> ForSvg(string path, string? ffmpegFolder = null)
     {
-        var why = SvgSupport.DecoderAvailable(FfmpegLocator.LocateDefault()) ? null : Lang.T.TxtSvgNoDecoder;
+        var why = SvgSupport.DecoderAvailable(FfmpegLocator.LocateDefault(ffmpegFolder)) ? null : Lang.T.TxtSvgNoDecoder;
         return
         [
             Action(ActionIds.SvgToPng, Lang.T.TxtToPng, why) with { Caption = Lang.T.TxtSvgToPngCaption(Raster.SvgLongSide) },
@@ -119,10 +120,10 @@ public static class TextFileCatalog
     /// Несколько файлов: действие активно, если нужно хоть одному. Неподходящие файлы задача пропускает сама
     /// («Не JSON», «Уже UTF-8»).
     /// </summary>
-    public static IReadOnlyList<DialAction> ForBatch(FileKind kind, IReadOnlyList<string> paths)
+    public static IReadOnlyList<DialAction> ForBatch(FileKind kind, IReadOnlyList<string> paths, string? ffmpegFolder = null)
     {
         if (kind == FileKind.Svg)
-            return ForSvg(paths[0]);
+            return ForSvg(paths[0], ffmpegFolder);
         if (kind == FileKind.Icon)
             return ForIcon(paths[0]).Select(a => a with { IsEnabled = true, DisabledReason = null }).ToList();
 

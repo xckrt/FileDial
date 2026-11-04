@@ -52,6 +52,25 @@ internal static class Raster
             throw new CompressionException(IsSvg(source) ? Lang.T.TxtSvgRenderFailed + "." : Lang.T.JobCannotReadImage, result.ErrorTail);
     }
 
+    /// <summary>
+    /// Несколько размеров: исходник рисуется один раз в самом крупном, остальные уменьшаются из него.
+    /// Так быстрее — каждый запуск librsvg заново загружает шрифты (около 0,7 с на SVG с текстом).
+    /// </summary>
+    public static async Task RenderSizesAsync(FfmpegTools tools, string source, IReadOnlyList<int> sizes, bool square,
+        Func<int, string> output, IProgress<JobProgress>? progress, CancellationToken ct)
+    {
+        var largest = sizes.Max();
+        progress?.Report(new JobProgress(Lang.T.TxtStageRendering(largest), 0));
+        await RenderAsync(tools, source, largest, square, output(largest), ct).ConfigureAwait(false);
+        var done = 1;
+        foreach (var size in sizes.Where(s => s != largest).OrderByDescending(s => s))
+        {
+            ct.ThrowIfCancellationRequested();
+            progress?.Report(new JobProgress(Lang.T.TxtStageRendering(size), (double)done++ / sizes.Count));
+            await RenderAsync(tools, output(largest), size, square, output(size), ct).ConfigureAwait(false);
+        }
+    }
+
     /// <summary>Готовую папку с результатами — под свободное имя «имя (PNG)».</summary>
     public static string FinishFolder(string staging, string parent, string sourcePath)
     {
@@ -97,13 +116,8 @@ public sealed class SvgPngSizesJob(FfmpegTools tools, string? outputDirectory = 
             Directory.CreateDirectory(staging);
             var stem = Path.GetFileNameWithoutExtension(sourcePath);
             var sizes = Raster.SvgSetSizes;
-            for (var i = 0; i < sizes.Count; i++)
-            {
-                ct.ThrowIfCancellationRequested();
-                progress?.Report(new JobProgress(Lang.T.TxtStageRendering(sizes[i]), (double)i / sizes.Count));
-                await Raster.RenderAsync(tools, sourcePath, sizes[i], square: false,
-                    Path.Combine(staging, $"{stem}_{sizes[i]}px.png"), ct).ConfigureAwait(false);
-            }
+            await Raster.RenderSizesAsync(tools, sourcePath, sizes, square: false,
+                size => Path.Combine(staging, $"{stem}_{size}px.png"), progress, ct).ConfigureAwait(false);
             var folder = Raster.FinishFolder(staging, parent, sourcePath);
             progress?.Report(new JobProgress(Lang.T.JobStageDone, 1));
             return new JobResult(JobStatus.Done, Lang.T.TxtPngSetDone(sizes.Count, Path.GetFileName(folder)), folder);
@@ -140,15 +154,11 @@ public sealed class ToIcoJob(FfmpegTools tools, string? outputDirectory = null) 
         var work = DocumentOutput.WorkDirectory();
         try
         {
+            string Frame(int size) => Path.Combine(work, $"{size}.png");
+            await Raster.RenderSizesAsync(tools, sourcePath, sizes, square: true, Frame, progress, ct).ConfigureAwait(false);
             var pngs = new List<byte[]>();
-            for (var i = 0; i < sizes.Count; i++)
-            {
-                ct.ThrowIfCancellationRequested();
-                progress?.Report(new JobProgress(Lang.T.TxtStageRendering(sizes[i]), (double)i / sizes.Count));
-                var frame = Path.Combine(work, $"{sizes[i]}.png");
-                await Raster.RenderAsync(tools, sourcePath, sizes[i], square: true, frame, ct).ConfigureAwait(false);
-                pngs.Add(await File.ReadAllBytesAsync(frame, ct).ConfigureAwait(false));
-            }
+            foreach (var size in sizes)
+                pngs.Add(await File.ReadAllBytesAsync(Frame(size), ct).ConfigureAwait(false));
             var output = TextOutput.Save(sourcePath, outputDirectory, "", ".ico", IcoFile.Write(pngs));
             return TextOutput.Done(progress, Lang.T.TxtIcoDone(string.Join(", ", sizes)), output);
         }

@@ -47,7 +47,7 @@ public static class ActionCatalog
             FileKind.Pdf => ForPdf(pages),
             FileKind.Document => ForDocument(path),
             FileKind.Text => TextFileCatalog.ForText(path),
-            FileKind.Svg => TextFileCatalog.ForSvg(path),
+            FileKind.Svg => TextFileCatalog.ForSvg(path, (settings ?? JobSettings.Default).FfmpegFolder),
             FileKind.Icon => TextFileCatalog.ForIcon(path),
             _ => [],
         };
@@ -60,7 +60,7 @@ public static class ActionCatalog
         JobSettings? settings = null)
     {
         if (kind is FileKind.Text or FileKind.Svg or FileKind.Icon)
-            return TextFileCatalog.ForBatch(kind, paths);
+            return TextFileCatalog.ForBatch(kind, paths, settings?.FfmpegFolder);
         var extensions = paths.Select(p => NormalizeExtension(Path.GetExtension(p))).ToHashSet();
         var single = ForFile(paths[0], sizes.Count > 0 ? sizes.Max() : 0, null, settings);
         return single.Select(a => a switch
