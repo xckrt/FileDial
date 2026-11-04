@@ -115,7 +115,7 @@ public sealed partial class RuTexts
     public override string TxtJsonAlreadyPretty => "JSON уже оформлен с отступами";
     public override string TxtJsonAlreadyMinified => "JSON уже без лишних пробелов";
     public override string TxtNeedsEdge => "Нужен Microsoft Edge";
-    public override string TxtSvgNoDecoder => "Ваш ffmpeg собран без поддержки SVG (нужна «full»-сборка)";
+    public override string TxtSvgNoDecoder => "В вашем ffmpeg нет декодера SVG (librsvg)";
     public override string TxtIcoUnreadable => "Не удалось прочитать значок";
     public override string TxtIcoSingleSize => "В значке только один размер";
 
@@ -193,7 +193,7 @@ public sealed partial class EnTexts
     public override string TxtJsonAlreadyPretty => "The JSON is already indented";
     public override string TxtJsonAlreadyMinified => "The JSON is already minified";
     public override string TxtNeedsEdge => "Needs Microsoft Edge";
-    public override string TxtSvgNoDecoder => "Your ffmpeg is built without SVG support (a \"full\" build is needed)";
+    public override string TxtSvgNoDecoder => "Your ffmpeg has no SVG decoder (librsvg)";
     public override string TxtIcoUnreadable => "Could not read the icon";
     public override string TxtIcoSingleSize => "The icon has only one size";
 

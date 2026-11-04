@@ -2,25 +2,32 @@ English · [Русский](README.ru.md)
 
 # FileDial — prototype
 
-Select a video, image, audio file, archive, PDF or document in File Explorer or on the desktop and press
-**Ctrl+Alt+K**: a radial menu (dial) with actions for that file type appears at the cursor. Everything works offline.
+Select a video, image, audio file, archive, PDF, document, text file, SVG or icon in File Explorer or on the desktop
+and press **Ctrl+Alt+K** (or right-click → "Open in FileDial…"): a radial menu (dial) with actions for that file type
+appears at the cursor. Everything works offline.
 
 | Type | Extensions | Sectors (inactive ones in italics) |
 |------|------------|------------------------------------|
 | Video | mp4, mov, mkv, webm | Compress to 25 MB, Trim, Make GIF, Extract audio, Frame to image, Subtitles, Remove sound, **Format ›** MP4 · MKV · WebM · MOV |
-| Images | jpg, jpeg, png, webp, bmp, gif, tif, tiff | **Format ›** JPG · PNG · WebP · BMP · TIFF · GIF, Resize to 1920 px, Rotate right, Rotate left, Mirror, Compress to 1 MB, *Remove background*, To PDF |
+| Images | jpg, jpeg, png, webp, bmp, gif, tif, tiff | **Format ›** JPG · PNG · WebP · BMP · TIFF · GIF · ICO, Resize to 1920 px, Rotate right, Rotate left, Mirror, Compress to 1 MB, Remove background, To PDF |
 | Audio | mp3, wav, flac, m4a, aac, ogg, opus, wma | **Format ›** MP3 · M4A · WAV · FLAC · OGG · Opus, Normalize volume, Remove noise, Speed up ×1.5, Slow down ×0.75, To mono, Trim, To text |
+| Archives | zip, 7z, rar, tar, tar.gz/tgz, tar.bz2, tar.xz | Extract here, Extract to folder, Extract to…, Test archive, **Format ›** ZIP · 7z, Password-protect, Split into parts, Contents |
+| PDF | pdf | Split into pages, Extract pages, Rotate right, Rotate left, Pages to images, Recognize text, Password-protect, *Merge* (for several PDFs) |
+| Documents | docx, doc, rtf, odt · xlsx, xls, ods · pptx, ppt, odp | To PDF, **Format ›** (text documents: DOCX · ODT · RTF; spreadsheets: XLSX · ODS · CSV; presentations: PPTX · ODP), To text, Extract images, Compress images, Remove personal data, Password-protect, *Combine into PDF* (for several documents) |
+| Text | txt, text, csv, tsv, json, xml, md, markdown, log, ini, cfg, conf, yaml, yml | To UTF-8, **Line endings ›** CRLF · LF, To XLSX (CSV/TSV), Format JSON, Minify JSON, To HTML (Markdown), To PDF (Markdown) |
+| SVG | svg | To PNG, PNG in all sizes, To ICO |
+| Icons | ico | To PNG, All sizes to PNG |
+| File parts | name.zip.001, .002, … | compact dial: **Enter or click — join parts** |
+| Everything else | psd, exe, folders, files of different types… | compact dial: **Enter or click — compress to ZIP** |
 
-| Archives | zip, 7z, rar, tar, tar.gz/tgz, tar.bz2, tar.xz | Extract here, Extract to folder, Extract to…, Test archive, **Format ›** ZIP · 7z, Contents, Password-protect, Split into parts | |
-| PDF | pdf | Split into pages, Extract pages, Rotate right, Rotate left, Pages to images, Recognize text, Password-protect, *Merge* (for several PDFs) | |
-| Documents | docx, doc, rtf, odt · xlsx, xls, ods · pptx, ppt, odp | To PDF, **Format ›** (text documents: DOCX · ODT · RTF; spreadsheets: XLSX · ODS · CSV; presentations: PPTX · ODP), To text, Extract images, Compress images, Remove personal data, Password-protect, *Combine into PDF* (for several documents) | |
-| File parts | name.zip.001, .002, … | compact dial: **Enter or click — join parts** | |
-| Everything else | txt, psd, folders, files of different types… | compact dial: **Enter or click — compress to ZIP** | |
-
-**Format ›** is a group sector (marked with a triangle at its outer edge): hovering outside the dial opens a
-fan of formats. The file's own format is inactive in the fan ("Already PNG").
-The only sector still inactive is "Remove background" (it needs an image neural network). "Subtitles" and
-"To text" work once a speech recognition model is available — see [Speech recognition](#speech-recognition).
+**Format ›**, **Line endings ›** and **More ›** (see [My actions](#my-actions)) are group sectors (marked with a
+triangle at their outer edge): hovering outside the dial opens a fan. The file's own format is inactive in the fan
+("Already PNG").
+"Merge" and "Combine into PDF" are inactive for a single file ("Select several PDFs"). Other sectors are inactive
+only when the action is pointless or impossible for this particular file, and the hint says why. "Subtitles" and
+"To text" work once a speech recognition model is available (see [Speech recognition](#speech-recognition)),
+"Remove background" once its model is downloaded (see [Remove background](#remove-background)); without a model
+these sectors offer to download it.
 
 ### Multiple files
 
@@ -32,9 +39,13 @@ does not stop the others; "Cancel" stops everything. Each file gets its own hist
 - Files already in the target format are skipped (not copied). A format in the fan is inactive only if **all**
   files are already in it.
 - "Compress to…" is inactive only if **all** files are already under the target; smaller ones are skipped.
-- "Trim" works on one file only.
+- "Trim", "Contents" and "Extract pages" work on one file only.
 - Images: "Combine into PDF" makes one document, one image per page, in selection order.
-- Mixed types, folders or more than 200 files show "Not supported yet" with the reason.
+- Text files (for example, .txt, .csv and .json together count as one type): an action is active if at least one
+  file needs it; files it does not apply to are skipped ("Only for JSON files", "Already UTF-8").
+- Files of different types or a selection with folders show the compact dial with the reason in the center
+  ("Files of different types", "The selection contains folders") and **Enter or click — compress to ZIP**.
+- More than 200 items show "No more than 200 at a time" and "Not supported yet".
 
 ### PDF from images
 
@@ -47,12 +58,18 @@ image, `name.pdf`; for several, named after the folder (`Vacation.pdf`).
 - Windows 10/11 x64.
 - .NET 10 SDK — only for building from source; the `FileDial.exe` built by `publish.ps1` does not need .NET.
 - ffmpeg — the app installs it itself in one click (see [Installing ffmpeg](#installing-ffmpeg)). Not needed for
-  PDFs and documents (except "Compress images" in a document).
+  archives, PDFs, documents (except "Compress images" in a document), text files and icons. Needed for SVG,
+  image → ICO and "Remove background" (ffmpeg reads and writes the pictures).
+- SVG needs an ffmpeg built with the librsvg decoder. The gyan.dev "full" build that FileDial installs does not
+  always include it (the 9.0.1 "full" build checked here does not) — see [Limitations](#limitations).
 - For documents, "To PDF", "Format", "Combine into PDF" and text from DOC/RTF/PPT need **Microsoft Office** or
   **LibreOffice** (either one; if both are present, Office is used). Without them these sectors are inactive
   with a reason; everything else works. "Password-protect" for a document works only through Office.
 - "Recognize text" in PDFs uses the text recognition built into Windows: it needs a language with the optical
   character recognition component (usually installed together with the display language).
+- Markdown → PDF prints through **Microsoft Edge** (part of Windows 10/11); without Edge the sector is inactive.
+- "Remove background" runs a neural network on the CPU; no graphics card is needed. The model (179 MB) is downloaded
+  once from the settings.
 
 ## Building and running
 
@@ -62,12 +79,14 @@ dotnet test
 dotnet run --project src/FileDial.App
 ```
 
-The built app: `src/FileDial.App/bin/Debug/net10.0-windows/FileDial.exe`.
-Administrator rights are neither needed nor requested (`asInvoker`). There are no windows, only a tray icon;
-to quit, right-click the icon → "Exit". A second instance does not start.
+The built app: `src/FileDial.App/bin/Debug/net10.0-windows10.0.19041.0/FileDial.exe`.
+Administrator rights are neither needed nor requested (`asInvoker`). There are no windows, only a tray icon. The
+tray menu has "Settings…", "History…", "Help (README)", "Check for updates" (only in builds with update checks, see
+[Updates](#updates)) and "Exit". A second instance does not start (`--dial` from the context menu only asks the
+running copy to open the dial).
 
-If the hotkey is already taken by another program, FileDial says so and immediately opens the settings so you
-can pick another shortcut (without a hotkey the app stays in the tray and does not quit).
+If the hotkey is already taken by another program, FileDial says so and immediately opens the settings so you can
+pick another shortcut (without a hotkey the app stays in the tray and does not quit).
 
 ## Settings
 
@@ -79,14 +98,19 @@ shortcut is taken), the window stays open and shows the reason.
 | Language | Match Windows | Interface language: "Match Windows", Русский or English (see [Languages](#languages)). The chosen language is shown immediately; without "Save" the previous one comes back |
 | Hotkey | Ctrl+Alt+K | Click the field and press a shortcut. It needs Ctrl, Alt or Win plus a letter, digit or F1–F24. The new shortcut is registered right away; if it is taken, the old one stays |
 | Start with Windows | off | An entry in `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` — no administrator rights, current user only |
+| “Open in FileDial…” in the Explorer context menu | on | The context menu entry for files and folders (see [Explorer context menu](#explorer-context-menu)) |
 | Appearance | Graphite | Theme of the dial and windows: "Graphite" (dark, lime accent), "Brass" (warm dark, brass accent), "Paper" (light, blue accent), "Match Windows" — Graphite or Paper depending on the Windows app theme. The chosen theme is shown immediately; without "Save" the previous one comes back |
 | Animations | on | Turns off all FileDial animations (animations turned off in Windows are respected too) |
 | Keep action history | on | Records every action in the history (see below). Turning it off does not delete existing entries |
+| Check for updates weekly | on | Shown only in builds with update checks (see [Updates](#updates)) |
 | Where to save results | next to the original file | Or in a chosen folder. Temporary files are also created there, so the source folder stays clean |
 | Open the result folder when done | off | Shows the result in File Explorer right away |
 | Video compression target | 25 MB | 8 / 10 / 25 / 50 / 100 MB. Changes the sector label, the "already smaller" check and the name (`name_10mb.mp4`) |
 | Image compression target | 1 MB | 500 KB / 1 / 2 / 5 MB, likewise |
 | ffmpeg | auto | Folder with `ffmpeg.exe` and `ffprobe.exe`; checked first. The field shows which ffmpeg will be used |
+| Speech recognition | — | Model download and choice, recognition language (see [Speech recognition](#speech-recognition)) |
+| My actions | empty | Your own commands in the dial (see [My actions](#my-actions)) |
+| Background removal | — | Model download for "Remove background" (see [Remove background](#remove-background)) |
 
 ## Languages
 
@@ -98,6 +122,23 @@ installer. Output file names follow the interface language too (`name_25mb.mp4` 
 All strings live in `src/FileDial.Core/Localization`: the abstract `Texts` class with one subclass per language
 (`EnTexts`, `RuTexts`). Adding a language means adding one more class derived from `Texts` and registering its code
 in `Lang`; a string missing from a language is a build error, not an empty label in a window.
+
+## Explorer context menu
+
+Right-click a file, several files or a folder in File Explorer or on the desktop → **"Open in FileDial…"**: the dial
+opens at the cursor for the current selection, exactly as with the hotkey. This is for people who do not remember
+the shortcut.
+
+- On **Windows 11** the entry is in the classic menu: "Show more options" (or Shift+F10 / Shift+right-click).
+  The new Windows 11 menu only accepts entries from packaged apps, which FileDial is not.
+- The entry is written to `HKCU\Software\Classes\*\shell\FileDial` and `HKCU\Software\Classes\Directory\shell\FileDial`
+  (current user only, no administrator rights). It runs `"FileDial.exe" --dial` once for the whole selection.
+- If FileDial is already running, `--dial` only asks the running copy to open the dial and exits. If it is not
+  running, this starts FileDial (it stays in the tray) and opens the dial.
+- The entry is on by default. It can be turned off in Settings → "General" or in the installer ("Explorer context
+  menu entry"). On every start FileDial rewrites the entry to the current exe and the interface language, so moving
+  between a portable and an installed copy does not leave a broken entry. Uninstalling removes the entry only if it
+  points to the copy being removed.
 
 ## Speech recognition
 
@@ -120,6 +161,82 @@ accurate (small) model is preferred over the base one. Recognition language: "Au
 "Your ffmpeg is built without whisper" (the gyan.dev "full" builds of ffmpeg 8+ include it).
 If the file contains no speech, no result is created ("No speech found"). SRT numbering starts at 1.
 
+## Remove background
+
+"Remove background" in the image dial makes `name_no_bg.png` next to the original: a PNG with a transparent
+background. The mask is computed by the **IS-Net** neural network (general-use model, Apache-2.0 license) through
+**ONNX Runtime** on the CPU, offline.
+
+- **Model.** Without it the sector is inactive with the hint "Needs the background model (179 MB) — Enter: download";
+  Enter or a click opens Settings → "Background removal", where "Download the model (179 MB)" downloads
+  `isnet-general-use.onnx` from the releases of the rembg project on GitHub (progress and "Cancel" right there). The
+  file is checked by size and SHA-256 and moved to `%LOCALAPPDATA%\FileDial\models` only after the check. For an
+  offline distribution put it into `models\` next to `FileDial.exe`.
+- The picture is read and written by ffmpeg: any supported image format, EXIF rotation is applied, the first frame of
+  animated GIF/WebP is used, and existing transparency is kept.
+- Images over 40 megapixels are downsized first ("The image is very large, so the result was reduced to W×H.").
+- Speed: a typical 3840×2400 photo takes about 4 s. The network stays loaded for a minute after the last use, so a
+  batch of images loads it only once.
+- The original is not changed; a taken name gives `name_no_bg_2.png`. Works on several images at once.
+
+## My actions
+
+Settings → "My actions" → "Add…" puts your own command into the dial: any program with an argument template.
+
+| Field | Meaning |
+|-------|---------|
+| Name | The sector label (up to 60 characters; long labels are shortened in the sector) |
+| Applies to | "Any file", "Video", "Images", "Audio", "PDF", "Documents", "Archives" or "By extension" (`txt, md, log`) |
+| Program | A full path to an `.exe`, a program name from `PATH` or the system folders (`notepad.exe`), or `{ffmpeg}` — the ffmpeg FileDial found |
+| Arguments | The template with variables (see below) |
+| Result file (for `{out}`) | "Name suffix" and "Extension" (empty keeps the original one) |
+| Show the program window | Without `{out}` the program is just opened and FileDial does not wait for it. With `{out}` it waits until it finishes |
+
+Variables: `{file}` — the full path, `{dir}` — the folder, `{name}` — the name without extension, `{ext}` — the
+extension, `{out}` — a new file next to the original (or in the results folder): `name<suffix>.<ext>`, never
+overwriting (`name_2…`), `{ffmpeg}` — the path to ffmpeg. The editor shows the "Command for a sample file" and the
+examples "ffmpeg: 720p" (`{ffmpeg} -i {file} -vf scale=-2:720 {out}`, suffix `_720p`, extension `mp4`), "Notepad"
+(`notepad.exe {file}` with a window) and "ImageMagick" (`magick {file} -resize 50% {out}`; needs ImageMagick installed).
+
+- **No shell.** The program is started directly, and the arguments are passed as a list: the template is split by
+  spaces, quotes group words and are removed, `""` inside quotes is a literal quote, and the backslash is not special.
+  A variable is substituted inside its argument, so paths with spaces, Cyrillic or quotes stay one argument and cannot
+  turn into a command. Only `.exe` and `.com` are started; `.bat` and `.cmd` are rejected (cmd.exe would re-parse the
+  line) — run a script through its interpreter, for example `powershell.exe -File script.ps1 {file}`.
+- The working folder is the file's folder. Success is exit code 0 and, if the template has `{out}`, the result file
+  appearing. Otherwise the action window shows the error with the last lines of the program output; an unfinished
+  result is deleted, also on "Cancel".
+- **Placement.** The dial always has 8 sectors (keys 1–8). Matching actions go into free sectors. If they do not fit,
+  the last plain (non-group) sector becomes a **More ›** group: its fan holds the replaced action first, then yours
+  (at most 9 in the fan, so up to 8 of your actions per file type). The position of "More" is the same for a file
+  type, so the keys you are used to do not change. Files without their own dial (compact dial) with matching
+  actions get a regular dial: "Compress to ZIP" plus your actions (not for folders and file parts).
+- Several selected files show only the actions that match **every** file; the action runs for each file.
+- A program that is missing makes the sector inactive ("Program not found: …"), and the settings list shows the
+  problem too. The command runs with your user rights and can do anything you can — add only commands you trust.
+- Actions are stored in `settings.json` (up to 50); broken entries are dropped on load without affecting other
+  settings.
+
+## Updates
+
+The update check is built in but **turned off in this repository**: it works only if the build has a GitHub
+repository in the `<UpdateRepository>` property of `src\FileDial.App\FileDial.App.csproj` (`owner/repo`). With an
+empty value (the current state) there is no tray item, no setting and no network requests.
+
+With a repository set:
+
+- 30 seconds after startup, at most once a week (the time of the last check is in
+  `%APPDATA%\FileDial\update-check.txt`), FileDial asks GitHub for the latest release (`releases/latest`; drafts and
+  pre-releases are ignored). It can be turned off in Settings → "Check for updates weekly". Tray →
+  "Check for updates" checks right away and always reports the result ("You have the latest version, 0.2.0.").
+- A newer version shows the notification "FileDial X is available". A click downloads the `FileDial-Setup-<version>.exe`
+  asset (only over https from github.com; checked by size and by SHA-256 when GitHub publishes the digest) into
+  `%TEMP%\FileDial-update-…` and runs it with `--install --quiet --start`: the installer closes the running copy,
+  replaces the exe, keeps settings, autostart, shortcuts and the context menu entry, and starts the new version.
+  If something fails, the notification "Couldn't update" opens the release page.
+- Network errors during the background check only go to the error log. Downloaded installers older than a day are
+  removed.
+
 ## History
 
 Tray → "History…". Each action from the dial is an entry: what was done, to which file, when, and how it ended
@@ -139,25 +256,39 @@ defaults or the nearest valid values and does not crash.
 ## Building for distribution
 
 ```powershell
-.\publish.ps1            # tests → publish → zip and installer
-.\publish.ps1 -SkipTests # without tests
+.\publish.ps1                                     # tests → publish → zip and installer
+.\publish.ps1 -SkipTests                          # without tests
+.\publish.ps1 -CertificateThumbprint 0123…4567    # plus code signing
 ```
 
 Output:
 
-- `dist\FileDial-Setup-<version>.exe` (~190 MB) — the installer, see [Installation](#installation);
-- `dist\FileDial-<version>-win-x64.zip` (~73 MB) — the portable version: exe and README, runs from anywhere;
-- `dist\FileDial\FileDial.exe` — the exe itself (.NET included, nothing to install).
+- `dist\FileDial-Setup-<version>.exe` (~86 MB) — the installer, see [Installation](#installation);
+- `dist\FileDial-<version>-win-x64.zip` (~80 MB) — the portable version: exe and both READMEs, runs from anywhere;
+- `dist\FileDial\FileDial.exe` — the exe itself (.NET and ONNX Runtime included, nothing to install).
 
 The script prints the SHA-256 of the archive and the installer.
 The version comes from `<Version>` in `src\FileDial.App\FileDial.App.csproj`; the exe has its own icon and file
 information.
 
-- The exe is deliberately not compressed: a compressed single-file app unpacks its assemblies into memory on every
-  start, so the tray app takes ~240 MB instead of ~110 MB, and compression barely shrinks the zip.
-- ffmpeg and the speech recognition model are not included in the distribution — the app installs them itself in
-  one click. For a fully offline distribution, put `ffmpeg.exe`, `ffprobe.exe` and `models\ggml-base.bin` (or
-  `ggml-small.bin`) into `dist\FileDial` and repackage: `.\publish.ps1 -KeepExtras`.
+- **Compressed self-extracting exe** (publish profile `src\FileDial.App\Properties\PublishProfiles\win-x64.pubxml`):
+  ~86 MB instead of ~190 MB uncompressed (the update download is the same size). On the first start the exe unpacks
+  itself once into `%TEMP%\.net\FileDial\<hash>` (~1.5 s); later starts take ~0.2 s, as without compression. Memory is
+  the same (~105 MB): the assemblies are mapped from disk. At startup FileDial removes extractions of its previous
+  versions and installer extractions older than an hour. Everything "next to FileDial.exe" (ffmpeg, `models`,
+  README) is looked up next to the real exe, not in the extraction folder.
+- **Code signing** (optional): `-CertificateThumbprint <thumbprint>` (certificate in `CurrentUser\My`) or the
+  environment variables `FILEDIAL_SIGN_PFX` (path to a `.pfx`) and `FILEDIAL_SIGN_PASSWORD`. The exe is signed with
+  `signtool` from the Windows SDK (SHA-256, DigiCert timestamp) before packaging, so both the zip and the installer
+  are signed. Without these, signing is skipped.
+- ffmpeg and the models are not included in the distribution — the app installs them itself in one click. For a fully
+  offline distribution, put `ffmpeg.exe`, `ffprobe.exe`, `models\ggml-base.bin` (or `ggml-small.bin`) and
+  `models\isnet-general-use.onnx` into `dist\FileDial` and repackage: `.\publish.ps1 -KeepExtras`.
+
+**GitHub Actions** (`.github/workflows/build.yml`): every push and pull request runs the tests on `windows-latest`
+(tests that need ffmpeg are skipped there). A tag `v*` (for example `v0.3.0`, it must match `<Version>`) also runs
+`publish.ps1` and creates a GitHub release with `FileDial-Setup-<version>.exe` and the zip. Signing in CI is enabled
+by the repository secrets `FILEDIAL_SIGN_PFX_BASE64` (the `.pfx` in base64) and `FILEDIAL_SIGN_PASSWORD`.
 
 ## Installation
 
@@ -169,30 +300,33 @@ Run `FileDial-Setup-<version>.exe`. No administrator rights are needed: everythi
   space right away: Program Files requires an administrator, and you are told so before installation.
 - **Appearance** — Graphite, Brass, Paper or "Match Windows"; the installer recolors itself immediately. The
   interface language can be chosen here as well.
-- **Options** — start with Windows, Start menu shortcut, desktop shortcut.
+- **Options** — start with Windows, Start menu shortcut, desktop shortcut, Explorer context menu entry.
 - At the end — how to use it (3 steps) and a "Start FileDial" checkbox.
 - **Update** — the installer of the new version: it recognizes the installed copy, offers "Update", keeps the same
   folder and does not touch settings or history. A running FileDial is closed cleanly (running jobs are cancelled,
   temporary files are removed) and, if the checkbox is set, started again after the update.
-- **Uninstall** — "Settings → Apps → FileDial → Uninstall". This removes the app, shortcuts, autostart and the
-  entry in Installed apps; from the folder only FileDial's own files (FileDial.exe, README.md), and the folder
-  itself if it is left empty. With the checkbox, settings, history, downloaded ffmpeg and models are removed too
-  (their size is shown). Without it everything is kept for a future install.
+- **Uninstall** — "Settings → Apps → FileDial → Uninstall". This removes the app, shortcuts, autostart, the context
+  menu entry and the entry in Installed apps; from the folder only FileDial's own files (FileDial.exe, README.md,
+  README.ru.md), and the folder itself if it is left empty. With the checkbox, settings, history, downloaded ffmpeg
+  and models are removed too (their size is shown). Without it everything is kept for a future install.
 
 How it works: the installer is the same `FileDial.exe`. The word "Setup" in the file name (or the `--install` switch)
-opens the setup wizard, `--uninstall` opens removal. This way the distribution does not carry a second copy of .NET.
+opens the setup wizard, `--uninstall` opens removal (`--dial` always means the app itself). This way the distribution
+does not carry a second copy of .NET.
 
 For administrators — without windows:
 
 ```powershell
-.\FileDial-Setup-0.2.0.exe --install --quiet [--dir "D:\Apps"] [--no-autostart]
+.\FileDial-Setup-0.2.0.exe --install --quiet [--dir "D:\Apps"] [--no-autostart] [--start]
 "%LOCALAPPDATA%\Programs\FileDial\FileDial.exe" --uninstall --quiet [--remove-data]
 ```
 
+A new quiet installation turns on autostart, the Start menu shortcut and the context menu entry; a quiet update keeps
+the existing choices. `--start` starts the installed app afterwards (this is how the update from the tray works).
 Exit code: 0 — done, 1 — error (details in `%LOCALAPPDATA%\FileDial\errors.log`), 2 — the folder is not suitable.
 
-The installer is not digitally signed, so Windows SmartScreen may show "Unknown publisher" on first run:
-"More info → Run anyway".
+An unsigned installer (built without a certificate) may make Windows SmartScreen show "Unknown publisher" on first
+run: "More info → Run anyway".
 
 ## Installing ffmpeg
 
@@ -217,20 +351,22 @@ For an offline distribution, put `ffmpeg.exe` and `ffprobe.exe` next to `FileDia
 
 ## How to use
 
-1. Select one file of a supported type (see the table above) in File Explorer or on the desktop.
-2. Press **Ctrl+Alt+K** — the dial opens at the cursor.
+1. Select a file of a supported type (see the table above) in File Explorer or on the desktop.
+2. Press **Ctrl+Alt+K** (or right-click → "Open in FileDial…") — the dial opens at the cursor.
 3. Pick a sector with the mouse or the **1–8** keys (1 is the top sector, then clockwise); the arrow keys move
    around the dial. A click or **Enter** runs the action.
-   On the "Format" sector a fan of formats opens outside the dial: hover over a format and click it.
-   With the keyboard: select "Format" by its digit and press **Enter** to open the fan; then **1–N** or the arrows,
+   On a group sector ("Format", "Line endings", "More") a fan opens outside the dial: hover over an item and click it.
+   With the keyboard: select the group by its digit and press **Enter** to open the fan; then **1–N** or the arrows,
    **Enter** to run, **Esc** or **Backspace** to go back to the main dial.
 4. **Esc**, a click in the center or outside the dial, a right-click, or switching to another window closes the dial
    without changing anything.
 
-For other file types, folders and multiple selected files, a small dial without sectors is shown with
-"Not supported yet". Long names are shortened in the middle, keeping the extension visible.
+Other file types (psd, exe…), folders and selections of different types show a compact dial without sectors with
+the hint "Enter or click — compress to ZIP". Long names are shortened in the middle, keeping the extension visible.
 The center of the dial shows the name and size, plus the duration (video, audio) or resolution (images) if ffmpeg
-is found. Hovering over an inactive sector explains why it is unavailable.
+is found; for text files the number of lines and the encoding ("12 KB · 340 lines · UTF-8"), for SVG the size of the
+drawing ("4 KB · 512×512"), for icons the sizes inside ("15 KB · 7 sizes, up to 256×256").
+Hovering over an inactive sector explains why it is unavailable.
 If the active window is not File Explorer, nothing is selected or the file is unavailable, a short notification
 appears at the cursor.
 
@@ -240,7 +376,7 @@ The dial is designed like a rotary knob: a scale of ticks runs around the rim (l
 each sector has an icon, a label and its key number in the corner. On opening, the knob turns another 18° and the
 sectors light up clockwise (about 300 ms). The pointer notch on the rim moves to the selected sector by the
 shortest path and settles with a slight bounce, like a detent. The selected sector smoothly changes color and moves
-outward a little. Formats in the fan unfold from under the "Format" sector one after another. After a choice, the
+outward a little. Items in the fan unfold from under the group sector one after another. After a choice, the
 sector moves further out, the dial turns another 8° and fades out; Esc closes it the same way, only faster.
 Notifications fade in and out, the progress bar moves smoothly, and for short operations without percentages a
 segment runs along it.
@@ -258,8 +394,9 @@ instantly.
   Name: `name_frame.png`.
 - "Remove sound" — the video is copied without re-encoding into the same container. Name: `name_muted.ext`.
   Inactive if there is no sound.
-- "Format" — to MP4. If the video is already H.264 and AAC, it is only remuxed (seconds, lossless);
-  otherwise H.264 CRF 20 + AAC 192 kbit/s. Inactive for `.mp4`.
+- "Format ›" — a fan MP4 · MKV · WebM · MOV; the file's own format is inactive ("Already MP4"). Compatible streams are
+  only remuxed (seconds, lossless), otherwise re-encoded — see [Video formats](#video-formats). Name: `name.mp4` and
+  so on.
 
 ### PDF
 
@@ -304,6 +441,50 @@ FileDial reads and writes text, images and author information itself. Everything
   5 minutes; cancelling also terminates only the Office process that FileDial started. A Word or PowerPoint you have
   open is not touched.
 
+### Text files
+
+The original is not changed; results are new files next to it. Nothing here needs ffmpeg, Office or Excel.
+Actions that do not apply to the file are inactive with a reason ("Only for JSON files", "Only for CSV and TSV
+tables", "Only for Markdown (.md) files"); a binary file with a text extension gets "This looks like a binary file,
+not text" on every sector.
+
+- **Encoding detection**: BOM (UTF-8, UTF-16, UTF-32), UTF-16 without BOM, a strict UTF-8 check, and for single-byte
+  text a heuristic that chooses between Windows-1251, CP866 and Windows-1252. For the dial only the first 4 MB are
+  read; actions read the whole file (up to 256 MB).
+- **To UTF-8** — `name_utf8.txt`, the text converted as is (line endings unchanged). A BOM is written only for CSV/TSV,
+  so Excel recognizes the encoding; text, JSON, XML and scripts get UTF-8 without BOM. Inactive if the file is already
+  UTF-8 ("Already UTF-8") or plain ASCII ("Plain ASCII is already valid UTF-8").
+- **Line endings › CRLF · LF** — `name_crlf.txt` / `name_lf.txt`. All line breaks (CRLF, LF, a lone CR) are converted;
+  the encoding and BOM stay the same (UTF-16 too). The file's own style is inactive ("Line endings are already LF"),
+  and both are inactive for a single-line file.
+- **To XLSX** (CSV, TSV) — `name.xlsx`, written by FileDial itself. The delimiter (comma, semicolon, tab) is detected
+  from the first lines (`.tsv` defaults to tab); quotes follow RFC 4180, including line breaks inside quotes. Numbers
+  become numbers (except values with leading zeros, which stay text), everything else is text. The summary reads
+  "N rows, M columns, delimiter: semicolon." Excel limits are checked: 1,048,576 rows, 16,384 columns; longer cells are
+  cut to 32,767 characters with a note.
+- **Format JSON** — `name_formatted.json` with indentation; **Minify JSON** — `name.min.json`. Both write UTF-8 without
+  BOM. A broken JSON (up to 5 MB is checked when the dial opens) makes both inactive with the place of the error:
+  "JSON error: line 3, character 14"; an already indented or minified file makes the matching sector inactive.
+- **To HTML** (Markdown) — `name.html`, a self-contained page with built-in styles: headings, paragraphs, nested
+  lists, quotes, code blocks, GFM tables, links, images, emphasis, strikethrough. Embedded HTML is escaped, so the page
+  is safe to open. If the result is saved into another folder, relative paths to images become absolute.
+- **To PDF** (Markdown) — the same page printed to `name.pdf` by Microsoft Edge in headless mode with a separate
+  temporary profile (your open Edge is not affected); 90 s timeout. Without Edge: "Needs Microsoft Edge".
+
+### SVG and icons
+
+- **SVG → To PNG** — `name.png`, long side 1024 px; the vector is rendered at that size, not scaled up from a small
+  picture. **PNG in all sizes** — a `name (PNG)` folder with `name_16px.png` … `name_1024px.png` (16, 32, 48, 64, 128,
+  256, 512, 1024). **To ICO** — `name.ico` with 16, 24, 32, 48, 64, 128 and 256 px frames (PNG inside, transparent
+  padding to a square).
+- SVG is rendered by ffmpeg's librsvg decoder. If the ffmpeg in use lacks it, all three sectors are inactive with
+  "Your ffmpeg has no SVG decoder (librsvg)". Note that not every "full" build has it — see [Limitations](#limitations).
+- **ICO → To PNG** — `name.png` of the largest size; **All sizes to PNG** — a `name (PNG)` folder with one file per size
+  (`name_32x32.png`, …). Both work without ffmpeg (PNG and BMP frames, 32-bit with alpha and paletted with a mask).
+  "All sizes to PNG" is inactive for a single-size icon ("The icon has only one size").
+- **Image → Format › ICO** — `name.ico` with the standard sizes up to the image's own size (small images are not
+  scaled up beyond 48 px).
+
 ### Archives
 
 No third-party programs are needed: zip is read and written by .NET, other formats by the `tar.exe` built into
@@ -320,9 +501,9 @@ Windows (libarchive; available since Windows 10 1803). The original archive is n
 - **Test archive** reads the whole content and verifies checksums without writing anything to disk.
 - **Format › ZIP / 7z** — repacking (for example, rar → zip for people without an archiver). 7z compresses better
   than zip.
-- **Compress to ZIP** — for documents, folders and selections of files of different types: Enter or a click in the
-  compact dial. One folder or file → `name.zip`, several → named after their folder. Names are stored in UTF-8,
-  empty folders are kept.
+- **Compress to ZIP** — for files without their own dial, folders and selections of files of different types: Enter or
+  a click in the compact dial. One folder or file → `name.zip`, several → named after their folder. Names are stored
+  in UTF-8, empty folders are kept.
 - **Contents** — a window with the file list, without extracting: a folder tree (as in File Explorer: folders, then
   files), sizes, a total like "N files · X MB unpacked" and an "Extract here" button. The list is virtualized, so
   an archive with tens of thousands of files opens without delay.
@@ -372,8 +553,8 @@ Name: `name_trimmed.ext`.
 
 - The result is a new file next to the original; the original is not changed, and metadata (EXIF) is not carried
   over to the result.
-- Formats: JPG, PNG, WebP, BMP, TIFF (LZW), GIF (own palette). "Rotate left" gives `name_rotated_left`,
-  "Mirror" flips horizontally, `name_mirrored`.
+- Formats: JPG, PNG, WebP, BMP, TIFF (LZW), GIF (own palette), ICO (see [SVG and icons](#svg-and-icons)).
+  "Rotate left" gives `name_rotated_left`, "Mirror" flips horizontally, `name_mirrored`.
 - "To JPG" and "To BMP": transparent areas are filled with white (JPG has no transparency), quality `-q:v 2`, 4:4:4.
 - "To WebP": quality 90, transparency is kept. "To PNG" is lossless.
 - "Resize to 1920 px": long side 1920, aspect ratio kept (lanczos). Inactive if the image is already 1920 px or
@@ -384,6 +565,7 @@ Name: `name_trimmed.ext`.
 - "Compress to 1 MB" — a JPG with the best quality that fits into 1,000,000 bytes (binary search over the quality
   scale). If even the lowest quality does not fit, the image is downsized in 25% steps.
   Inactive for files under 1 MB. Name: `name_1mb.jpg`.
+- "Remove background" — see [Remove background](#remove-background).
 - Changing the format keeps the name (`photo.png` → `photo.jpg`); if the name is taken, `photo_2.jpg`.
   Converting to the file's own format is inactive ("Already PNG").
 
@@ -441,29 +623,51 @@ Name: `name_trimmed.ext`.
 - The selection is read only from regular File Explorer windows (`CabinetWClass`) and the desktop.
   Open/Save dialogs of other programs are not supported.
 - Virtual items (for example, inside a zip archive, "This PC", the Recycle Bin) are treated as unavailable.
+- **Windows 11 context menu.** "Open in FileDial…" is only in the classic menu ("Show more options"), not in the
+  new compact one.
 - FileDial does not open password-protected documents (DOCX and so on): Office is given a deliberately wrong
   password so it does not hang on a hidden prompt, and FileDial reports that the document is password-protected.
 - "Remove personal data" and "Extract images" work only for the newer formats (DOCX, XLSX, PPTX, OpenDocument).
+- **SVG needs ffmpeg with librsvg.** Not every build has it: the gyan.dev "full" build 9.0.1 checked on the
+  development machine has no SVG decoder, so the SVG sectors are inactive there. Use an ffmpeg that lists `librsvg` in `ffmpeg -decoders` and point Settings →
+  ffmpeg to it.
+- **Encoding detection is a heuristic.** Files with a BOM, UTF-16 and UTF-8 are detected reliably; for single-byte
+  text FileDial only distinguishes Windows-1251, CP866 and Windows-1252, and a short or unusual text can be guessed
+  wrong. Other code pages (KOI8-R, Windows-1250…) are not recognized.
+- **Remove background** is a general-purpose network: on unusual images (several subjects, low contrast with the
+  background, glass, hair, drawings) the mask can be rough or remove too much. The source is never changed.
+- Markdown → HTML supports a common subset of Markdown (no footnotes, no math); embedded HTML is shown as text.
 - Unexpected errors are written to `%LOCALAPPDATA%\FileDial\errors.log` and do not crash the app.
 
 ## How it works
 
 ```
-src/FileDial.Core         logic without UI or WinAPI (tested)
-  Menu/                   actions by file type, selection parsing → dial or notification
+src/FileDial.Core         logic without UI (tested); registry access only in Setup/
+  Menu/                   actions by file type, text/SVG/icon dials, selection parsing → dial or notification
   Geometry/               sector geometry, window placement within the monitor
-  Compression/            bitrate calculation, output name, ffmpeg/ffprobe arguments and launch, progress
-  Jobs/                   common action interface, image and audio conversions (ffmpeg arguments)
+  Compression/            bitrate calculation, output name, ffmpeg/ffprobe arguments and launch, ffmpeg installer
+  Jobs/                   common action interface, image and audio conversions, speech, background removal (ONNX)
+  Archives/               zip/7z/tar, AES ZIP, split and join
+  Documents/              PDF (PDFsharp), Office/LibreOffice conversion, DOCX/ODT processing
+  TextFiles/              encodings, line endings, CSV → XLSX, JSON, Markdown, ICO, SVG rendering
+  Custom/                 user actions: template parsing, launch, placement in the dial
+  Updates/                GitHub release check, verified download, weekly schedule
+  Setup/                  installer, shortcuts, Explorer context menu entry
   Selection/              selection read result, file check
   Settings/               settings, their storage and normalization, key combination
   History/                action history: recording, storage, grouping by day
   Localization/           interface strings: Texts and one subclass per language
+  Text/                   size formatting, plurals, name shortening
+  AppPaths.cs             exe folder vs. extraction folder, cleanup of old extractions
 src/FileDial.App          WPF application
   Hotkey/                 RegisterHotKey in a message window (no global hooks)
   Selection/              reading the selection through shell COM on a separate STA thread
-  UI/                     dial, notification, action window, animations, DPI-aware placement
+  UI/                     dial, notification, action windows, settings, "My action" editor, animations
   Tray/                   tray icon
-  Settings/               autostart through the registry
+  Settings/               autostart and context menu entry through the registry
+  Setup/                  setup wizard window, quiet install, closing running copies
+  Updates/                update notification, download and quiet install
+  Documents/              PDF rendering and OCR through Windows
 tests/FileDial.Core.Tests xUnit tests
 ```
 
@@ -480,8 +684,24 @@ Getting the selection (without emulating Ctrl+C and without the clipboard):
   `IShellBrowser::QueryActiveShellView` → `IShellView::GetItemObject(SVGIO_BACKGROUND)` → `SelectedItems()`.
 - All COM calls run on a separate STA thread with a 5 s timeout; COM objects are released and exceptions are
   caught.
-- ffmpeg/ffprobe are started through `ProcessStartInfo.ArgumentList` — each argument separately, so paths with
-  spaces and non-ASCII characters (such as Cyrillic) are passed without manual escaping.
+- The context menu entry takes the same path: `FileDial.exe --dial` signals the running copy (a named event), which
+  reads the selection of the foreground Explorer window like after the hotkey.
+- ffmpeg/ffprobe and user actions are started through `ProcessStartInfo.ArgumentList` — each argument separately, so
+  paths with spaces and non-ASCII characters (such as Cyrillic) are passed without manual escaping and without a shell.
+
+## Third-party components
+
+| Component | License | How it is used |
+|-----------|---------|----------------|
+| PDFsharp 6.2.4 | MIT | PDF parsing and assembly (pinned: 6.5 and later are AGPL) |
+| System.Security.Cryptography.Pkcs | MIT | A dependency of PDFsharp, pinned to a current version |
+| ONNX Runtime (Microsoft.ML.OnnxRuntime) | MIT | Runs the background removal network on the CPU; included in the exe |
+| IS-Net general-use model (`isnet-general-use.onnx`, rembg releases) | Apache-2.0 | Downloaded separately from the settings, not included |
+| whisper.cpp models (`ggml-*.bin`) | MIT | Downloaded separately from the settings, not included |
+| ffmpeg (gyan.dev "full" or BtbN build) | GPL | A separate program, downloaded separately on request, not included |
+
+Everything else (WPF, WinForms for the tray icon, ZIP, JSON) is part of .NET; Windows provides `tar.exe`, the PDF
+engine and OCR.
 
 ## Tests
 
@@ -501,10 +721,30 @@ Getting the selection (without emulating Ctrl+C and without the clipboard):
   passwords (no password — prompt, wrong one — retry), text and images from DOCX and ODT, "Remove personal data"
   (properties, comments, tracked changes, template path; mimetype first in ODT), inactive sectors with reasons.
   Conversion through Office and LibreOffice was checked manually (scenarios 69–73);
+- text files: encoding detection (BOMs, UTF-16 without BOM, Windows-1251/CP866/Windows-1252, a truncated sample),
+  conversion to UTF-8 (BOM only for CSV), line endings (mixed and lone CR, UTF-16 keeps its BOM), CSV parsing by
+  RFC 4180 and a valid XLSX package, JSON formatting and error position, Markdown blocks and inline markup, escaping of
+  embedded HTML, relative image paths, Markdown → PDF through Edge (if installed); ICO reading and writing (PNG and BMP
+  frames), image → ICO, SVG decoder detection, sizes and rendering (skipped without librsvg); dial sectors and their
+  reasons, batches;
+- user actions: argument tokenizing and quotes, substitution with spaces, Cyrillic and quotes in file names, unknown
+  variables, output names without overwriting, the placement rule ("More ›" on a full dial, free sectors, the fan
+  capped at 9, the compact dial, batches), running a program with and without `{out}`, errors with the output tail,
+  settings round-trip and dropping broken entries;
+- background removal: the sector without and with a model, tensor preparation and mask application, model download
+  verification (a wrong file leaves nothing), PAM reading, and a real-model check on a test picture (skipped if the
+  model is not present);
+- updates: version and tag parsing, the GitHub release response (pre-releases, missing asset, https and github.com
+  only, SHA-256 digest), verified download into its own folder, cleanup of old downloads, the weekly schedule and clock
+  changes; cleanup of old self-extraction folders;
 - the installer (on temporary folders and a separate registry key): the "…\FileDial" folder, permissions and space,
-  copying with progress, the Installed apps entry, autostart, shortcuts, theme; an update does not reset settings;
-  cancelling does not leave half an exe; uninstall removes only its own files, data only with the checkbox, and does
-  not touch other programs' autostart entries.
+  copying with progress, the Installed apps entry, autostart, shortcuts, theme, the context menu entry (follows the
+  exe, removed on uninstall only if it is ours); an update does not reset settings; cancelling does not leave half an
+  exe; uninstall removes only its own files, data only with the checkbox, and does not touch other programs'
+  autostart entries;
+- localization: no Cyrillic and no empty strings in English, plurals, XAML keys exist.
+
+GitHub Actions runs the same tests without ffmpeg, so the ffmpeg integration tests are skipped there.
 
 ## Manual test scenario
 
@@ -515,17 +755,17 @@ The scenarios assume the English interface; with the Russian interface, labels a
 
 | # | Scenario | Steps | Expected result |
 |---|----------|-------|-----------------|
-| 1 | File on the desktop | Put a video on the desktop, select it, Ctrl+Alt+K | The dial at the cursor, name and size in the center; 8 sectors, only "Compress to 25 MB" is active |
+| 1 | File on the desktop | Put a video larger than 25 MB on the desktop, select it, Ctrl+Alt+K | The dial at the cursor, name, size and duration in the center; 8 sectors from "Compress to 25 MB" to "Format ›"; a sector is inactive only with a reason in its hint (for example, "Subtitles" without a speech model) |
 | 2 | Compression | In the dial, click "Compress to 25 MB" (or 1, Enter) | Progress window, the percentage grows, the UI stays responsive; at the end the size is ≤ 25 MB and "Show in folder" opens the folder with `name_25mb.mp4` selected |
 | 3 | Two File Explorer tabs | A window with two tabs in different folders, a different video selected in each; switch between the tabs and press Ctrl+Alt+K | Every time the dial shows the file from the **active** tab, never from the other one |
 | 4 | Non-ASCII names and spaces | A video at `D:\Мои видео\Отпуск в горах\клип 1.mp4` (a Cyrillic path), compress it | Compression succeeds, `клип 1_25mb.mp4` appears next to it |
 | 5 | Repeated compression | Compress the same file again | `…_25mb_2.mp4` appears, the first result is untouched |
-| 6 | Multiple files | Select 3 images, Ctrl+Alt+K; then an image and an mp3 | A "3 images" dial with actions; for different types, "Files of different types · Not supported yet" |
-| 7 | Another type | Select a `.jpg` or `.pdf` | A small dial without sectors with the name, size and "Not supported yet" |
+| 6 | Multiple files | Select 3 images, Ctrl+Alt+K; then an image and an mp3 | A "3 images" dial with actions; for different types, a compact dial "2 items selected · Files of different types" with "Enter or click — compress to ZIP" |
+| 7 | Another type | Select a `.psd` (or any file without its own dial), Ctrl+Alt+K, Enter | A small dial without sectors with the name, size and "Enter or click — compress to ZIP"; Enter creates `name.zip` next to it |
 | 8 | Nothing selected | Clear the selection in File Explorer, Ctrl+Alt+K | The notification "Nothing is selected" at the cursor |
 | 9 | Not File Explorer | Notepad or a browser is active, Ctrl+Alt+K | The notification "The active window is not File Explorer" |
 | 10 | Esc and clicks | Open the dial: Esc; again — click in the center; again — click outside the dial; again — Alt+Tab | The dial closes, files do not change |
-| 11 | Inactive sector | Hover over "Trim" or press 2, then Enter or click | The hint "Not available in the prototype", nothing runs |
+| 11 | Inactive sector | Open the dial on a single-page PDF, hover over "Split into pages" or press 1, then Enter or click | The hint "The document has one page", nothing runs |
 | 12 | Cancelling compression | Start compression, click "Cancel" (or close the window) | "Cancelled"; next to the original there is no `.filedial-*.tmp` or `_25mb.mp4`, `%TEMP%\FileDial` is empty |
 | 13 | File under 25 MB | Select a video < 25 MB, Ctrl+Alt+K | The "Compress to 25 MB" sector is inactive, the center reads "The file is already under 25 MB"; click/Enter do nothing |
 | 13a | Long video | Select a video longer than 18 minutes (larger than 25 MB), Ctrl+Alt+K | Size and duration in the center; "Compress to 25 MB" is inactive with the reason "Videos over 18 min do not fit in 25 MB" |
@@ -535,7 +775,7 @@ The scenarios assume the English interface; with the Russian interface, labels a
 | 14 | No ffmpeg | Temporarily remove ffmpeg from PATH and from the app folder, restart FileDial | A tray notification; in the action window, "Install ffmpeg with one click" → settings → installation with progress; after it, actions work |
 | 15 | Second monitor | Move File Explorer to a second monitor (preferably with a different scale, for example 100% and 150%), open the dial at the very edge | The dial is on the same monitor as the cursor, does not go past the edge, has the right size and is sharp |
 | 16 | Screen edge | Open the dial near a screen corner and near the taskbar | The dial is entirely within the work area |
-| 17 | Hotkey taken | Close FileDial, take Ctrl+Alt+K with the script below, start FileDial | The message "Ctrl+Alt+K is already used by another program."; FileDial does not stay in the tray without a hotkey. Starting it again while FileDial is running reports "FileDial is already running" |
+| 17 | Hotkey taken | Close FileDial, take Ctrl+Alt+K with the script below, start FileDial | The message "Ctrl+Alt+K is already used by another program."; the settings open to pick another shortcut, FileDial stays in the tray. Starting it again while FileDial is running reports "FileDial is already running" |
 | 18 | Administrator window | Start File Explorer as administrator (for example, from Task Manager with the "Create this task with administrative privileges" checkbox: `explorer.exe /separate`), select a file, Ctrl+Alt+K | A notification about administrator rights, no crash |
 | 19 | Exit | Tray → "Exit" during compression | ffmpeg terminates, temporary files are deleted, the FileDial process exits |
 | 20 | Image | Select a PNG with transparency larger than 1920 px, open the dial | Size and resolution in the center; "To PNG" is inactive ("Already PNG"). "To JPG" → `name.jpg` next to it with a white background; "Resize to 1920 px" → `name_1920px.png` |
@@ -545,7 +785,7 @@ The scenarios assume the English interface; with the Russian interface, labels a
 | 24 | Animations off | Turn off "Animation effects" in Windows settings, repeat 23 | Everything appears and changes instantly |
 | 26 | Video: GIF and frame | A short clip (< 30 s): "Make GIF", "Frame to image" | `name.gif` (480 px) and `name_frame.png` next to it; for a clip longer than 30 s, GIF is inactive |
 | 27 | Video: sound | A clip with sound: "Extract audio", "Remove sound"; then a clip without sound | `name.m4a` and `name_muted.mp4`; for the silent clip both sectors are inactive |
-| 28 | Video: format | A `.mkv` or an iPhone `.mov`: "Format" | `name.mp4` next to it, opens in the default player; for `.mp4` the sector is inactive |
+| 28 | Video: format | A `.mkv` or an iPhone `.mov`: "Format ›" → MP4 | `name.mp4` next to it, opens in the default player; in the fan the file's own format is inactive ("Already MKV") |
 | 29 | Image: 1 MB | A photo larger than 1 MB: "Compress to 1 MB" | `name_1mb.jpg` no larger than 1,000,000 bytes, quality looks decent |
 | 30 | Audio: noise and speed | A voice recording: "Remove noise", "Speed up ×1.5" | Two files next to it; the sped-up one is 1.5 times shorter, the voice does not sound like a cartoon |
 | 31 | Format fan | Image → hover over "Format", move the mouse outward to "WebP", click | The fan opens smoothly and does not close when crossing the gap; `name.webp` appears next to it |
@@ -594,9 +834,33 @@ The scenarios assume the English interface; with the Russian interface, labels a
 | 74 | Installation | Run `FileDial-Setup-0.2.0.exe`, keep all defaults → "Install" | The dial fills, "Done" with three steps; FileDial is in Start and in Installed apps, the tray icon is there, Ctrl+Alt+K works |
 | 75 | Custom folder | "Change…" → `C:\Program Files` | "No permission to write to this folder…", the button is disabled; on another drive — `D:\…\FileDial`, installation succeeds |
 | 76 | Update | With FileDial running, run the installer again → "Reinstall" | The running copy closes itself and starts again after "Done"; hotkey and history are unchanged |
-| 77 | Uninstall | Installed apps → FileDial → "Uninstall", leave the data checkbox unchecked | The uninstall window, the dial fades out; after a couple of seconds the app folder is gone, no shortcut or autostart; settings are kept |
+| 77 | Uninstall | Installed apps → FileDial → "Uninstall", leave the data checkbox unchecked | The uninstall window, the dial fades out; after a couple of seconds the app folder is gone, no shortcut, autostart or context menu entry; settings are kept |
 | 78 | Theme in the installer | Choose "Paper" | The installer turns light at once; after installation FileDial also uses the "Paper" theme |
 | 25 | File disappeared | Open the dial on an image, delete the file in another window, choose "To JPG" | The message "Original file not found…" without technical details |
+| 79 | Context menu | Right-click a video in File Explorer (Windows 11: "Show more options") → "Open in FileDial…" | The video dial opens at the cursor, the same as with Ctrl+Alt+K; with several selected files, one dial for the whole selection |
+| 80 | Context menu: FileDial not running | Exit FileDial from the tray, then use "Open in FileDial…" on an image | FileDial starts, the dial opens, the tray icon stays after the dial closes |
+| 81 | Context menu: setting | Settings → turn off "“Open in FileDial…” in the Explorer context menu", "Save"; then turn it on again | The entry disappears from the menu and comes back; with the interface language switched to Russian the entry reads "Открыть в FileDial…" |
+| 82 | Context menu: installer | Install with "Explorer context menu entry" unchecked; then uninstall a copy that has the entry | No entry after installation; after uninstall the entry is gone |
+| 83 | Text: encoding | A `.txt` in Windows-1251 with Cyrillic text → dial | The center shows "… · N lines · Windows-1251"; "To UTF-8" → `name_utf8.txt` that opens correctly in Notepad; on the result "To UTF-8" is inactive ("Already UTF-8") |
+| 84 | Text: line endings | A file with LF line endings → "Line endings ›" → CRLF | `name_crlf.txt`; in the fan "LF" is inactive ("Line endings are already LF") |
+| 85 | CSV → XLSX | A CSV with semicolons, Cyrillic text and numbers → "To XLSX" | `name.xlsx` opens in Excel/LibreOffice, numbers are numbers; the summary "N rows, M columns, delimiter: semicolon." |
+| 86 | JSON | A JSON with an error; then a valid minified JSON → "Format JSON" | For the broken file both JSON sectors are inactive with "JSON error: line …, character …"; `name_formatted.json` with indentation, "Minify JSON" is inactive ("The JSON is already minified") |
+| 87 | Markdown | A `.md` with headings, a table and an image → "To HTML", then "To PDF" | `name.html` opens in a browser with styles and the image; `name.pdf` appears, no Edge window is shown |
+| 88 | SVG | An `.svg` → dial with the default ffmpeg; then with an ffmpeg that has librsvg (Settings → ffmpeg) | Without librsvg all three sectors are inactive with the reason about SVG support; with it "To PNG" gives `name.png` 1024 px, "PNG in all sizes" a `name (PNG)` folder with 8 files, "To ICO" `name.ico` |
+| 89 | Icons | A multi-size `.ico` → dial → "To PNG", "All sizes to PNG"; then a single-size icon | The center shows "… · N sizes, up to 256×256"; `name.png` 256×256 and a `name (PNG)` folder; for the single-size icon "All sizes to PNG" is inactive ("The icon has only one size") |
+| 90 | Image → ICO | A 512×512 PNG → "Format ›" → ICO; then a 32×32 PNG | `name.ico` with sizes 16–256; for the small picture only sizes up to 48 |
+| 91 | My action: video | Settings → "My actions" → "Add…" → "ffmpeg: 720p" → Save → "Save"; open the dial on a 1080p video | Sector 7 is "More ›", its fan holds "Remove sound" and "To 720p"; "To 720p" makes `name_720p.mp4` 720 px high |
+| 92 | My action: compact dial | Add the "Notepad" example (Any file); open the dial on a `.psd` | A regular dial with "Compress to ZIP" and "Open in Notepad"; the latter opens Notepad and FileDial does not wait for it |
+| 93 | My action: checks | In the editor enter a `.bat` program, then a path to a program that does not exist; then save an action for a copied `.exe`, delete that exe and open the dial | "Only .exe programs can be run…" and "Program not found: …", "Save" does not close the editor; for the deleted program the sector is inactive ("Program not found: …") and the settings list shows the problem |
+| 94 | My action: batch | Select 3 videos → "More ›" → "To 720p"; then select a video and an image | Three results, progress "1 of 3 · …"; for the video and the image only actions matching both are shown ("Open in Notepad", "Compress to ZIP") |
+| 95 | Remove background: model | Without the model open the dial on a photo, choose "Remove background" | The hint "Needs the background model (179 MB) — Enter: download"; Enter opens Settings → "Background removal"; the download shows progress, then "Model downloaded", the sector is active |
+| 96 | Remove background | A 3840×2400 photo of a person or an object → "Remove background" | `name_no_bg.png` in about 4 s with a transparent background; the original is unchanged |
+| 97 | Remove background: large image | An image over 40 megapixels | The result is smaller, the summary says "The image is very large, so the result was reduced to W×H." |
+| 98 | Updates: off | A build with an empty `<UpdateRepository>` (the current state) | The tray has no "Check for updates", the settings have no "Check for updates weekly", no requests to GitHub |
+| 99 | Updates: on | A build with `<UpdateRepository>` set and a newer release with the setup asset; tray → "Check for updates" | The notification "FileDial X is available"; a click downloads and installs it, FileDial restarts with the new version, settings kept. Without a newer release: "You have the latest version, …" |
+| 100 | Compressed exe | Delete `%TEMP%\.net\FileDial`, start `FileDial.exe` twice (exit in between) | The first start takes ~1.5 s and creates `%TEMP%\.net\FileDial\<hash>`, the second ~0.2 s; Task Manager shows ~105 MB; after updating to another version the old hash folder is removed at startup |
+| 101 | Signing | `.\publish.ps1 -CertificateThumbprint <thumbprint>` | The exe properties have a "Digital Signatures" tab with the certificate and a timestamp; the zip and the installer contain the signed exe |
+| 102 | Quiet installation | `FileDial-Setup-0.2.0.exe --install --quiet --start` | Exit code 0, no windows; FileDial is installed with autostart, the Start menu shortcut and the context menu entry, and runs in the tray |
 
 Script for scenario 17 (holds Ctrl+Alt+K while the PowerShell window is open; Enter releases it):
 
