@@ -605,6 +605,7 @@ internal sealed class RadialWindow : Window
         return current switch
         {
             null => DefaultHint(),
+            { Id: Core.Custom.CustomActionIds.More } => Lang.T.CstChooseAction,
             { IsGroup: true } => Lang.T.UiDialChooseFormat,
             { IsEnabled: false, FixActionId: not null } => Lang.T.UiDialEnterDownload(current.DisabledReason ?? ""),
             { IsEnabled: false } => current.DisabledReason ?? ActionCatalog.NotInPrototype,

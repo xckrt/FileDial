@@ -26,6 +26,9 @@ public sealed record JobSettings
     /// <summary>В найденном ffmpeg есть фильтр whisper (проверяется программой при запуске).</summary>
     public bool SpeechFilterAvailable { get; init; }
 
+    /// <summary>Свои действия пользователя (добавляются в круг поверх встроенных).</summary>
+    public IReadOnlyList<Custom.CustomAction> CustomActions { get; init; } = Custom.CustomActionList.Empty;
+
     public string OutputDirectoryFor(string sourcePath) =>
         string.IsNullOrWhiteSpace(OutputFolder) ? Path.GetDirectoryName(sourcePath)! : OutputFolder;
 

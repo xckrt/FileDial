@@ -4,6 +4,7 @@ using System.Windows.Input;
 using FileDial.App.Interop;
 using FileDial.Core.Archives;
 using FileDial.Core.Compression;
+using FileDial.Core.Custom;
 using FileDial.Core.History;
 using FileDial.Core.Jobs;
 using FileDial.Core.Localization;
@@ -81,7 +82,7 @@ public partial class JobWindow : Window
     {
         var tools = FfmpegLocator.LocateDefault(_settings.FfmpegFolder);
         // Архивам ffmpeg не нужен — их можно распаковывать и до его установки.
-        if (tools is null && FileJobs.NeedsFfmpeg(_actionId))
+        if (tools is null && FileJobs.NeedsFfmpeg(_actionId) && !CustomActionIds.IsCustom(_actionId))
         {
             ShowFinished(
                 Lang.T.UiJobNeedsFfmpeg,
@@ -153,10 +154,10 @@ public partial class JobWindow : Window
             StageText.Text = Lang.T.UiJobDone;
             SetProgress(1);
             ShowFinished(result.Message, HistoryStatus.Done, record: !perFileHistory);
-            if (_resultPath is null)
-                RevealButton.Visibility = Visibility.Collapsed;
-            RevealButton.Visibility = Visibility.Visible;
-            RevealButton.Focus();
+            // Своё действие без {out} ничего не создаёт — показывать в папке нечего.
+            RevealButton.Visibility = _resultPath is null ? Visibility.Collapsed : Visibility.Visible;
+            if (_resultPath is not null)
+                RevealButton.Focus();
             if (_settings.OpenFolderWhenDone && _resultPath is not null)
                 ShellActions.ShowInFolder(_resultPath);
         }

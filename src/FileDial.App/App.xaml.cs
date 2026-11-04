@@ -10,6 +10,7 @@ using FileDial.App.Tray;
 using FileDial.App.UI;
 using FileDial.Core.Archives;
 using FileDial.Core.Compression;
+using FileDial.Core.Custom;
 using FileDial.Core.Localization;
 using FileDial.Core.Documents;
 using FileDial.Core.History;
@@ -283,6 +284,14 @@ public partial class App : Application
                     new DialAction(ActionIds.ExtractHere, Lang.T.ExtractHere, true), [archive]));
                 contents.Show();
                 contents.Activate();
+                return;
+            }
+            // Своё действие: программа из настроек, для пакета — по каждому файлу.
+            if (radial.Chosen is { } chosen && CustomActions.Find(_settings.CustomActions, chosen.Id) is { } custom
+                && menu.SourcePaths.Count > 0)
+            {
+                var output = _settings.Jobs.OutputFolder;
+                StartJob(chosen, menu.SourcePaths, tools => new CustomActionJob(custom, tools, output));
                 return;
             }
             if (radial.Chosen is not { } action || menu.SourcePaths.Count == 0 || !FileJobs.IsImplemented(action.Id))

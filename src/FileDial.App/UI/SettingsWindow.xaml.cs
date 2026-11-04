@@ -105,6 +105,7 @@ public partial class SettingsWindow : Window
                 Style = (Style)Application.Current.FindResource("SegmentRadio"),
             });
         }
+        _customActions = [.. settings.CustomActions];
         ApplyTexts();
         Lang.Changed += ApplyTexts;
 
@@ -174,6 +175,7 @@ public partial class SettingsWindow : Window
         HotkeyHint.Text = _hotkeyHint();
         UpdateFfmpegStatus();
         UpdateWhisperStatus();
+        RefreshCustomList();
     }
 
     /// <summary>Пока идёт запись сочетания, горячую клавишу программы не обрабатываем.</summary>
@@ -532,6 +534,7 @@ public partial class SettingsWindow : Window
                 .FirstOrDefault(r => r.IsChecked == true)?.Tag as string ?? "auto",
             VideoTargetBytes = SelectedTarget(VideoTargets, _initial.VideoTargetBytes),
             ImageTargetBytes = SelectedTarget(ImageTargets, _initial.ImageTargetBytes),
+            CustomActions = [.. _customActions],
         };
 
         if (_apply(settings, AutostartBox.IsChecked == true) is { } error)
