@@ -1,4 +1,4 @@
-using FileDial.Core.Compression;
+﻿using FileDial.Core.Compression;
 using FileDial.Core.Jobs;
 using FileDial.Core.Menu;
 
@@ -35,10 +35,12 @@ public class ConversionIntegrationTests : IDisposable
 
     private static Task<ProbeInfo> ProbeAsync(string path) => ProbeInfo.RunAsync(Tools, path, CancellationToken.None);
 
-    private async Task<JobResult> RunAsync(string actionId, string source)
+    private Task<JobResult> RunAsync(string actionId, string source) => RunAsync(FileJobs.Create(actionId, Tools)!, source);
+
+    private async Task<JobResult> RunAsync(IFileJob job, string source)
     {
         var before = File.ReadAllBytes(source);
-        var result = await FileJobs.Create(actionId, Tools)!.RunAsync(source, null, CancellationToken.None);
+        var result = await job.RunAsync(source, null, CancellationToken.None);
         Assert.Equal(JobStatus.Done, result.Status);
         Assert.True(File.Exists(result.OutputPath));
         Assert.Equal(before, File.ReadAllBytes(source)); // исходник не изменён
@@ -70,10 +72,43 @@ public class ConversionIntegrationTests : IDisposable
     {
         var png = await GenerateAsync("большая.png", "-f", "lavfi", "-i", "testsrc2=size=2400x1200", "-frames:v", "1");
 
-        var result = await RunAsync(ActionIds.Resize1920, png);
+        var result = await RunAsync(new ImageResizeJob(Tools, ResizeRequest.Default), png);
         Assert.Equal(Path.Combine(_dir, "большая_1920px.png"), result.OutputPath);
+        Assert.StartsWith("2400×1200 → 1920×960.", result.Message);
         var info = await ProbeAsync(result.OutputPath!);
         Assert.Equal((1920, 960), (info.Width, info.Height));
+    }
+
+    [FfmpegFact]
+    public async Task Resize_PercentAndCustom_KeepFormat()
+    {
+        var jpg = await GenerateAsync("фото.jpg", "-f", "lavfi", "-i", "testsrc2=size=1000x600", "-frames:v", "1");
+
+        var half = await RunAsync(new ImageResizeJob(Tools, new ResizeRequest(ResizeBy.Percent, 50)), jpg);
+        Assert.Equal(Path.Combine(_dir, "фото_50%.jpg"), half.OutputPath);
+        Assert.Equal((500, 300), await SizeAsync(half.OutputPath!));
+
+        var box = await RunAsync(new ImageResizeJob(Tools, new ResizeRequest(ResizeBy.Exact, 0, 400, 400)), jpg);
+        Assert.Equal((400, 240), await SizeAsync(box.OutputPath!)); // вписана в 400×400 с пропорциями
+
+        var exact = await RunAsync(new ImageResizeJob(Tools, new ResizeRequest(ResizeBy.Exact, 0, 300, 300, KeepAspect: false)), jpg);
+        Assert.Equal((300, 300), await SizeAsync(exact.OutputPath!));
+    }
+
+    [FfmpegFact]
+    public async Task Resize_SmallImage_NothingToDo()
+    {
+        var png = await GenerateAsync("значок.png", "-f", "lavfi", "-i", "testsrc2=size=320x200", "-frames:v", "1");
+        var result = await new ImageResizeJob(Tools, ResizeRequest.Default).RunAsync(png, null, CancellationToken.None);
+        Assert.Equal(JobStatus.NothingToDo, result.Status);
+        Assert.Contains("320×200", result.Message);
+        Assert.Single(Directory.GetFiles(_dir, "значок*"));
+    }
+
+    private async Task<(int, int)> SizeAsync(string path)
+    {
+        var info = await ProbeAsync(path);
+        return (info.Width, info.Height);
     }
 
     [FfmpegFact]

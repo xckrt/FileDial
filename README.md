@@ -9,7 +9,7 @@ appears at the cursor. Everything works offline.
 | Type | Extensions | Sectors (inactive ones in italics) |
 |------|------------|------------------------------------|
 | Video | mp4, mov, mkv, webm | Compress to 25 MB, Trim, Make GIF, Extract audio, Frame to image, Subtitles, Remove sound, **Format ›** MP4 · MKV · WebM · MOV |
-| Images | jpg, jpeg, png, webp, bmp, gif, tif, tiff | **Format ›** JPG · PNG · WebP · BMP · TIFF · GIF · ICO, Resize to 1920 px, Rotate right, Rotate left, Mirror, Compress to 1 MB, Remove background, To PDF |
+| Images | jpg, jpeg, png, webp, bmp, gif, tif, tiff | **Format ›** JPG · PNG · WebP · BMP · TIFF · GIF · ICO, Resize…, Rotate right, Rotate left, Mirror, Compress to 1 MB, Remove background, To PDF |
 | Audio | mp3, wav, flac, m4a, aac, ogg, opus, wma | **Format ›** MP3 · M4A · WAV · FLAC · OGG · Opus, Normalize volume, Remove noise, Speed up ×1.5, Slow down ×0.75, To mono, Trim, To text |
 | Archives | zip, 7z, rar, tar, tar.gz/tgz, tar.bz2, tar.xz | Extract here, Extract to folder, Extract to…, Test archive, **Format ›** ZIP · 7z, Password-protect, Split into parts, Contents |
 | PDF | pdf | Split into pages, Extract pages, Rotate right, Rotate left, Pages to images, Recognize text, Password-protect, *Merge* (for several PDFs) |
@@ -557,8 +557,16 @@ Name: `name_trimmed.ext`.
   "Rotate left" gives `name_rotated_left`, "Mirror" flips horizontally, `name_mirrored`.
 - "To JPG" and "To BMP": transparent areas are filled with white (JPG has no transparency), quality `-q:v 2`, 4:4:4.
 - "To WebP": quality 90, transparency is kept. "To PNG" is lossless.
-- "Resize to 1920 px": long side 1920, aspect ratio kept (lanczos). Inactive if the image is already 1920 px or
-  smaller. Name: `name_1920px.ext`.
+- "Resize…" opens a window with the size to shrink to:
+  - **Longest side** — 3840, 2560, 1920, 1280, 1024, 800 or 640 px; sizes the image already fits in are inactive;
+  - **Percent** — 75, 50, 33 or 25%;
+  - **Custom size, px** — width × height. With "Keep proportions" the second side is calculated as you type and the
+    image fits into the box; without it the image becomes exactly that size (stretched if needed).
+
+  Images are only made smaller, never upscaled; the window shows the result ("Result: 1920×1280.") and the
+  last choice is remembered. For several images the same choice applies to each, and images that are already
+  small enough are skipped. Lanczos scaling, same format (JPG, WebP; other formats → PNG). Names:
+  `name_1920px.ext`, `name_50%.ext`, `name_800x600.ext`.
 - "Rotate right": 90° clockwise. Name: `name_rotated.ext`.
 - Rotation and resizing keep the JPG/PNG/WebP format; BMP, GIF and TIFF are saved as PNG.
 - For animated GIF/WebP the first frame is used.
@@ -782,8 +790,8 @@ The scenarios assume the English interface; with the Russian interface, labels a
 | 17 | Hotkey taken | Close FileDial, take Ctrl+Alt+K with the script below, start FileDial | The message "Ctrl+Alt+K is already used by another program."; the settings open to pick another shortcut, FileDial stays in the tray. Starting it again while FileDial is running reports "FileDial is already running" |
 | 18 | Administrator window | Start File Explorer as administrator (for example, from Task Manager with the "Create this task with administrative privileges" checkbox: `explorer.exe /separate`), select a file, Ctrl+Alt+K | A notification about administrator rights, no crash |
 | 19 | Exit | Tray → "Exit" during compression | ffmpeg terminates, temporary files are deleted, the FileDial process exits |
-| 20 | Image | Select a PNG with transparency larger than 1920 px, open the dial | Size and resolution in the center; "To PNG" is inactive ("Already PNG"). "To JPG" → `name.jpg` next to it with a white background; "Resize to 1920 px" → `name_1920px.png` |
-| 21 | Small image | An image smaller than 1920 px | "Resize to 1920 px" is inactive, with the size in the reason |
+| 20 | Image | Select a PNG with transparency larger than 1920 px, open the dial | Size and resolution in the center; "To PNG" is inactive ("Already PNG"). "To JPG" → `name.jpg` next to it with a white background; "Resize…" → 1920 px → `name_1920px.png` |
+| 21 | Resize: any size | A 2400×1600 photo → "Resize…"; then type 1000 into width; then untick "Keep proportions" and enter 500 × 500 | 3840 and 2560 are inactive, 1920 is preselected ("Result: 1920×1280."); width 1000 gives height 667; the last choice gives `name_500x500.jpg` exactly 500×500; next time the window opens with the last choice |
 | 22 | Audio | Select an MP3, open the dial | Duration in the center; "To MP3" is inactive. "To WAV" and "Normalize volume" create files next to it, progress in percent |
 | 23 | Animations | Open the dial, move the mouse over the sectors, close with Esc | The dial turns and the sectors light up in turn, highlight with the sector moving out, a quick fade-out with a turn; nothing flickers or jerks |
 | 24 | Animations off | Turn off "Animation effects" in Windows settings, repeat 23 | Everything appears and changes instantly |

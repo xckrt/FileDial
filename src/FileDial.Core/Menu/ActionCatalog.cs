@@ -15,7 +15,6 @@ public static class ActionCatalog
     public const int SectorCount = 8;
     public static string NotInPrototype => Lang.T.NotInPrototype;
     public static string AlreadySmall => CompressionCheck.AlreadySmall;
-    public const int ResizeLongSide = 1920;
 
     /// <summary>Форматы для конвертации: подпись и расширение. Порядок = порядок во внешнем кольце.</summary>
     public static readonly IReadOnlyList<(string Label, string Extension)> VideoFormats =
@@ -123,14 +122,10 @@ public static class ActionCatalog
 
     private static IReadOnlyList<DialAction> ForImage(string path, long sizeBytes, ProbeInfo? media, JobSettings settings)
     {
-        string? resizeWhyNot = null;
-        if (media is { Width: > 0, Height: > 0 } && Math.Max(media.Width, media.Height) <= ResizeLongSide)
-            resizeWhyNot = Lang.T.AlreadyNoBigger(ResizeLongSide, media.Width, media.Height);
-
         return
         [
             DialAction.Group(ActionIds.ImageConvert, Lang.T.Format, Formats(path, ImageFormats, ActionIds.ImageTo)),
-            Action(ActionIds.Resize1920, Lang.T.ResizeTo(ResizeLongSide), resizeWhyNot),
+            Action(ActionIds.ResizeImage, Lang.T.RszLabel, null) with { Caption = Lang.T.RszCaption },
             Action(ActionIds.RotateRight, Lang.T.RotateRight, null),
             Action(ActionIds.RotateLeft, Lang.T.RotateLeft, null),
             Action(ActionIds.Mirror, Lang.T.Mirror, null),

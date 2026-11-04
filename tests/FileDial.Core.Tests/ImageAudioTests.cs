@@ -27,7 +27,7 @@ public class ImageActionTests
     private static ProbeInfo Picture(int w, int h) => new(0, true, false, w, h);
 
     private static DialAction Resize(string path, ProbeInfo? media) =>
-        ActionCatalog.ForFile(path, 1, media).Single(a => a.Id == ActionIds.Resize1920);
+        ActionCatalog.ForFile(path, 1, media).Single(a => a.Id == ActionIds.ResizeImage);
 
     [Fact]
     public void Png_HasConvertGroupFirst_AndOtherSectors()
@@ -35,7 +35,7 @@ public class ImageActionTests
         var actions = ActionCatalog.ForFile(@"C:\p\скрин.png", 500_000, Picture(3000, 2000));
 
         Assert.Equal(8, actions.Count);
-        Assert.Equal(["Формат", "Уменьшить до 1920\u00A0px", "Повернуть вправо", "Повернуть влево", "Отразить",
+        Assert.Equal(["Формат", "Уменьшить…", "Повернуть вправо", "Повернуть влево", "Отразить",
             "Сжать до 1\u00A0МБ", "Убрать фон", "В PDF"], actions.Select(a => a.Label));
         Assert.True(actions[0].IsGroup);
         Assert.True(actions[0].IsEnabled);
@@ -68,23 +68,13 @@ public class ImageActionTests
     }
 
     [Fact]
-    public void SmallImage_ResizeDisabledWithSize()
+    public void Resize_AlwaysOffered_SizeChosenInWindow()
     {
+        // Размер выбирается в окне: даже небольшую картинку можно уменьшить ещё.
         var resize = Resize(@"C:\p\a.png", Picture(1200, 800));
-        Assert.False(resize.IsEnabled);
-        Assert.Equal("Уже не больше 1920 px (1200×800)", resize.DisabledReason);
-    }
-
-    [Fact]
-    public void ExactlyLimit_ResizeDisabled_OneMore_Enabled()
-    {
-        Assert.False(Resize(@"C:\p\a.png", Picture(1920, 1080)).IsEnabled);
-        Assert.True(Resize(@"C:\p\a.png", Picture(1080, 1921)).IsEnabled);
-    }
-
-    [Fact]
-    public void UnknownSize_ResizeStaysEnabled()
-    {
+        Assert.True(resize.IsEnabled);
+        Assert.Equal("Уменьшить размер", resize.Title);
+        Assert.True(FileJobs.NeedsResizeInput(resize.Id));
         Assert.True(Resize(@"C:\p\a.png", null).IsEnabled);
     }
 }
@@ -213,15 +203,16 @@ public class ConversionSpecTests
     [InlineData(@"C:\a.tiff", ".png")]
     public void ResizeAndRotate_KeepFormatWhenPossible(string path, string expected)
     {
-        Assert.Equal(expected, ConversionSpecs.For(ActionIds.Resize1920)!.OutputExtension(path, Picture));
+        Assert.Equal(expected, ConversionSpecs.Resize(ResizeRequest.Default).OutputExtension(path, Picture));
         Assert.Equal(expected, ConversionSpecs.For(ActionIds.RotateRight)!.OutputExtension(path, Picture));
     }
 
     [Fact]
-    public void Resize_UsesLanczosLongSide()
+    public void Resize_UsesLanczos_ExactTargetSize()
     {
-        var args = ConversionSpecs.For(ActionIds.Resize1920)!.Arguments(@"C:\a.png", Picture).ToList();
-        Assert.Equal("scale='if(gte(iw,ih),1920,-2)':'if(gte(iw,ih),-2,1920)':flags=lanczos", args[args.IndexOf("-vf") + 1]);
+        // Картинка 640×480: 50% → 320×240.
+        var args = ConversionSpecs.Resize(new ResizeRequest(ResizeBy.Percent, 50)).Arguments(@"C:\a.png", Picture).ToList();
+        Assert.Equal("scale=320:240:flags=lanczos", args[args.IndexOf("-vf") + 1]);
     }
 
     [Fact]

@@ -42,7 +42,8 @@ public static class ActionIds
 
     // Изображения
     public const string ImageConvert = "image-convert";
-    public const string Resize1920 = "image-resize-1920";
+    /// <summary>«Уменьшить…»: размер выбирается в окне перед запуском.</summary>
+    public const string ResizeImage = "image-resize";
     public const string RotateRight = "image-rotate-right";
     public const string RotateLeft = "image-rotate-left";
     public const string Mirror = "image-mirror";

@@ -24,6 +24,9 @@ public sealed record AppSettings
 
     public bool OpenFolderWhenDone { get; init; }
 
+    /// <summary>Последний выбранный размер в «Уменьшить…» (см. <see cref="FileDial.Core.Jobs.ResizeRequest.Format"/>).</summary>
+    public string Resize { get; init; } = FileDial.Core.Jobs.ResizeRequest.Default.Format();
+
     /// <summary>Записывать выполненные действия в историю (хранится только на этом компьютере).</summary>
     public bool KeepHistory { get; init; } = true;
 
@@ -69,6 +72,7 @@ public sealed record AppSettings
     {
         Hotkey = HotkeyGesture.Format(),
         Theme = Themes.Contains(Theme) ? Theme : "graphite",
+        Resize = FileDial.Core.Jobs.ResizeRequest.Parse(Resize).Format(),
         Language = Localization.Lang.Settings.Contains(Language) ? Language : "auto",
         VideoTargetBytes = Nearest(VideoTargets, VideoTargetBytes),
         ImageTargetBytes = Nearest(ImageTargets, ImageTargetBytes),

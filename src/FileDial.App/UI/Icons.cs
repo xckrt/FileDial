@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using System.Windows.Media;
 using System.Windows.Shapes;
 using FileDial.Core.Menu;
@@ -46,7 +46,7 @@ internal static class Icons
 
         // Картинки
         [ActionIds.ImageConvert] = Convert,
-        [ActionIds.Resize1920] = Shrink,
+        [ActionIds.ResizeImage] = Shrink,
         [ActionIds.RotateRight] = "M19,12 A7,7 0 1 1 15.5,5.9 M15,2.5 L15.8,6 L12.3,6.8",
         [ActionIds.RotateLeft] = "M5,12 A7,7 0 1 0 8.5,5.9 M9,2.5 L8.2,6 L11.7,6.8",
         [ActionIds.Mirror] = "M12,3 V21 M9,6.5 L3.5,17.5 H9 Z M15,6.5 L20.5,17.5 H15 Z",

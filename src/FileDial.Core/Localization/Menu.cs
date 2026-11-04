@@ -1,4 +1,4 @@
-namespace FileDial.Core.Localization;
+﻿namespace FileDial.Core.Localization;
 
 // Круг: подписи секторов, причины неактивности, разбор выделения.
 
@@ -30,8 +30,6 @@ public abstract partial class Texts
     public abstract string AlreadySilent { get; }
 
     // Картинки
-    public abstract string ResizeTo(int side);
-    public abstract string AlreadyNoBigger(int side, int width, int height);
     public abstract string RotateRight { get; }
     public abstract string RotateLeft { get; }
     public abstract string Mirror { get; }
@@ -119,8 +117,6 @@ public sealed partial class RuTexts
     public override string RemoveSound => "Убрать звук";
     public override string AlreadySilent => "В видео и так нет звука";
 
-    public override string ResizeTo(int side) => $"Уменьшить до {side} px";
-    public override string AlreadyNoBigger(int side, int width, int height) => $"Уже не больше {side} px ({width}×{height})";
     public override string RotateRight => "Повернуть вправо";
     public override string RotateLeft => "Повернуть влево";
     public override string Mirror => "Отразить";
@@ -203,8 +199,6 @@ public sealed partial class EnTexts
     public override string RemoveSound => "Remove sound";
     public override string AlreadySilent => "The video is already silent";
 
-    public override string ResizeTo(int side) => $"Resize to {side} px";
-    public override string AlreadyNoBigger(int side, int width, int height) => $"Already {side} px or smaller ({width}×{height})";
     public override string RotateRight => "Rotate right";
     public override string RotateLeft => "Rotate left";
     public override string Mirror => "Mirror";

@@ -351,6 +351,8 @@ public partial class App : Application
                 AskPartSize(action, menu.SourcePaths);
             else if (FileJobs.NeedsPageRange(action.Id))
                 AskPageRange(action, menu.SourcePaths[0]);
+            else if (FileJobs.NeedsResizeInput(action.Id))
+                AskResize(action, menu.SourcePaths);
             // Отрисовка и распознавание PDF — средствами Windows, поэтому задачи живут здесь, а не в ядре.
             else if (action.Id == ActionIds.PdfToImages)
                 StartJob(action, menu.SourcePaths, _ => new PdfImagesJob(_settings.Jobs.OutputFolder));
@@ -372,6 +374,37 @@ public partial class App : Application
             return;
         var output = _settings.Jobs.OutputFolder;
         StartJob(action, files, _ => new FileSplitJob(partSize, output));
+    }
+
+    /// <summary>
+    /// «Уменьшить…»: размер выбирается в окне (для одной картинки — с её размером и итогом), выбор запоминается,
+    /// затем обычное окно выполнения.
+    /// </summary>
+    private void AskResize(DialAction action, IReadOnlyList<string> images)
+    {
+        (int Width, int Height)? size = null;
+        if (images.Count == 1 && FfmpegLocator.LocateDefault(_settings.FfmpegFolder) is { } tools &&
+            new FfprobeMediaProbe(tools, MediaProbeTimeout).TryProbe(images[0]) is { Width: > 0, Height: > 0 } info)
+            size = (info.Width, info.Height);
+
+        var title = images.Count == 1 ? Path.GetFileName(images[0]) : Lang.T.Images(images.Count);
+        if (ResizeWindow.Ask(title, size, ResizeRequest.Parse(_settings.Resize)) is not { } request)
+            return;
+
+        if (request.Format() != _settings.Resize)
+        {
+            _settings = _settings with { Resize = request.Format() };
+            try
+            {
+                SettingsStore.Save(SettingsStore.DefaultPath, _settings);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                ErrorLog.Write("Сохранение размера", ex); // не страшно: в следующий раз предложим прежний
+            }
+        }
+        var output = _settings.Jobs.OutputFolder;
+        StartJob(action, images, tools => new ImageResizeJob(tools!, request, output));
     }
 
     /// <summary>«Защитить паролем» (архив, PDF, документ): пароль вводится дважды, затем обычное окно выполнения.</summary>

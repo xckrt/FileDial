@@ -69,7 +69,6 @@ public static class ConversionSpecs
             },
 
             // --- Изображения ---
-            ActionIds.Resize1920 => ImageFilter($"_{ActionCatalog.ResizeLongSide}px", ResizeFilter(ActionCatalog.ResizeLongSide)),
             ActionIds.RotateRight => ImageFilter(Lang.T.JobSuffixRotated, "transpose=clock"),
             ActionIds.RotateLeft => ImageFilter(Lang.T.JobSuffixRotatedLeft, "transpose=cclock"),
             ActionIds.Mirror => ImageFilter(Lang.T.JobSuffixMirrored, "hflip"),
@@ -222,6 +221,15 @@ public static class ConversionSpecs
     };
 
     /// <summary>Фильтр с сохранением формата (поворот, отражение, уменьшение).</summary>
+    /// <summary>Уменьшение до выбранного размера: точные ширина и высота считаются по сведениям ffprobe.</summary>
+    public static ConversionSpec Resize(ResizeRequest request) =>
+        Image(request.Suffix, (src, _) => SameImageFormat(src), (src, info) =>
+        {
+            var (w, h) = request.Target(info.Width, info.Height);
+            var size = string.Create(CultureInfo.InvariantCulture, $"scale={w}:{h}:flags=lanczos");
+            return [.. Filter(size), .. ImageEncoder(SameImageFormat(src))];
+        });
+
     private static ConversionSpec ImageFilter(string suffix, string filter) =>
         Image(suffix, (src, _) => SameImageFormat(src), (src, _) => [.. Filter(filter), .. ImageEncoder(SameImageFormat(src))]);
 
