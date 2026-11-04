@@ -99,6 +99,27 @@ public static class ActionIds
     public const string DocToPrefix = "doc-to:";
     public static string DocTo(string extension) => DocToPrefix + extension;
 
+    // Текст и данные
+    public const string TextToUtf8 = "text-to-utf8";
+    /// <summary>Группа «Переводы строк».</summary>
+    public const string TextLineEndings = "text-line-endings";
+    public const string TextToCrlf = "text-eol:crlf";
+    public const string TextToLf = "text-eol:lf";
+    public const string CsvToXlsx = "text-csv-to-xlsx";
+    public const string JsonFormat = "text-json-format";
+    public const string JsonMinify = "text-json-minify";
+    public const string MarkdownToHtml = "text-md-to-html";
+    public const string MarkdownToPdf = "text-md-to-pdf";
+
+    // SVG и значки
+    public const string SvgToPng = "svg-to-png";
+    public const string SvgPngSizes = "svg-png-sizes";
+    public const string SvgToIco = "svg-to-ico";
+    public const string IcoToPng = "ico-to-png";
+    public const string IcoAllPng = "ico-all-png";
+    /// <summary>«ICO» в группе «Формат» у картинок.</summary>
+    public static readonly string ImageToIco = ImageTo(".ico");
+
     /// <summary>Открыть настройки распознавания речи (скачать модель).</summary>
     public const string SetupSpeech = "setup-speech";
 

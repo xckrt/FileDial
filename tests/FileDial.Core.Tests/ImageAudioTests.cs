@@ -45,11 +45,11 @@ public class ImageActionTests
     }
 
     [Fact]
-    public void ConvertGroup_ListsSixFormats_OwnFormatDisabled()
+    public void ConvertGroup_ListsSevenFormats_OwnFormatDisabled()
     {
         var group = ActionCatalog.ForFile(@"C:\p\скрин.png", 1)[0];
 
-        Assert.Equal(["JPG", "PNG", "WebP", "BMP", "TIFF", "GIF"], group.Children!.Select(c => c.Label));
+        Assert.Equal(["JPG", "PNG", "WebP", "BMP", "TIFF", "GIF", "ICO"], group.Children!.Select(c => c.Label));
         var png = group.Children!.Single(c => c.Label == "PNG");
         Assert.False(png.IsEnabled);
         Assert.Equal("Файл уже в PNG", png.DisabledReason);

@@ -52,10 +52,10 @@ public class ActionCatalogTests
 
     [Theory]
     [InlineData(@"C:\v\a.avi")]
-    [InlineData(@"C:\v\a.txt")]
+    [InlineData(@"C:\v\a.exe")]
     [InlineData(@"C:\v\a.psd")]
     [InlineData(@"C:\v\mp4")]
-    [InlineData(@"C:\v\a.mp4.txt")]
+    [InlineData(@"C:\v\a.mp4.exe")]
     public void OtherFiles_GetNoActions(string path)
     {
         Assert.Empty(ActionCatalog.ForFile(path, 80_000_000));
@@ -101,7 +101,7 @@ public class SelectionInterpreterTests
     [Fact]
     public void OtherType_ShowsCompactCircleWithZip()
     {
-        var outcome = SelectionInterpreter.Interpret(SelectionResult.Success([@"C:\a\doc.txt"]), File30Mb);
+        var outcome = SelectionInterpreter.Interpret(SelectionResult.Success([@"C:\a\doc.psd"]), File30Mb);
 
         var menu = Assert.IsType<HotkeyOutcome.ShowMenu>(outcome).Menu;
         Assert.Equal(DialMenuKind.Unsupported, menu.Kind);

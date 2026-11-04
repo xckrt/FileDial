@@ -10,6 +10,12 @@ public enum FileKind
     Pdf,
     /// <summary>Документы Office и OpenDocument: тексты, таблицы, презентации.</summary>
     Document,
+    /// <summary>Текст и данные: txt, csv, json, xml, md, log, ini…</summary>
+    Text,
+    /// <summary>Векторный рисунок SVG.</summary>
+    Svg,
+    /// <summary>Значок Windows (.ico).</summary>
+    Icon,
 }
 
 public static class FileKinds
@@ -21,6 +27,10 @@ public static class FileKinds
     /// <summary>Архивы, которые распаковывает .NET (zip) или встроенный в Windows tar.exe (остальные).</summary>
     public static readonly IReadOnlySet<string> Archive = Set(".zip", ".7z", ".rar", ".tar", ".gz", ".tgz", ".bz2", ".tbz2", ".xz", ".txz");
 
+    /// <summary>Текстовые файлы с данными; .svg сюда не входит — у него свой круг.</summary>
+    public static readonly IReadOnlySet<string> Text = Set(".txt", ".text", ".csv", ".tsv", ".json", ".xml", ".md", ".markdown",
+        ".log", ".ini", ".cfg", ".conf", ".yaml", ".yml");
+
     public static FileKind Of(string path)
     {
         var ext = Path.GetExtension(path);
@@ -30,6 +40,9 @@ public static class FileKinds
         if (Archive.Contains(ext)) return FileKind.Archive;
         if (ext.Equals(".pdf", StringComparison.OrdinalIgnoreCase)) return FileKind.Pdf;
         if (Documents.OfficeDocs.Extensions.Contains(ext)) return FileKind.Document;
+        if (Text.Contains(ext)) return FileKind.Text;
+        if (ext.Equals(".svg", StringComparison.OrdinalIgnoreCase)) return FileKind.Svg;
+        if (ext.Equals(".ico", StringComparison.OrdinalIgnoreCase)) return FileKind.Icon;
         return FileKind.Other;
     }
 

@@ -230,7 +230,8 @@ public class NewFormatSpecTests
     [Fact]
     public void AllMenuFormats_HaveSpecs()
     {
-        foreach (var (_, ext) in ActionCatalog.ImageFormats)
+        // ICO собирается своей задачей (ToIcoJob), без ConversionSpec.
+        foreach (var (_, ext) in ActionCatalog.ImageFormats.Where(f => f.Extension != ".ico"))
             Assert.NotNull(ConversionSpecs.For(ActionIds.ImageTo(ext)));
         foreach (var (_, ext) in ActionCatalog.AudioFormats)
             Assert.NotNull(ConversionSpecs.For(ActionIds.AudioTo(ext)));

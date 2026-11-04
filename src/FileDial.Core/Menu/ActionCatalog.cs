@@ -22,7 +22,7 @@ public static class ActionCatalog
         [("MP4", ".mp4"), ("MKV", ".mkv"), ("WebM", ".webm"), ("MOV", ".mov")];
 
     public static readonly IReadOnlyList<(string Label, string Extension)> ImageFormats =
-        [("JPG", ".jpg"), ("PNG", ".png"), ("WebP", ".webp"), ("BMP", ".bmp"), ("TIFF", ".tiff"), ("GIF", ".gif")];
+        [("JPG", ".jpg"), ("PNG", ".png"), ("WebP", ".webp"), ("BMP", ".bmp"), ("TIFF", ".tiff"), ("GIF", ".gif"), ("ICO", ".ico")];
 
     public static readonly IReadOnlyList<(string Label, string Extension)> AudioFormats =
         [("MP3", ".mp3"), ("M4A", ".m4a"), ("WAV", ".wav"), ("FLAC", ".flac"), ("OGG", ".ogg"), ("Opus", ".opus")];
@@ -46,6 +46,9 @@ public static class ActionCatalog
             FileKind.Archive => ForArchive(path),
             FileKind.Pdf => ForPdf(pages),
             FileKind.Document => ForDocument(path),
+            FileKind.Text => TextFileCatalog.ForText(path),
+            FileKind.Svg => TextFileCatalog.ForSvg(path),
+            FileKind.Icon => TextFileCatalog.ForIcon(path),
             _ => [],
         };
 
@@ -56,6 +59,8 @@ public static class ActionCatalog
     public static IReadOnlyList<DialAction> ForBatch(FileKind kind, IReadOnlyList<string> paths, IReadOnlyList<long> sizes,
         JobSettings? settings = null)
     {
+        if (kind is FileKind.Text or FileKind.Svg or FileKind.Icon)
+            return TextFileCatalog.ForBatch(kind, paths);
         var extensions = paths.Select(p => NormalizeExtension(Path.GetExtension(p))).ToHashSet();
         var single = ForFile(paths[0], sizes.Count > 0 ? sizes.Max() : 0, null, settings);
         return single.Select(a => a switch
