@@ -49,7 +49,8 @@ public class SubmenuAndTrimIntegrationTests : IDisposable
     {
         var png = await GenerateAsync("картинка.png", "-f", "lavfi", "-i", "testsrc2=size=96x64", "-frames:v", "1");
 
-        foreach (var (label, ext) in ActionCatalog.ImageFormats.Where(f => f.Extension != ".png"))
+        // ICO — квадратный значок нескольких размеров, проверяется в TextFileTests.
+        foreach (var (label, ext) in ActionCatalog.ImageFormats.Where(f => f.Extension is not (".png" or ".ico")))
         {
             var output = await RunAsync(ActionIds.ImageTo(ext), png);
             Assert.Equal(Path.Combine(_dir, "картинка" + ext), output);

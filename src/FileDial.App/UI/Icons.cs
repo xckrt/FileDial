@@ -25,6 +25,12 @@ internal static class Icons
     private static readonly string Page = "M6,3 H14 L19,8 V21 H6 Z M14,3 V8 H19 ";
     private static readonly string Lock = "M6,11 H18 V20.5 H6 Z M8.5,11 V8 A3.5,3.5 0 0 1 15.5,8 V11 M12,14.5 V17";
     private static readonly string Merge = "M3,4 H9 V11 H3 Z M15,4 H21 V11 H15 Z M6,11 V14 H18 V11 M12,14 V20 M9,17 L12,20 L15,17";
+    private static readonly string LineBreak = "M19,5 V13 H6 M10,9 L6,13 L10,17";
+    private static readonly string Braces =
+        "M8,4 C6,4 6,5 6,7 V10 C6,11 5,12 4,12 C5,12 6,13 6,14 V17 C6,19 6,20 8,20 " +
+        "M16,4 C18,4 18,5 18,7 V10 C18,11 19,12 20,12 C19,12 18,13 18,14 V17 C18,19 18,20 16,20 ";
+    private static readonly string Sizes = "M3,16 H6 V19 H3 Z M8,13.5 H13.5 V19 H8 Z M15.5,10 H21 V19 H15.5 Z";
+    private static readonly string AppIcon = "M5,5 H19 V19 H5 Z M9,9 H15 V15 H9 Z";
 
     private static readonly Dictionary<string, string> Data = new()
     {
@@ -87,6 +93,25 @@ internal static class Icons
         [ActionIds.DocStrip] = Circle(12, 8, 3.5) + "M5,20 C5,14.5 19,14.5 19,20 M4,4 L20,20",
         [ActionIds.DocProtect] = Lock,
         [ActionIds.DocsToPdf] = Merge,
+
+        // Текст и данные
+        [ActionIds.TextToUtf8] = "M3.5,18 L7.5,6 L11.5,18 M5,14 H10 M14,12 H20.5 M17.5,9 L20.5,12 L17.5,15",
+        [ActionIds.TextLineEndings] = LineBreak,
+        [ActionIds.TextToCrlf] = LineBreak,
+        [ActionIds.TextToLf] = LineBreak,
+        [ActionIds.CsvToXlsx] = "M4,5 H20 V19 H4 Z M4,10 H20 M4,14.5 H20 M10,5 V19 M15,5 V19",
+        [ActionIds.JsonFormat] = Braces + "M10,9 H14 M11.5,12 H15 M10,15 H13",
+        [ActionIds.JsonMinify] = Braces + "M9.5,9.5 L12,12 L9.5,14.5 M14.5,9.5 L12,12 L14.5,14.5",
+        [ActionIds.MarkdownToHtml] = "M8,7 L3,12 L8,17 M16,7 L21,12 L16,17 M14,5 L10,19",
+        [ActionIds.MarkdownToPdf] = Page + "M8,13 H15 M8,17 H13",
+
+        // SVG и значки
+        [ActionIds.SvgToPng] = "M4,18 C8,6 16,6 20,18 M2.5,16.5 H5.5 V19.5 H2.5 Z M18.5,16.5 H21.5 V19.5 H18.5 Z M10.5,7.5 H13.5 V10.5 H10.5 Z",
+        [ActionIds.SvgPngSizes] = Sizes,
+        [ActionIds.SvgToIco] = AppIcon,
+        [ActionIds.ImageToIco] = AppIcon,
+        [ActionIds.IcoToPng] = "M4,5 H20 V19 H4 Z M4,16 L9,11 L13,15 L16,12 L20,16 " + Circle(15.5, 8.5, 1.4),
+        [ActionIds.IcoAllPng] = Sizes,
 
         // Компактный круг
         [ActionIds.CompressToZip] = "M4,7.5 L12,3.5 L20,7.5 V16.5 L12,20.5 L4,16.5 Z M4,7.5 L12,11.5 L20,7.5 M12,11.5 V20.5",

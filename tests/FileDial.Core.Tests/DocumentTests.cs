@@ -386,7 +386,7 @@ public class DocumentCatalogTests
         Assert.Equal(FileKind.Pdf, FileKinds.Of(@"C:\a.PDF"));
         Assert.Equal(FileKind.Document, FileKinds.Of(@"C:\a.docx"));
         Assert.Equal(FileKind.Document, FileKinds.Of(@"C:\a.odp"));
-        Assert.Equal(FileKind.Other, FileKinds.Of(@"C:\a.txt"));
+        Assert.Equal(FileKind.Other, FileKinds.Of(@"C:\a.psd"));
         Assert.Equal("3 документа", SelectionInterpreter.KindCount(FileKind.Document, 3));
     }
 

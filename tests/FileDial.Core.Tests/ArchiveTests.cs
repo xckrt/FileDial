@@ -55,10 +55,10 @@ public class ArchiveMenuTests
     public void OtherFile_GetsQuickZip()
     {
         var menu = Assert.IsType<HotkeyOutcome.ShowMenu>(
-            SelectionInterpreter.Interpret(SelectionResult.Success([@"C:\d\отчёт.txt"]), AnyFile)).Menu;
+            SelectionInterpreter.Interpret(SelectionResult.Success([@"C:\d\отчёт.psd"]), AnyFile)).Menu;
         Assert.Equal(DialMenuKind.Unsupported, menu.Kind);
         Assert.Equal(ActionIds.CompressToZip, menu.QuickAction!.Id);
-        Assert.Equal([@"C:\d\отчёт.txt"], menu.SourcePaths);
+        Assert.Equal([@"C:\d\отчёт.psd"], menu.SourcePaths);
     }
 
     [Fact]

@@ -209,13 +209,13 @@ public class CustomPlacementTests
     [Fact]
     public void CompactDial_WithMatchingActions_BecomesDialWithZip()
     {
-        var menu = Menu([@"C:\a\notes.txt"], [Custom("Блокнот"), Custom("Только txt", CustomActions.ByExtension, "txt"),
-            Custom("Только md", CustomActions.ByExtension, "md")]);
+        var menu = Menu([@"C:\a\notes.dat"], [Custom("Блокнот"), Custom("Только dat", CustomActions.ByExtension, "dat"),
+            Custom("Только bin", CustomActions.ByExtension, "bin")]);
 
         Assert.Equal(DialMenuKind.Actions, menu.Kind);
         Assert.Null(menu.QuickAction);
-        Assert.Equal([ActionIds.CompressToZip, "custom:Блокнот", "custom:Только txt"], menu.Actions.Select(a => a.Id));
-        Assert.Equal([@"C:\a\notes.txt"], menu.SourcePaths);
+        Assert.Equal([ActionIds.CompressToZip, "custom:Блокнот", "custom:Только dat"], menu.Actions.Select(a => a.Id));
+        Assert.Equal([@"C:\a\notes.dat"], menu.SourcePaths);
     }
 
     [Fact]
@@ -229,8 +229,8 @@ public class CustomPlacementTests
     [Fact]
     public void Batch_ShowsOnlyActionsMatchingEveryFile()
     {
-        var menu = Menu([@"C:\a\1.txt", @"C:\a\2.md"],
-            [Custom("Любые"), Custom("Только txt", CustomActions.ByExtension, "txt"), Custom("Тексты", CustomActions.ByExtension, "txt md")]);
+        var menu = Menu([@"C:\a\1.dat", @"C:\a\2.bin"],
+            [Custom("Любые"), Custom("Только dat", CustomActions.ByExtension, "dat"), Custom("Тексты", CustomActions.ByExtension, "dat bin")]);
 
         Assert.Equal([ActionIds.CompressToZip, "custom:Любые", "custom:Тексты"], menu.Actions.Select(a => a.Id));
         Assert.True(menu.IsBatch);
@@ -240,7 +240,7 @@ public class CustomPlacementTests
     public void FreeSectorsOverflow_LastFreeSectorBecomesMore()
     {
         var customs = Enumerable.Range(1, 9).Select(i => Custom($"Д{i}")).ToList();
-        var menu = Menu([@"C:\a\notes.txt"], customs);
+        var menu = Menu([@"C:\a\notes.dat"], customs);
 
         Assert.Equal(ActionCatalog.SectorCount, menu.Actions.Count);
         Assert.Equal(ActionIds.CompressToZip, menu.Actions[0].Id);

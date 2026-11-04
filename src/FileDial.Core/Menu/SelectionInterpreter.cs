@@ -111,6 +111,11 @@ public static class SelectionInterpreter
             return new HotkeyOutcome.ShowMenu(new DialMenu(DialMenuKind.Actions, NameShortener.Middle(name, MaxTitleLength),
                 size, ActionCatalog.ForFile(path, state.Size, null, settings), path));
 
+        // Текст, SVG и значки: подпись — строки и кодировка, размер рисунка или число размеров значка.
+        if (kind is FileKind.Text or FileKind.Svg or FileKind.Icon)
+            return new HotkeyOutcome.ShowMenu(new DialMenu(DialMenuKind.Actions, NameShortener.Middle(name, MaxTitleLength),
+                TextFileCatalog.Subtitle(kind, path, size), ActionCatalog.ForFile(path, state.Size, null, settings), path));
+
         // Длительность и размер кадра нужны, чтобы не предлагать заведомо ненужное или невозможное;
         // без ffprobe обходимся тем, что знаем по имени и размеру файла.
         var info = media?.TryProbe(path);
@@ -195,6 +200,9 @@ public static class SelectionInterpreter
         FileKind.Audio => Lang.T.AudioFiles(n),
         FileKind.Pdf => Lang.T.Pdfs(n),
         FileKind.Document => Lang.T.Documents(n),
+        FileKind.Text => Lang.T.TxtTextFiles(n),
+        FileKind.Svg => Lang.T.TxtSvgFiles(n),
+        FileKind.Icon => Lang.T.TxtIconFiles(n),
         _ => Lang.T.Files(n),
     };
 

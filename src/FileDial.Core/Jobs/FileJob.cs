@@ -41,6 +41,10 @@ public static class FileJobs
         settings ??= JobSettings.Default;
         var output = settings.OutputFolder;
 
+        // Текст, SVG и значки (SVG и ICO из картинки — через ffmpeg).
+        if (TextFiles.TextFileJobs.IsOwn(actionId))
+            return TextFiles.TextFileJobs.Create(actionId, tools, output);
+
         // Архивы — без ffmpeg.
         switch (actionId)
         {
@@ -98,7 +102,8 @@ public static class FileJobs
             or ActionIds.DocToPdf or ActionIds.DocText or ActionIds.DocImages or ActionIds.DocStrip
             or ActionIds.DocProtect or ActionIds.DocsToPdf)
         && ActionIds.TargetExtension(actionId, ActionIds.ArchiveToPrefix) is null
-        && ActionIds.TargetExtension(actionId, ActionIds.DocToPrefix) is null;
+        && ActionIds.TargetExtension(actionId, ActionIds.DocToPrefix) is null
+        && !TextFiles.TextFileJobs.RunsWithoutFfmpeg(actionId);
 
     /// <summary>Перед запуском нужно спросить, какие страницы взять («Извлечь страницы»).</summary>
     public static bool NeedsPageRange(string actionId) => actionId == ActionIds.PdfExtract;
@@ -116,7 +121,7 @@ public static class FileJobs
     public static bool IsImplemented(string actionId) =>
         !NeedsFfmpeg(actionId) || actionId is ActionIds.Compress25 or ActionIds.ImageCompress1Mb or ActionIds.ImageToPdf
             or ActionIds.DocCompress or ActionIds.RemoveBackground
-            or ActionIds.Subtitles or ActionIds.SpeechToText || NeedsTrimInput(actionId) ||
+            or ActionIds.Subtitles or ActionIds.SpeechToText || NeedsTrimInput(actionId) || TextFiles.TextFileJobs.IsOwn(actionId) ||
         ConversionSpecs.For(actionId) is not null;
 
     /// <summary>Перед запуском нужно спросить у пользователя границы отрезка.</summary>
