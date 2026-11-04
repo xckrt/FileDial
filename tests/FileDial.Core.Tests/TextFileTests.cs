@@ -663,7 +663,7 @@ public class TextCatalogTests : TextTestBase
         {
             var actions = ActionCatalog.ForFile(@"C:\нет\logo.svg", 1);
             Assert.Equal(["В PNG", "PNG всех размеров", "В ICO"], actions.Select(a => a.Label));
-            Assert.All(actions, a => Assert.StartsWith("Ваш ffmpeg собран без поддержки SVG", a.DisabledReason));
+            Assert.All(actions, a => Assert.StartsWith("В вашем ffmpeg нет декодера SVG", a.DisabledReason));
             SvgSupport.Override = true;
             Assert.All(ActionCatalog.ForFile(@"C:\нет\logo.svg", 1), a => Assert.True(a.IsEnabled));
             Assert.Equal("В PNG (1024 px)", ActionCatalog.ForFile(@"C:\нет\logo.svg", 1)[0].Title);
