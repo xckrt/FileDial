@@ -17,6 +17,9 @@ internal static class SetupLauncher
 
     public static Mode? Detect(IReadOnlyList<string> args, string? processPath)
     {
+        // Пункт меню Проводника — всегда программа, даже если exe назван как установщик.
+        if (Has(args, ContextMenuEntry.DialArg))
+            return null;
         if (Has(args, "--uninstall"))
             return Mode.Uninstall;
         if (Has(args, "--install"))
@@ -82,12 +85,14 @@ internal static class SetupLauncher
                 return 2;
             }
             RunningCopies.StopAsync(TimeSpan.FromSeconds(10)).GetAwaiter().GetResult();
-            // Обновление сохраняет то, что пользователь уже выбрал (автозапуск, ярлыки); новая установка — по умолчанию.
+            // Обновление сохраняет то, что пользователь уже выбрал (автозапуск, ярлыки, пункт меню); новая установка — по умолчанию.
+            // Пункт меню — по настройке: программа сверяет с ней реестр при запуске, а у старых версий пункта не было.
             var options = installed is { } current
                 ? new InstallOptions(directory,
                     Autostart: installer.AutostartPointsTo(current.ExePath) && !Has(args, "--no-autostart"),
                     StartMenuShortcut: installer.ShortcutExists(desktop: false, current.ExePath),
-                    DesktopShortcut: installer.ShortcutExists(desktop: true, current.ExePath))
+                    DesktopShortcut: installer.ShortcutExists(desktop: true, current.ExePath),
+                    ContextMenu: SettingsStore.Load(SettingsStore.DefaultPath).ContextMenu)
                 : new InstallOptions(directory, Autostart: !Has(args, "--no-autostart"));
             installer.InstallAsync(exe, Version, options with { ReadmePaths = UI.ShellActions.AllReadmes() },
                 null, CancellationToken.None).GetAwaiter().GetResult();

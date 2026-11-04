@@ -1,4 +1,5 @@
 using System.Runtime.Versioning;
+using FileDial.Core.Localization;
 using FileDial.Core.Settings;
 using FileDial.Core.Setup;
 using Microsoft.Win32;
@@ -21,6 +22,7 @@ public sealed class InstallerTests : IDisposable
         {
             UninstallKey = _registry + @"\Uninstall\FileDial",
             RunKey = _registry + @"\Run",
+            ClassesKey = _registry + @"\Classes",
             StartMenuFolder = Path.Combine(_root, "Пуск"),
             DesktopFolder = Path.Combine(_root, "Рабочий стол"),
             SettingsPath = Path.Combine(_root, "Roaming", "FileDial", "settings.json"),
@@ -170,6 +172,61 @@ public sealed class InstallerTests : IDisposable
         using (new FileStream(app.ExePath, FileMode.Open, FileAccess.Read, FileShare.None))
             Assert.Equal([app.ExePath], _installer.Uninstall(app, removeData: false));
         Assert.True(Directory.Exists(Target));
+    }
+
+    [Fact]
+    public async Task Install_RegistersContextMenuForInstalledExe()
+    {
+        var exe = await _installer.InstallAsync(_source, "1.0", new InstallOptions(Target), null, CancellationToken.None);
+
+        foreach (var cls in new[] { "*", "Directory" })
+        {
+            var verb = $@"{_env.ClassesKey}\{cls}\shell\FileDial";
+            Assert.Equal(Lang.T.CtxVerb, Value(verb, ""));
+            Assert.Equal($"\"{exe}\",0", Value(verb, "Icon"));
+            Assert.Equal("Player", Value(verb, "MultiSelectModel"));
+            Assert.Equal($"\"{exe}\" --dial", Value(verb + @"\command", ""));
+        }
+        Assert.True(_installer.ContextMenuPointsTo(exe));
+        Assert.True(SettingsStore.Load(_env.SettingsPath).ContextMenu);
+    }
+
+    [Fact]
+    public async Task ContextMenu_Register_IsIdempotent_AndFollowsExe()
+    {
+        ContextMenuEntry.Register(_env.ClassesKey, @"D:\portable\FileDial.exe", "Old");
+        var exe = await _installer.InstallAsync(_source, "1.0", new InstallOptions(Target), null, CancellationToken.None);
+        await _installer.InstallAsync(_source, "1.1", new InstallOptions(Target), null, CancellationToken.None);
+
+        Assert.True(_installer.ContextMenuPointsTo(exe)); // переносная копия уступила установленной
+        Assert.Equal(Lang.T.CtxVerb, Value($@"{_env.ClassesKey}\Directory\shell\FileDial", ""));
+    }
+
+    [Fact]
+    public async Task Update_UncheckedContextMenu_RemovesEntry_AndRemembersChoice()
+    {
+        var exe = await _installer.InstallAsync(_source, "1.0", new InstallOptions(Target), null, CancellationToken.None);
+        await _installer.InstallAsync(_source, "1.1", new InstallOptions(Target, ContextMenu: false), null, CancellationToken.None);
+
+        Assert.False(_installer.ContextMenuPointsTo(exe));
+        Assert.Null(Value($@"{_env.ClassesKey}\*\shell\FileDial\command", ""));
+        Assert.Null(Value($@"{_env.ClassesKey}\Directory\shell\FileDial", ""));
+        // Программа сверяет пункт с настройкой при запуске — снятая галочка не должна вернуться.
+        Assert.False(SettingsStore.Load(_env.SettingsPath).ContextMenu);
+    }
+
+    [Fact]
+    public async Task Uninstall_RemovesOwnContextMenu_KeepsForeign()
+    {
+        await _installer.InstallAsync(_source, "1.0", new InstallOptions(Target), null, CancellationToken.None);
+        _installer.Uninstall(_installer.FindInstalled()!, removeData: false);
+        Assert.Null(ContextMenuEntry.TargetOf(_env.ClassesKey));
+        Assert.Null(Value($@"{_env.ClassesKey}\Directory\shell\FileDial", ""));
+
+        await _installer.InstallAsync(_source, "1.0", new InstallOptions(Target), null, CancellationToken.None);
+        ContextMenuEntry.Register(_env.ClassesKey, @"D:\portable\FileDial.exe", "FileDial");
+        _installer.Uninstall(_installer.FindInstalled()!, removeData: false);
+        Assert.Equal(@"D:\portable\FileDial.exe", ContextMenuEntry.TargetOf(_env.ClassesKey));
     }
 
     private sealed class SyncProgress(Action<InstallProgress> report) : IProgress<InstallProgress>

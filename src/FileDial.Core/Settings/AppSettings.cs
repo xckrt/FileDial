@@ -27,6 +27,9 @@ public sealed record AppSettings
     /// <summary>Записывать выполненные действия в историю (хранится только на этом компьютере).</summary>
     public bool KeepHistory { get; init; } = true;
 
+    /// <summary>Пункт «FileDial…» в контекстном меню Проводника (для тех, кто не помнит сочетание клавиш).</summary>
+    public bool ContextMenu { get; init; } = true;
+
     /// <summary>Папка с ffmpeg.exe и ffprobe.exe; пусто — искать рядом с программой и в PATH.</summary>
     public string? FfmpegFolder { get; init; }
 

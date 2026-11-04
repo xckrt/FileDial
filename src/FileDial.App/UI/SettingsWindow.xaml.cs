@@ -56,6 +56,7 @@ public partial class SettingsWindow : Window
 
         HotkeyBox.Text = _hotkey.Format();
         AutostartBox.IsChecked = autostart;
+        ContextMenuBox.IsChecked = settings.ContextMenu;
         AnimationsBox.IsChecked = settings.Animations;
         HistoryBox.IsChecked = settings.KeepHistory;
         OpenFolderBox.IsChecked = settings.OpenFolderWhenDone;
@@ -524,6 +525,7 @@ public partial class SettingsWindow : Window
                 .FirstOrDefault(r => r.IsChecked == true)?.Tag as string ?? _initial.Language,
             Animations = AnimationsBox.IsChecked == true,
             KeepHistory = HistoryBox.IsChecked == true,
+            ContextMenu = ContextMenuBox.IsChecked == true,
             OpenFolderWhenDone = OpenFolderBox.IsChecked == true,
             OutputFolder = string.IsNullOrEmpty(folder) ? null : folder,
             FfmpegFolder = _ffmpegFolder,

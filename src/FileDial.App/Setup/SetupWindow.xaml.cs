@@ -95,6 +95,7 @@ public partial class SetupWindow : Window
             AutostartBox.IsChecked = _installer.AutostartPointsTo(app.ExePath);
             StartMenuBox.IsChecked = _installer.ShortcutExists(desktop: false, app.ExePath);
             DesktopBox.IsChecked = _installer.ShortcutExists(desktop: true, app.ExePath);
+            ContextMenuBox.IsChecked = settings.ContextMenu; // реестр программа сверяет с настройкой
         }
 
         foreach (var id in AppSettings.Themes)
@@ -247,7 +248,7 @@ public partial class SetupWindow : Window
     private async Task InstallAsync()
     {
         var options = new InstallOptions(_directory, AutostartBox.IsChecked == true, StartMenuBox.IsChecked == true,
-            DesktopBox.IsChecked == true, ChosenTheme) { ReadmePaths = ShellActions.AllReadmes() };
+            DesktopBox.IsChecked == true, ChosenTheme, ContextMenuBox.IsChecked == true) { ReadmePaths = ShellActions.AllReadmes() };
         BeginWork(_installed is null ? () => Lang.T.SetupInstalling : () => Lang.T.SetupUpdating);
         _cts = new CancellationTokenSource();
         var started = DateTime.UtcNow;

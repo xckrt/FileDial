@@ -40,6 +40,8 @@
                     <TextBlock Text="{l:T UiGeneralTitle}" Style="{StaticResource SectionTitle}" />
                     <CheckBox x:Name="AutostartBox" Style="{StaticResource FlatCheckBox}"
                               Content="{l:T UiAutostart}" />
+                    <CheckBox x:Name="ContextMenuBox" Style="{StaticResource FlatCheckBox}"
+                              Content="{l:T CtxSettingsOption}" />
                     <CheckBox x:Name="AnimationsBox" Style="{StaticResource FlatCheckBox}" Content="{l:T UiAnimations}" />
                     <CheckBox x:Name="HistoryBox" Style="{StaticResource FlatCheckBox}"
                               Content="{l:T UiKeepHistory}" />

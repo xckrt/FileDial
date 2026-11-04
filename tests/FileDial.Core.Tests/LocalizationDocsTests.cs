@@ -248,6 +248,7 @@ public sealed class LocalizationInstallerTests : IDisposable
         var env = new InstallEnvironment
         {
             UninstallKey = _registry + @"\Uninstall\FileDial",
+            ClassesKey = _registry + @"\Classes",
             RunKey = _registry + @"\Run",
             StartMenuFolder = Path.Combine(_root, "Start"),
             DesktopFolder = Path.Combine(_root, "Desktop"),
@@ -265,6 +266,8 @@ public sealed class LocalizationInstallerTests : IDisposable
         using var key = Registry.CurrentUser.OpenSubKey(env.UninstallKey)!;
         Assert.Equal("Radial action menu for files", key.GetValue("Comments"));
         Assert.Equal("FileDial", key.GetValue("DisplayName"));
+        using var verb = Registry.CurrentUser.OpenSubKey(env.ClassesKey + @"\*\shell\FileDial")!;
+        Assert.Equal("Open in FileDial…", verb.GetValue(""));
         Assert.Contains("Copying the program", stages);
         Assert.Equal("Done", stages[^1]);
     }

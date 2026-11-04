@@ -28,6 +28,7 @@ public partial class App : Application
 
     private Mutex? _singleInstance;
     private EventWaitHandle? _exitSignal;
+    private EventWaitHandle? _dialSignal;
     private HotkeyManager? _hotkey;
     private TrayIcon? _tray;
     private RadialWindow? _radial;
@@ -59,7 +60,15 @@ public partial class App : Application
             return;
         }
 
+        // «Открыть в FileDial…» из меню Проводника: круг открывает уже запущенная копия, эта сразу выходит.
+        var dial = ContextMenu.IsDialLaunch(e.Args);
         _singleInstance = new Mutex(true, @"Local\FileDial.Prototype", out var created);
+        if (!created && dial)
+        {
+            ContextMenu.RequestDial();
+            Shutdown();
+            return;
+        }
         if (!created)
         {
             Lang.Set(SettingsStore.Load(SettingsStore.DefaultPath).Language);
@@ -72,11 +81,15 @@ public partial class App : Application
         // Установщик просит закрыться перед обновлением или удалением — выходим штатно, как из меню трея.
         _exitSignal = new EventWaitHandle(false, EventResetMode.AutoReset, RunningCopies.ExitEventName);
         ThreadPool.RegisterWaitForSingleObject(_exitSignal, (_, _) => Dispatcher.BeginInvoke(ExitApp), null, -1, executeOnlyOnce: true);
+        // Пункт меню Проводника при запущенной копии — то же, что горячая клавиша (ждём каждый раз, а не однажды).
+        _dialSignal = new EventWaitHandle(false, EventResetMode.AutoReset, ContextMenu.DialEventName);
+        ThreadPool.RegisterWaitForSingleObject(_dialSignal, (_, _) => Dispatcher.BeginInvoke(OpenDial), null, -1, executeOnlyOnce: false);
 
         _settings = SettingsStore.Load(SettingsStore.DefaultPath);
         Motion.UserEnabled = _settings.Animations;
         Palette.Apply(Theme.Resolve(_settings.Theme));
         Lang.Set(_settings.Language);
+        ContextMenu.Set(_settings.ContextMenu); // пункт меню — на этот exe и на текущем языке
 
         _ = RefreshSpeechSupportAsync();
         var noFfmpeg = FfmpegLocator.LocateDefault(_settings.FfmpegFolder) is null;
@@ -100,7 +113,15 @@ public partial class App : Application
                 "FileDial", MessageBoxButton.OK, MessageBoxImage.Warning);
             OpenSettings();
         }
+        else if (dial)
+        {
+            // Запущены из меню Проводника, а копии в трее не было: открываем круг, когда всё готово.
+            Dispatcher.BeginInvoke(DispatcherPriority.ApplicationIdle, OpenDial);
+        }
     }
+
+    /// <summary>Круг по пункту меню Проводника: тот же путь, что и по горячей клавише.</summary>
+    private void OpenDial() => OnHotkeyPressed(this, EventArgs.Empty);
 
     private async Task RefreshSpeechSupportAsync()
     {
@@ -185,6 +206,10 @@ public partial class App : Application
         if (autostart != Autostart.IsEnabled() && Autostart.Set(autostart) is { } autostartError)
             return autostartError;
 
+        var language = Lang.T.Code;
+        if (ContextMenu.Set(settings.ContextMenu) is { } menuError)
+            return menuError;
+
         try
         {
             SettingsStore.Save(SettingsStore.DefaultPath, settings);
@@ -199,6 +224,8 @@ public partial class App : Application
         Motion.UserEnabled = _settings.Animations;
         Palette.Apply(Theme.Resolve(_settings.Theme));
         Lang.Set(_settings.Language);
+        if (_settings.ContextMenu && Lang.T.Code != language)
+            ContextMenu.Set(true); // текст пункта — на новом языке
         _tray?.SetHotkey(_hotkey.Current?.Format());
         _ = RefreshSpeechSupportAsync(); // могла смениться папка ffmpeg
         return null;
@@ -424,6 +451,7 @@ public partial class App : Application
         _hotkey?.Dispose();
         _singleInstance?.Dispose();
         _exitSignal?.Dispose();
+        _dialSignal?.Dispose();
         base.OnExit(e);
     }
 

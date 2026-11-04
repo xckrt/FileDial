@@ -1,0 +1,30 @@
+namespace FileDial.Core.Localization;
+
+// Пункт «FileDial…» в контекстном меню Проводника: сам пункт, галочки в настройках и установщике.
+
+public abstract partial class Texts
+{
+    /// <summary>Текст пункта в контекстном меню Проводника.</summary>
+    public abstract string CtxVerb { get; }
+    /// <summary>Галочка в настройках («Общее»).</summary>
+    public abstract string CtxSettingsOption { get; }
+    /// <summary>Галочка в установщике («Дополнительно»): короткая — делит строку с автозапуском.</summary>
+    public abstract string CtxSetupOption { get; }
+    public abstract string CtxFailed { get; }
+}
+
+public sealed partial class RuTexts
+{
+    public override string CtxVerb => "Открыть в FileDial…";
+    public override string CtxSettingsOption => "Пункт «Открыть в FileDial…» в меню Проводника";
+    public override string CtxSetupOption => "Пункт в меню Проводника";
+    public override string CtxFailed => "Не удалось изменить пункт в меню Проводника: нет доступа к реестру.";
+}
+
+public sealed partial class EnTexts
+{
+    public override string CtxVerb => "Open in FileDial…";
+    public override string CtxSettingsOption => "“Open in FileDial…” in the Explorer context menu";
+    public override string CtxSetupOption => "Explorer context menu entry";
+    public override string CtxFailed => "Could not change the Explorer context menu entry: no access to the registry.";
+}

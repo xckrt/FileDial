@@ -15,6 +15,8 @@ public sealed record InstallEnvironment
     public required string UninstallKey { get; init; }
     public required string RunKey { get; init; }
     public string RunValue { get; init; } = "FileDial";
+    /// <summary>Классы для пункта контекстного меню (относительно HKCU).</summary>
+    public required string ClassesKey { get; init; }
     public required string StartMenuFolder { get; init; }
     public required string DesktopFolder { get; init; }
     public required string SettingsPath { get; init; }
@@ -25,6 +27,7 @@ public sealed record InstallEnvironment
     {
         UninstallKey = @"Software\Microsoft\Windows\CurrentVersion\Uninstall\FileDial",
         RunKey = @"Software\Microsoft\Windows\CurrentVersion\Run",
+        ClassesKey = ContextMenuEntry.DefaultClassesKey,
         StartMenuFolder = Environment.GetFolderPath(Environment.SpecialFolder.Programs),
         DesktopFolder = Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory),
         SettingsPath = SettingsStore.DefaultPath,
@@ -41,7 +44,8 @@ public sealed record InstallOptions(
     bool Autostart = true,
     bool StartMenuShortcut = true,
     bool DesktopShortcut = false,
-    string? Theme = null)
+    string? Theme = null,
+    bool ContextMenu = true)
 {
     /// <summary>Справка на всех языках для папки программы; по умолчанию — README*.md рядом с установщиком.</summary>
     public IReadOnlyList<string>? ReadmePaths { get; init; }
@@ -154,6 +158,9 @@ public sealed class Installer(InstallEnvironment environment)
                value.Trim('"').Equals(exePath, StringComparison.OrdinalIgnoreCase);
     }
 
+    /// <summary>Пункт в контекстном меню Проводника указывает именно на эту копию.</summary>
+    public bool ContextMenuPointsTo(string exePath) => ContextMenuEntry.PointsTo(environment.ClassesKey, exePath);
+
     public bool ShortcutExists(bool desktop, string exePath) =>
         ShellLink.TargetOf(ShortcutPath(desktop)) is { } target && SamePath(target, exePath);
 
@@ -223,14 +230,17 @@ public sealed class Installer(InstallEnvironment environment)
         }
         SetShortcut(desktop: false, options.StartMenuShortcut, exe);
         SetShortcut(desktop: true, options.DesktopShortcut, exe);
+        if (options.ContextMenu)
+            ContextMenuEntry.Register(environment.ClassesKey, exe, Lang.T.CtxVerb);
+        else
+            ContextMenuEntry.Unregister(environment.ClassesKey);
 
-        // 4. Тема, выбранная в установщике, — в настройки (остальные настройки при обновлении не трогаем).
-        if (options.Theme is { } theme)
-        {
-            var settings = SettingsStore.Load(environment.SettingsPath);
-            if (settings.Theme != theme)
-                SettingsStore.Save(environment.SettingsPath, settings with { Theme = theme });
-        }
+        // 4. Тема и пункт меню, выбранные в установщике, — в настройки (остальные при обновлении не трогаем):
+        //    пункт меню программа сверяет с настройкой при каждом запуске.
+        var settings = SettingsStore.Load(environment.SettingsPath);
+        var chosen = settings with { Theme = options.Theme ?? settings.Theme, ContextMenu = options.ContextMenu };
+        if (chosen != settings)
+            SettingsStore.Save(environment.SettingsPath, chosen);
 
         progress?.Report(new InstallProgress(Lang.T.InstallDone, 1));
         return exe;
@@ -284,7 +294,7 @@ public sealed class Installer(InstallEnvironment environment)
         .Sum(d => new DirectoryInfo(d).EnumerateFiles("*", SearchOption.AllDirectories).Sum(f => f.Length));
 
     /// <summary>
-    /// Удаление: автозапуск, ярлыки и запись в «Приложениях» — если они указывают на эту копию; файлы программы;
+    /// Удаление: автозапуск, ярлыки, пункт контекстного меню и запись в «Приложениях» — если они указывают на эту копию; файлы программы;
     /// по желанию — данные. Возвращает то, что сейчас удалить нельзя (запущенный exe), — это удалит отложенная команда.
     /// </summary>
     public IReadOnlyList<string> Uninstall(InstalledApp app, bool removeData, IProgress<InstallProgress>? progress = null)
@@ -296,6 +306,7 @@ public sealed class Installer(InstallEnvironment environment)
         foreach (var desktop in new[] { false, true })
             if (ShortcutExists(desktop, app.ExePath))
                 File.Delete(ShortcutPath(desktop));
+        ContextMenuEntry.Unregister(environment.ClassesKey, app.ExePath);
 
         progress?.Report(new InstallProgress(Lang.T.InstallStageAppsEntry, 0.4));
         Registry.CurrentUser.DeleteSubKeyTree(environment.UninstallKey, throwOnMissingSubKey: false);

@@ -96,9 +96,13 @@
                     </Grid>
 
                     <TextBlock Text="{l:T SetupMoreTitle}" Style="{StaticResource SectionTitle}" />
-                    <CheckBox x:Name="AutostartBox" Style="{StaticResource FlatCheckBox}" IsChecked="True"
-                              Content="{l:T SetupAutostart}" />
-                    <!-- Оба ярлыка в одну строку — место под выбор языка. -->
+                    <!-- Автозапуск и пункт меню Проводника, ниже оба ярлыка — по строке: окно фиксированной высоты. -->
+                    <WrapPanel>
+                        <CheckBox x:Name="AutostartBox" Style="{StaticResource FlatCheckBox}" IsChecked="True"
+                                  Content="{l:T SetupAutostart}" Margin="0,4,24,4" />
+                        <CheckBox x:Name="ContextMenuBox" Style="{StaticResource FlatCheckBox}" IsChecked="True"
+                                  Content="{l:T CtxSetupOption}" />
+                    </WrapPanel>
                     <WrapPanel>
                         <CheckBox x:Name="StartMenuBox" Style="{StaticResource FlatCheckBox}" IsChecked="True"
                                   Content="{l:T SetupStartMenuShortcut}" Margin="0,4,24,4" />
