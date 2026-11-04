@@ -241,6 +241,7 @@ public partial class App : Application
                         // Модель из настроек или найденная сама (рядом с программой / скачанная).
                         WhisperModel = SpeechModels.FindDefault(settings.WhisperModel),
                         SpeechFilterAvailable = speechFilter,
+                        BackgroundModel = BackgroundModels.FindDefault(),
                     });
             });
 
@@ -274,6 +275,11 @@ public partial class App : Application
             if (radial.Chosen is { Id: ActionIds.SetupSpeech })
             {
                 OpenSettings(SettingsSection.Speech);
+                return;
+            }
+            if (radial.Chosen is { Id: ActionIds.SetupBackground })
+            {
+                OpenSettings(SettingsSection.Background);
                 return;
             }
             if (radial.Chosen is { Id: ActionIds.ArchiveContents } && menu.SourcePath is { } archive)

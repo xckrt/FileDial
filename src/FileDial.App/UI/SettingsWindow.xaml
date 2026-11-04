@@ -110,6 +110,22 @@
                     <TextBlock x:Name="WhisperStatus" Foreground="{DynamicResource MutedBrush}" FontSize="12"
                                TextWrapping="Wrap" Margin="0,6,0,8" />
                     <WrapPanel x:Name="WhisperLanguages" />
+
+                    <TextBlock x:Name="BackgroundSection" Text="{l:T BgSettingsTitle}"
+                               Style="{StaticResource SectionTitle}" />
+                    <WrapPanel x:Name="BgDownloadButtons" Margin="0,0,0,8" />
+                    <StackPanel x:Name="BgDownloadPanel" Visibility="Collapsed" Margin="0,0,0,10">
+                        <DockPanel>
+                            <Button DockPanel.Dock="Right" Content="{l:T UiCancel}" Style="{StaticResource SmallButton}"
+                                    Margin="8,0,0,0" Click="OnCancelBgDownload" />
+                            <TextBlock x:Name="BgDownloadText" Foreground="{DynamicResource TextBrush}" FontSize="12"
+                                       VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                        </DockPanel>
+                        <ProgressBar x:Name="BgDownloadProgress" Style="{StaticResource FlatProgress}" Minimum="0"
+                                     Maximum="1" Margin="0,6,0,0" />
+                    </StackPanel>
+                    <TextBlock x:Name="BgStatus" Foreground="{DynamicResource MutedBrush}" FontSize="12"
+                               TextWrapping="Wrap" />
                 </StackPanel>
             </ScrollViewer>
         </DockPanel>

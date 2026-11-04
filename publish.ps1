@@ -12,7 +12,8 @@
     ffmpeg и модель распознавания речи в дистрибутив не входят: программа ставит их сама одной кнопкой.
     Для полностью офлайн-дистрибутива положите в dist\FileDial перед упаковкой:
       ffmpeg.exe и ffprobe.exe — рядом с FileDial.exe;
-      models\ggml-base.bin (или ggml-small.bin) — модель whisper.
+      models\ggml-base.bin (или ggml-small.bin) — модель whisper;
+      models\isnet-general-use.onnx — модель для «Убрать фон».
     и запустите скрипт с ключом -KeepExtras.
 
 .EXAMPLE

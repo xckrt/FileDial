@@ -26,6 +26,9 @@ public sealed record JobSettings
     /// <summary>В найденном ffmpeg есть фильтр whisper (проверяется программой при запуске).</summary>
     public bool SpeechFilterAvailable { get; init; }
 
+    /// <summary>Файл модели для «Убрать фон» (находит программа); null — модели нет.</summary>
+    public string? BackgroundModel { get; init; }
+
     public string OutputDirectoryFor(string sourcePath) =>
         string.IsNullOrWhiteSpace(OutputFolder) ? Path.GetDirectoryName(sourcePath)! : OutputFolder;
 

@@ -47,6 +47,13 @@
     <EmbeddedResource Include="..\..\README.ru.md" LogicalName="README.ru.md" WithCulture="false" />
   </ItemGroup>
 
+  <!-- ONNX Runtime кладёт рядом с dll библиотеки импорта (.lib) — для работы они не нужны, в дистрибутив не берём. -->
+  <Target Name="DropImportLibraries" AfterTargets="ComputeResolvedFilesToPublishList">
+    <ItemGroup>
+      <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)" Condition="'%(Extension)' == '.lib'" />
+    </ItemGroup>
+  </Target>
+
   <ItemGroup>
     <None Include="..\..\README.md" Link="README.md" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\README.ru.md" Link="README.ru.md" CopyToOutputDirectory="PreserveNewest" />

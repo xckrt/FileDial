@@ -17,6 +17,7 @@ internal enum SettingsSection
     None,
     Speech,
     Ffmpeg,
+    Background,
 }
 
 /// <summary>
@@ -33,6 +34,7 @@ public partial class SettingsWindow : Window
     private string? _whisperModel;
     private CancellationTokenSource? _download;
     private CancellationTokenSource? _ffmpegInstall;
+    private CancellationTokenSource? _bgDownload;
     private readonly Action? _onFfmpegInstalled;
     private readonly bool _speechFilter;
     private static readonly HttpClient Http = new() { Timeout = Timeout.InfiniteTimeSpan };
@@ -94,6 +96,7 @@ public partial class SettingsWindow : Window
         FillTargets(ImageTargets, "Image", AppSettings.ImageTargets, settings.ImageTargetBytes);
         UpdateFfmpegStatus();
         UpdateWhisperStatus();
+        UpdateBackgroundStatus();
         foreach (var (code, label) in Speech.Languages)
         {
             WhisperLanguages.Children.Add(new RadioButton
@@ -121,6 +124,8 @@ public partial class SettingsWindow : Window
                 SpeechSection.BringIntoView(new Rect(0, 0, 1, 300));
             else if (focus == SettingsSection.Ffmpeg)
                 FfmpegSection.BringIntoView(new Rect(0, 0, 1, 300));
+            else if (focus == SettingsSection.Background)
+                BackgroundSection.BringIntoView(new Rect(0, 0, 1, 200));
         };
         // Закрыли окно во время загрузки — останавливаем её, недокачанный файл удаляется.
         Closed += (_, _) =>
@@ -133,6 +138,7 @@ public partial class SettingsWindow : Window
             }
             _download?.Cancel();
             _ffmpegInstall?.Cancel();
+            _bgDownload?.Cancel();
         };
     }
 
@@ -174,6 +180,7 @@ public partial class SettingsWindow : Window
         HotkeyHint.Text = _hotkeyHint();
         UpdateFfmpegStatus();
         UpdateWhisperStatus();
+        UpdateBackgroundStatus();
     }
 
     /// <summary>Пока идёт запись сочетания, горячую клавишу программы не обрабатываем.</summary>
@@ -503,6 +510,71 @@ public partial class SettingsWindow : Window
     }
 
     private void OnCancelDownload(object sender, RoutedEventArgs e) => _download?.Cancel();
+
+    // --- Удаление фона ---
+
+    private void UpdateBackgroundStatus()
+    {
+        var model = BackgroundModels.FindDefault();
+        BgStatus.Text = model is null
+            ? Lang.T.BgSettingsMissing
+            : Lang.T.BgSettingsInstalled(Path.GetFileName(model), Size(model));
+
+        BgDownloadButtons.Children.Clear();
+        var button = new Button
+        {
+            Content = model is null ? Lang.T.BgSettingsDownload(BackgroundModels.SizeLabel) : Lang.T.BgSettingsDownloaded,
+            ToolTip = Lang.T.BgSettingsDownloadTip,
+            Style = (Style)FindResource(model is null ? "AccentButton" : "SmallButton"),
+            Margin = new Thickness(0, 0, 8, 0),
+            IsEnabled = model is null && _bgDownload is null,
+        };
+        button.Click += async (_, _) => await DownloadBackgroundModelAsync();
+        BgDownloadButtons.Children.Add(button);
+    }
+
+    private async Task DownloadBackgroundModelAsync()
+    {
+        _bgDownload = new CancellationTokenSource();
+        BgDownloadPanel.Visibility = Visibility.Visible;
+        UpdateBackgroundStatus();
+        var name = BackgroundModels.FileName;
+        var progress = new Progress<(long Done, long Total)>(p =>
+        {
+            BgDownloadText.Text = Lang.T.UiProgressOf(name, SizeFormatter.Format(p.Done), SizeFormatter.Format(p.Total));
+            BgDownloadProgress.Value = p.Total > 0 ? (double)p.Done / p.Total : 0;
+        });
+        BgDownloadText.Text = Lang.T.UiConnecting(name);
+        BgDownloadProgress.Value = 0;
+
+        try
+        {
+            var token = _bgDownload.Token;
+            var path = await Task.Run(() => BackgroundModels.DownloadAsync(Http, SpeechModels.DataFolder, progress, token));
+            ShowError(Lang.T.UiModelDownloadedVerified(Path.GetFileName(path)));
+        }
+        catch (OperationCanceledException)
+        {
+            ShowError(Lang.T.UiDownloadCancelled);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or IOException or InvalidDataException or UnauthorizedAccessException)
+        {
+            ErrorLog.Write("Загрузка модели фона", ex);
+            ShowError(ex is HttpRequestException ? Lang.T.UiDownloadFailed : ex.Message);
+        }
+        finally
+        {
+            _bgDownload.Dispose();
+            _bgDownload = null;
+            if (IsLoaded)
+            {
+                BgDownloadPanel.Visibility = Visibility.Collapsed;
+                UpdateBackgroundStatus();
+            }
+        }
+    }
+
+    private void OnCancelBgDownload(object sender, RoutedEventArgs e) => _bgDownload?.Cancel();
 
     // --- Сохранение ---
 

@@ -102,6 +102,9 @@ public static class ActionIds
     /// <summary>Открыть настройки распознавания речи (скачать модель).</summary>
     public const string SetupSpeech = "setup-speech";
 
+    /// <summary>Открыть настройки удаления фона (скачать модель).</summary>
+    public const string SetupBackground = "setup-background";
+
     // Конвертация: id вида «image-to:.png». Расширение после двоеточия — целевой формат.
     public const string ImageToPrefix = "image-to:";
     public const string AudioToPrefix = "audio-to:";

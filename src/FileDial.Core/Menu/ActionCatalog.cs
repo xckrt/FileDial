@@ -131,7 +131,7 @@ public static class ActionCatalog
             Action(ActionIds.Mirror, Lang.T.Mirror, null),
             Action(ActionIds.ImageCompress1Mb, Lang.T.CompressTo(JobSettings.TargetLabel(settings.ImageTargetBytes)),
                 sizeBytes <= settings.ImageTargetBytes ? CompressionCheck.AlreadySmallFor(settings.ImageTargetBytes) : null),
-            Stub(ActionIds.RemoveBackground, Lang.T.RemoveBackground),
+            BackgroundAction(settings),
             Action(ActionIds.ImageToPdf, Lang.T.ToPdf, null),
         ];
     }
@@ -265,5 +265,10 @@ public static class ActionCatalog
         return Speech.NeedsModel(settings) ? action with { FixActionId = ActionIds.SetupSpeech } : action;
     }
 
-    private static DialAction Stub(string id, string label) => new(id, label, false, NotInPrototype);
+    /// <summary>«Убрать фон»: без модели сектор неактивен, но выбор ведёт к её загрузке.</summary>
+    private static DialAction BackgroundAction(JobSettings settings) =>
+        settings.BackgroundModel is { } model && File.Exists(model)
+            ? Action(ActionIds.RemoveBackground, Lang.T.RemoveBackground, null)
+            : Action(ActionIds.RemoveBackground, Lang.T.RemoveBackground, BackgroundModels.NeedsModel)
+                with { FixActionId = ActionIds.SetupBackground };
 }
