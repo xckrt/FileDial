@@ -114,6 +114,9 @@ public static class FileJobs
     /// <summary>Перед запуском нужно спросить, до какого размера уменьшить («Уменьшить…»).</summary>
     public static bool NeedsResizeInput(string actionId) => actionId == ActionIds.ResizeImage;
 
+    /// <summary>Перед запуском нужно выбрать кадр («Кадрировать…»).</summary>
+    public static bool NeedsCropInput(string actionId) => actionId == ActionIds.CropImage;
+
     /// <summary>Перед запуском нужно спросить новый пароль («Защитить паролем»).</summary>
     public static bool NeedsNewPassword(string actionId) =>
         actionId is ActionIds.ArchivePassword or ActionIds.PdfProtect or ActionIds.DocProtect;
@@ -124,7 +127,7 @@ public static class FileJobs
     public static bool IsImplemented(string actionId) =>
         !NeedsFfmpeg(actionId) || actionId is ActionIds.Compress25 or ActionIds.ImageCompress1Mb or ActionIds.ImageToPdf
             or ActionIds.DocCompress or ActionIds.RemoveBackground
-            or ActionIds.Subtitles or ActionIds.SpeechToText || NeedsTrimInput(actionId) || NeedsResizeInput(actionId) || TextFiles.TextFileJobs.IsOwn(actionId) ||
+            or ActionIds.Subtitles or ActionIds.SpeechToText || NeedsTrimInput(actionId) || NeedsResizeInput(actionId) || NeedsCropInput(actionId) || TextFiles.TextFileJobs.IsOwn(actionId) ||
         ConversionSpecs.For(actionId) is not null;
 
     /// <summary>Перед запуском нужно спросить у пользователя границы отрезка.</summary>

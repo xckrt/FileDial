@@ -353,6 +353,8 @@ public partial class App : Application
                 AskPageRange(action, menu.SourcePaths[0]);
             else if (FileJobs.NeedsResizeInput(action.Id))
                 AskResize(action, menu.SourcePaths);
+            else if (FileJobs.NeedsCropInput(action.Id))
+                AskCrop(action, menu.SourcePaths);
             // Отрисовка и распознавание PDF — средствами Windows, поэтому задачи живут здесь, а не в ядре.
             else if (action.Id == ActionIds.PdfToImages)
                 StartJob(action, menu.SourcePaths, _ => new PdfImagesJob(_settings.Jobs.OutputFolder));
@@ -405,6 +407,38 @@ public partial class App : Application
         }
         var output = _settings.Jobs.OutputFolder;
         StartJob(action, images, tools => new ImageResizeJob(tools!, request, output));
+    }
+
+    /// <summary>
+    /// «Кадрировать…»: для одной картинки — превью с рамкой, для нескольких — пропорции и какую часть оставить.
+    /// Выбор пропорций запоминается, затем обычное окно выполнения.
+    /// </summary>
+    private void AskCrop(DialAction action, IReadOnlyList<string> images)
+    {
+        var tools = FfmpegLocator.LocateDefault(_settings.FfmpegFolder);
+        ProbeInfo? info = null;
+        if (images.Count == 1 && tools is not null)
+            info = new FfprobeMediaProbe(tools, MediaProbeTimeout).TryProbe(images[0]);
+
+        var title = images.Count == 1 ? Path.GetFileName(images[0]) : Lang.T.Images(images.Count);
+        if (CropWindow.Ask(title, images.Count == 1 ? images[0] : null, tools, info, CropChoice.Parse(_settings.Crop))
+            is not { } answer)
+            return;
+
+        if (answer.Choice.Format() != _settings.Crop)
+        {
+            _settings = _settings with { Crop = answer.Choice.Format() };
+            try
+            {
+                SettingsStore.Save(SettingsStore.DefaultPath, _settings);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                ErrorLog.Write("Сохранение пропорций", ex); // не страшно: в следующий раз предложим прежние
+            }
+        }
+        var output = _settings.Jobs.OutputFolder;
+        StartJob(action, images, tools => new ImageCropJob(tools!, answer.Request, output));
     }
 
     /// <summary>«Защитить паролем» (архив, PDF, документ): пароль вводится дважды, затем обычное окно выполнения.</summary>

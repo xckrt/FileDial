@@ -1,4 +1,4 @@
-using System.Security.Cryptography;
+﻿using System.Security.Cryptography;
 using FileDial.Core.Compression;
 using FileDial.Core.Custom;
 using FileDial.Core.History;
@@ -177,12 +177,16 @@ public class CustomPlacementTests
     }
 
     [Fact]
-    public void ImageDial_MoreReplacesLastSector()
+    public void ImageDial_FirstCustomTakesFreeEighthSector_SecondMakesMore()
     {
-        var menu = Menu([@"C:\p\photo.png"], [Custom("Уменьшить", "image")]);
+        // У картинок восьмой сектор свободен (повороты собраны в «Повернуть ›») — своё действие встаёт прямо в него.
+        var one = Menu([@"C:\p\photo.png"], [Custom("Уменьшить", "image")]);
+        Assert.Equal("custom:Уменьшить", one.Actions[7].Id);
+        Assert.Equal(ActionIds.ImageToPdf, one.Actions[6].Id);
 
-        Assert.Equal(CustomActionIds.More, menu.Actions[7].Id);
-        Assert.Equal([ActionIds.ImageToPdf, "custom:Уменьшить"], menu.Actions[7].Children!.Select(c => c.Id));
+        var two = Menu([@"C:\p\photo.png"], [Custom("Уменьшить", "image"), Custom("Печать", "image")]);
+        Assert.Equal(CustomActionIds.More, two.Actions[7].Id);
+        Assert.Equal(["custom:Уменьшить", "custom:Печать"], two.Actions[7].Children!.Select(c => c.Id));
     }
 
     [Fact]

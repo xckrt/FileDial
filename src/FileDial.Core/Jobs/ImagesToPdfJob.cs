@@ -76,10 +76,9 @@ public sealed class ImagesToPdfJob(FfmpegTools tools, string? outputDirectory = 
             throw new CompressionException(Lang.T.JobCannotReadImageNamed(Path.GetFileName(source)));
 
         var flatten = ConversionSpecs.FlattenOnWhite(info, null);
-        IReadOnlyList<string> map = flatten.Contains("-filter_complex") ? [] : ["-map", "0:v:0"];
         // 4:2:0 и RGB-JPEG понимают все просмотрщики PDF.
         var args = new List<string> { "-hide_banner", "-nostdin", "-y", "-loglevel", "error", "-i", source };
-        args.AddRange([.. map, "-frames:v", "1", "-map_metadata", "-1", .. flatten,
+        args.AddRange([.. flatten, "-frames:v", "1", "-map_metadata", "-1",
             "-c:v", "mjpeg", "-q:v", "3", "-pix_fmt", "yuvj420p", "-f", "image2", "-update", "1", jpeg]);
 
         var result = await ProcessRunner.RunAsync(tools.Ffmpeg, args, null, captureOutput: false, ct).ConfigureAwait(false);

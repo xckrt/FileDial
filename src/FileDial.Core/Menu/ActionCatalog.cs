@@ -122,19 +122,42 @@ public static class ActionCatalog
 
     private static IReadOnlyList<DialAction> ForImage(string path, long sizeBytes, ProbeInfo? media, JobSettings settings)
     {
+        // HEIC/AVIF, в котором ffprobe не нашёл картинки, ffmpeg и обработать не сможет — говорим сразу.
+        if (FileKinds.Heif.Contains(Path.GetExtension(path)) && media is { HasVideo: false })
+            return Disable(ImageActions(path, sizeBytes, settings), Lang.T.ImgHeifUnreadable);
+        return ImageActions(path, sizeBytes, settings);
+    }
+
+    private static IReadOnlyList<DialAction> Disable(IReadOnlyList<DialAction> actions, string reason) =>
+        actions.Select(a => a.IsGroup
+            ? DialAction.Group(a.Id, a.Label, Disable(a.Children!, reason))
+            : a with { IsEnabled = false, DisabledReason = reason, FixActionId = null }).ToList();
+
+    private static IReadOnlyList<DialAction> ImageActions(string path, long sizeBytes, JobSettings settings)
+    {
         return
         [
             DialAction.Group(ActionIds.ImageConvert, Lang.T.Format, Formats(path, ImageFormats, ActionIds.ImageTo)),
             Action(ActionIds.ResizeImage, Lang.T.RszLabel, null) with { Caption = Lang.T.RszCaption },
-            Action(ActionIds.RotateRight, Lang.T.RotateRight, null),
-            Action(ActionIds.RotateLeft, Lang.T.RotateLeft, null),
-            Action(ActionIds.Mirror, Lang.T.Mirror, null),
+            DialAction.Group(ActionIds.ImageRotate, Lang.T.ImgRotateGroup, RotateActions()),
+            Action(ActionIds.CropImage, Lang.T.ImgCropLabel, null) with { Caption = Lang.T.ImgCropCaption },
             Action(ActionIds.ImageCompress1Mb, Lang.T.CompressTo(JobSettings.TargetLabel(settings.ImageTargetBytes)),
                 sizeBytes <= settings.ImageTargetBytes ? CompressionCheck.AlreadySmallFor(settings.ImageTargetBytes) : null),
             BackgroundAction(settings),
             Action(ActionIds.ImageToPdf, Lang.T.ToPdf, null),
+            // Восьмой сектор свободен: в него встаёт первое своё действие для картинок (см. CustomPlacement).
         ];
     }
+
+    /// <summary>Веер «Повернуть ›»: короткие подписи во внешнем кольце, полные — в заголовке окна и в истории.</summary>
+    private static IReadOnlyList<DialAction> RotateActions() =>
+    [
+        Action(ActionIds.RotateRight, Lang.T.ImgRight, null) with { Caption = Lang.T.RotateRight },
+        Action(ActionIds.RotateLeft, Lang.T.ImgLeft, null) with { Caption = Lang.T.RotateLeft },
+        Action(ActionIds.Rotate180, Lang.T.ImgHalfTurn, null) with { Caption = Lang.T.ImgRotate180 },
+        Action(ActionIds.Mirror, Lang.T.ImgFlipHorizontalShort, null) with { Caption = Lang.T.ImgFlipHorizontal },
+        Action(ActionIds.MirrorVertical, Lang.T.ImgFlipVerticalShort, null) with { Caption = Lang.T.ImgFlipVertical },
+    ];
 
     private static IReadOnlyList<DialAction> ForAudio(string path, ProbeInfo? media, JobSettings settings) =>
     [

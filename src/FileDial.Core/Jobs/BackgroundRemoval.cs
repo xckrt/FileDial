@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.Globalization;
 using System.Text;
 using FileDial.Core.Compression;
@@ -328,7 +328,7 @@ public sealed class RemoveBackgroundJob(FfmpegTools tools, string? modelPath, st
 
         progress?.Report(new JobProgress(Lang.T.BgStageReading, null));
         var scale = pixels > MaxPixels ? Math.Sqrt((double)MaxPixels / pixels) : 1.0;
-        var (width, height, rgba) = await DecodeAsync(sourcePath, scale, ct).ConfigureAwait(false);
+        var (width, height, rgba) = await DecodeAsync(sourcePath, info, scale, ct).ConfigureAwait(false);
 
         progress?.Report(new JobProgress(Lang.T.BgStageLoadingModel, null));
         await Task.Run(() =>
@@ -387,15 +387,12 @@ public sealed class RemoveBackgroundJob(FfmpegTools tools, string? modelPath, st
     }
 
     /// <summary>Первый кадр как RGBA через PAM (у него в заголовке размер — уже после поворота по EXIF).</summary>
-    private async Task<(int Width, int Height, byte[] Rgba)> DecodeAsync(string source, double scale, CancellationToken ct)
+    private async Task<(int Width, int Height, byte[] Rgba)> DecodeAsync(string source, ProbeInfo info, double scale, CancellationToken ct)
     {
-        var args = new List<string> { "-hide_banner", "-nostdin", "-loglevel", "error", "-i", source, "-map", "0:v:0", "-frames:v", "1" };
-        if (scale < 1)
-        {
-            var k = scale.ToString("0.######", CultureInfo.InvariantCulture);
-            args.AddRange(["-vf", $"scale=trunc(iw*{k}):trunc(ih*{k}):flags=area"]);
-        }
-        args.AddRange(["-pix_fmt", "rgba", "-c:v", "pam", "-f", "image2pipe", "-"]);
+        var k = scale.ToString("0.######", CultureInfo.InvariantCulture);
+        var args = new List<string> { "-hide_banner", "-nostdin", "-loglevel", "error", "-i", source };
+        args.AddRange(info.PictureArguments(scale < 1 ? $"scale=trunc(iw*{k}):trunc(ih*{k}):flags=area" : null));
+        args.AddRange(["-frames:v", "1", "-pix_fmt", "rgba", "-c:v", "pam", "-f", "image2pipe", "-"]);
 
         (int, int, byte[])? image = null;
         var (exit, errors) = await FfmpegPipe.RunAsync(tools.Ffmpeg, args, null,

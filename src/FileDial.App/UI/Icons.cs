@@ -49,7 +49,12 @@ internal static class Icons
         [ActionIds.ResizeImage] = Shrink,
         [ActionIds.RotateRight] = "M19,12 A7,7 0 1 1 15.5,5.9 M15,2.5 L15.8,6 L12.3,6.8",
         [ActionIds.RotateLeft] = "M5,12 A7,7 0 1 0 8.5,5.9 M9,2.5 L8.2,6 L11.7,6.8",
+        [ActionIds.ImageRotate] = "M19,12 A7,7 0 1 1 15.5,5.9 M15,2.5 L15.8,6 L12.3,6.8",
+        [ActionIds.Rotate180] = "M4.5,14 A7.5,7.5 0 0 1 19.5,14 M17,11.5 L19.5,14 L22,11.5 M4.5,19.5 H19.5",
         [ActionIds.Mirror] = "M12,3 V21 M9,6.5 L3.5,17.5 H9 Z M15,6.5 L20.5,17.5 H15 Z",
+        [ActionIds.MirrorVertical] = "M3,12 H21 M6.5,9 L17.5,3.5 V9 Z M6.5,15 L17.5,20.5 V15 Z",
+        // Кадрирование — две встречные скобки-уголка, как у фоторедакторов (у «Обрезать» видео — ножницы).
+        [ActionIds.CropImage] = "M6.5,2.5 V17.5 H21.5 M2.5,6.5 H17.5 V21.5",
         [ActionIds.ImageCompress1Mb] = Compress,
         [ActionIds.RemoveBackground] = "M4,5 H20 V19 H4 Z M7.5,19 C7.5,14.5 16.5,14.5 16.5,19 " + Circle(12, 10.5, 2.6),
         [ActionIds.ImageToPdf] = "M6,3 H14 L19,8 V21 H6 Z M14,3 V8 H19 M9,13 H16 M9,17 H14",

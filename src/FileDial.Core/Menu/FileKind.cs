@@ -21,7 +21,14 @@ public enum FileKind
 public static class FileKinds
 {
     public static readonly IReadOnlySet<string> Video = Set(".mp4", ".mov", ".mkv", ".webm");
-    public static readonly IReadOnlySet<string> Image = Set(".jpg", ".jpeg", ".png", ".webp", ".bmp", ".gif", ".tif", ".tiff");
+    public static readonly IReadOnlySet<string> Image = Set(".jpg", ".jpeg", ".png", ".webp", ".bmp", ".gif", ".tif", ".tiff",
+        ".heic", ".heif", ".hif", ".avif");
+
+    /// <summary>
+    /// Контейнер HEIF: снимки iPhone (HEVC, часто сеткой плиток), .hif у Fujifilm и AVIF (AV1). Только для чтения:
+    /// ffmpeg их разбирает (сетку склеивает сам, поворот irot применяет), но записать HEIC не умеет.
+    /// </summary>
+    public static readonly IReadOnlySet<string> Heif = Set(".heic", ".heif", ".hif", ".avif");
     public static readonly IReadOnlySet<string> Audio = Set(".mp3", ".wav", ".flac", ".m4a", ".aac", ".ogg", ".opus", ".wma");
 
     /// <summary>Архивы, которые распаковывает .NET (zip) или встроенный в Windows tar.exe (остальные).</summary>
