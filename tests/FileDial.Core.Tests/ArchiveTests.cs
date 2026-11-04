@@ -140,7 +140,7 @@ public class ArchiveIntegrationTests : IDisposable
 
     private static Task<JobResult> Run(IFileJob job, string path) => job.RunAsync(path, null, CancellationToken.None);
 
-    [Fact]
+    [CyrillicWindowsFact]
     public async Task LegacyZip_CyrillicNames_AreReadCorrectly()
     {
         var zip = LegacyZip("Документы.zip", ("Отчёт за май.txt", "раз"), ("Счета/январь.txt", "два"));
@@ -154,7 +154,7 @@ public class ArchiveIntegrationTests : IDisposable
         Assert.Empty(Directory.GetDirectories(_root, ".filedial-*"));
     }
 
-    [Fact]
+    [CyrillicWindowsFact]
     public async Task ExtractHere_SingleRootFolder_HasNoDoubleNesting()
     {
         var zip = LegacyZip("проект-v2.zip", ("проект/readme.txt", "r"), ("проект/src/main.txt", "m"));
@@ -211,7 +211,7 @@ public class ArchiveIntegrationTests : IDisposable
         Assert.Contains("Проект/a.txt", zip.Entries.Select(e => e.FullName));
     }
 
-    [Fact]
+    [CyrillicWindowsFact]
     public async Task SevenZip_RoundTrip_AndCorruptionIsDetected()
     {
         if (!ArchiveSupport.TarAvailable) return;
@@ -238,7 +238,7 @@ public class ArchiveIntegrationTests : IDisposable
         await Assert.ThrowsAsync<CompressionException>(() => Run(new ArchiveTestJob(), broken));
     }
 
-    [Fact]
+    [CyrillicWindowsFact]
     public async Task TarGz_IsRepackedToZip()
     {
         if (!ArchiveSupport.TarAvailable) return;

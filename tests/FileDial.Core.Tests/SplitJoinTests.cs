@@ -110,7 +110,7 @@ public class SplitJoinTests : IDisposable
         Assert.Equal(expected, FileParts.PartCount(size, part));
     }
 
-    [Fact]
+    [CyrillicWindowsFact]
     public async Task SevenZip_SurvivesSplitAndJoin()
     {
         if (!ArchiveSupport.TarAvailable) return;

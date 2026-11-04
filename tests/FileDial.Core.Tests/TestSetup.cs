@@ -29,3 +29,19 @@ public sealed class LanguageCollection
 {
     public const string Name = "Language";
 }
+
+/// <summary>
+/// Тест с кириллицей в путях через встроенный tar.exe или в старых zip: tar получает аргументы в ANSI-кодировке,
+/// а имена в zip без флага UTF-8 — в OEM. Кириллицу они передают только в Windows с кириллической кодировкой
+/// (1251/866). В английской Windows (например, на GitHub Actions) программа честно отвечает «не передаёт» —
+/// там такие тесты пропускаем.
+/// </summary>
+public sealed class CyrillicWindowsFactAttribute : FactAttribute
+{
+    public CyrillicWindowsFactAttribute()
+    {
+        var text = System.Globalization.CultureInfo.CurrentCulture.TextInfo;
+        if (text.ANSICodePage != 1251 || text.OEMCodePage != 866)
+            Skip = $"Нужна Windows с кириллической кодировкой (ANSI {text.ANSICodePage}, OEM {text.OEMCodePage})";
+    }
+}

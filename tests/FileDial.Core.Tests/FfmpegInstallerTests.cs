@@ -191,7 +191,7 @@ public class FfmpegInstallerTests : IDisposable
         return bytes;
     }
 
-    [Fact]
+    [CyrillicWindowsFact]
     public async Task Install_SevenZip_ExtractsOnlyTwoTools()
     {
         if (!File.Exists(FfmpegInstaller.SystemTar))

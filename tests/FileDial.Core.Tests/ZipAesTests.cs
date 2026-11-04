@@ -61,7 +61,7 @@ public class ZipAesTests : IDisposable
         return zip;
     }
 
-    [Fact]
+    [CyrillicWindowsFact]
     public void RightPassword_ExtractsIdenticalFiles()
     {
         if (!ArchiveSupport.TarAvailable) return;

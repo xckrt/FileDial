@@ -56,7 +56,7 @@ public class ArchivePasswordTests : IDisposable
         Assert.Empty(Directory.GetFiles(_root, ".filedial-*"));
     }
 
-    [Fact]
+    [CyrillicWindowsFact]
     public async Task Extract_AsksForPassword_RejectsWrong_AcceptsRight()
     {
         if (!ArchiveSupport.TarAvailable) return;
@@ -78,7 +78,7 @@ public class ArchivePasswordTests : IDisposable
         Assert.Equal("1234 567890", File.ReadAllText(Path.Combine(ok.OutputPath!, "Сканы", "паспорт.txt")));
     }
 
-    [Fact]
+    [CyrillicWindowsFact]
     public async Task Test_And_Repack_WorkWithPassword()
     {
         if (!ArchiveSupport.TarAvailable) return;

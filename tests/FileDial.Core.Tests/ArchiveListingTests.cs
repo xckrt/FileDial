@@ -95,7 +95,7 @@ public class ArchiveUnicodePathTests : IDisposable
         return target;
     }
 
-    [Fact]
+    [CyrillicWindowsFact]
     public async Task Listing_ShowsCyrillicNamesAndSizes()
     {
         if (!ArchiveSupport.TarAvailable) return;
@@ -108,7 +108,7 @@ public class ArchiveUnicodePathTests : IDisposable
         Assert.True(contents.UnpackedBytes > 0);
     }
 
-    [Fact]
+    [CyrillicWindowsFact]
     public async Task NestedNonAnsiNames_SurviveRoundTrip()
     {
         if (!ArchiveSupport.TarAvailable) return;
