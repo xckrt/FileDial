@@ -44,6 +44,6 @@ public static class FfmpegLocator
         if (!string.IsNullOrWhiteSpace(preferredFolder) && Locate(preferredFolder, null) is { } preferred)
             return preferred;
         var path = FfmpegInstaller.InstallFolder + Path.PathSeparator + Environment.GetEnvironmentVariable("PATH");
-        return Locate(AppContext.BaseDirectory, path);
+        return Locate(AppPaths.ExeFolder, path);
     }
 }

@@ -9,7 +9,8 @@ namespace FileDial.App.Setup;
 /// <summary>
 /// Один exe — и программа, и установщик. Режим выбирается по имени файла и ключам:
 /// «FileDial-Setup-….exe» или <c>--install</c> — установка, <c>--uninstall</c> — удаление (так его зовут «Приложения»),
-/// иначе — обычная работа в трее. <c>--quiet</c> — без окон (для администраторов): <c>--install --quiet [--dir папка]</c>.
+/// иначе — обычная работа в трее. <c>--quiet</c> — без окон (для администраторов): <c>--install --quiet [--dir папка] [--start]</c>;
+/// <c>--start</c> — запустить установленную программу (так ставится обновление из трея).
 /// </summary>
 internal static class SetupLauncher
 {
@@ -89,8 +90,14 @@ internal static class SetupLauncher
                     StartMenuShortcut: installer.ShortcutExists(desktop: false, current.ExePath),
                     DesktopShortcut: installer.ShortcutExists(desktop: true, current.ExePath))
                 : new InstallOptions(directory, Autostart: !Has(args, "--no-autostart"));
-            installer.InstallAsync(exe, Version, options with { ReadmePaths = UI.ShellActions.AllReadmes() },
+            var installedExe = installer.InstallAsync(exe, Version, options with { ReadmePaths = UI.ShellActions.AllReadmes() },
                 null, CancellationToken.None).GetAwaiter().GetResult();
+            if (Has(args, "--start"))
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(installedExe)
+                {
+                    UseShellExecute = false,
+                    WorkingDirectory = Path.GetDirectoryName(installedExe)!,
+                })?.Dispose();
             return 0;
         }
         catch (Exception ex)

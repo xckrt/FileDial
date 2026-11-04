@@ -34,7 +34,7 @@ internal static class ShellActions
     public static string? ReadmePath(string? name = null)
     {
         name ??= ReadmeName;
-        var nearby = Path.Combine(AppContext.BaseDirectory, name);
+        var nearby = Path.Combine(FileDial.Core.AppPaths.ExeFolder, name);
         if (File.Exists(nearby))
             return nearby;
         try

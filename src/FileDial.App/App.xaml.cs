@@ -8,6 +8,8 @@ using FileDial.App.Setup;
 using FileDial.App.Settings;
 using FileDial.App.Tray;
 using FileDial.App.UI;
+using FileDial.App.Updates;
+using FileDial.Core;
 using FileDial.Core.Archives;
 using FileDial.Core.Compression;
 using FileDial.Core.Localization;
@@ -30,6 +32,7 @@ public partial class App : Application
     private EventWaitHandle? _exitSignal;
     private HotkeyManager? _hotkey;
     private TrayIcon? _tray;
+    private AppUpdater? _updater;
     private RadialWindow? _radial;
     private SettingsWindow? _settingsWindow;
     private HistoryWindow? _historyWindow;
@@ -90,6 +93,15 @@ public partial class App : Application
         if (noFfmpeg)
             _tray.Notify(Lang.T.ShellNeedsFfmpegTitle, Lang.T.ShellNeedsFfmpegText,
                 OpenFfmpegSetup);
+        if (AppUpdater.Enabled)
+        {
+            _updater = new AppUpdater(_tray, () => _settings);
+            _tray.AddCommand(() => Lang.T.UpdTrayCheckNow, _updater.CheckNow);
+            _ = _updater.CheckOnStartupAsync();
+        }
+        // Сжатый exe распаковывается в %TEMP%\.net: прежние версии там больше не нужны.
+        if (AppPaths.IsSelfExtracted)
+            _ = Task.Run(() => AppPaths.CleanOldExtractions(AppContext.BaseDirectory, DateTime.UtcNow));
 
         if (error != 0)
         {

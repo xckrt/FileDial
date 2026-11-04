@@ -24,7 +24,7 @@ public static class SpeechModels
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "FileDial", "models");
 
     /// <summary>Папка models рядом с программой — для дистрибутива с моделью «в комплекте».</summary>
-    public static string BundledFolder => Path.Combine(AppContext.BaseDirectory, "models");
+    public static string BundledFolder => Path.Combine(AppPaths.ExeFolder, "models");
 
     /// <summary>
     /// Модель для работы: указанная в настройках (даже если файла уже нет — тогда это сообщит проверка),

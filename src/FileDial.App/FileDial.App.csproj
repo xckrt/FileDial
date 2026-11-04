@@ -25,7 +25,14 @@
     <AssemblyTitle>FileDial — круговое меню действий для файлов</AssemblyTitle>
     <Description>FileDial — круговое меню действий для файлов</Description>
     <Copyright>FileDial, 2026</Copyright>
+
+    <!-- Репозиторий GitHub для проверки обновлений: «владелец/репозиторий». Пусто — проверка выключена и скрыта. -->
+    <UpdateRepository></UpdateRepository>
   </PropertyGroup>
+
+  <ItemGroup>
+    <AssemblyMetadata Include="UpdateRepository" Value="$(UpdateRepository)" />
+  </ItemGroup>
 
   <ItemGroup>
     <!-- WinForms и WPF содержат одноимённые типы; WinForms используем только явно. -->
@@ -48,8 +55,9 @@
   </ItemGroup>
 
   <ItemGroup>
-    <None Include="..\..\README.md" Link="README.md" CopyToOutputDirectory="PreserveNewest" />
-    <None Include="..\..\README.ru.md" Link="README.ru.md" CopyToOutputDirectory="PreserveNewest" />
+    <!-- ExcludeFromSingleFile: справка лежит рядом с exe в zip, а не уходит внутрь (IncludeAllContentForSelfExtract). -->
+    <None Include="..\..\README.md" Link="README.md" CopyToOutputDirectory="PreserveNewest" ExcludeFromSingleFile="true" />
+    <None Include="..\..\README.ru.md" Link="README.ru.md" CopyToOutputDirectory="PreserveNewest" ExcludeFromSingleFile="true" />
   </ItemGroup>
 
 </Project>

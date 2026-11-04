@@ -27,6 +27,9 @@ public sealed record AppSettings
     /// <summary>Записывать выполненные действия в историю (хранится только на этом компьютере).</summary>
     public bool KeepHistory { get; init; } = true;
 
+    /// <summary>Раз в неделю проверять новую версию на GitHub (если в сборке задан репозиторий).</summary>
+    public bool CheckForUpdates { get; init; } = true;
+
     /// <summary>Папка с ffmpeg.exe и ffprobe.exe; пусто — искать рядом с программой и в PATH.</summary>
     public string? FfmpegFolder { get; init; }
 
