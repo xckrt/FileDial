@@ -1,0 +1,80 @@
+# Тесты на каждый push и pull request; тег v* (например, v0.3.0) — ещё и сборка дистрибутива
+# через publish.ps1 и выпуск на GitHub с установщиком и zip.
+# Подпись — если заданы секреты FILEDIAL_SIGN_PFX_BASE64 (.pfx в base64) и FILEDIAL_SIGN_PASSWORD.
+# Действия закреплены по коммитам; в комментарии — версия.
+name: build
+
+on:
+  push:
+    branches: ['**']
+    tags: ['v*']
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
+        with:
+          dotnet-version: '10.0.x'
+      # Без ffmpeg тесты с ним пропускаются ([FfmpegFact]); Office и LibreOffice тестам не нужны.
+      - name: Tests
+        run: dotnet test --nologo
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: test
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    env:
+      SIGN_PFX_BASE64: ${{ secrets.FILEDIAL_SIGN_PFX_BASE64 }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
+        with:
+          dotnet-version: '10.0.x'
+
+      # Тег должен совпадать с <Version> в FileDial.App.csproj: по ней названы файлы и сверяется обновление.
+      - name: Version
+        shell: powershell
+        run: |
+          [xml]$csproj = Get-Content src\FileDial.App\FileDial.App.csproj -Encoding UTF8
+          $version = ($csproj.Project.PropertyGroup | Where-Object { $_.Version } | Select-Object -First 1).Version
+          if ("v$version" -ne '${{ github.ref_name }}') {
+              throw "Tag ${{ github.ref_name }} does not match <Version>$version</Version> in FileDial.App.csproj"
+          }
+          [IO.File]::AppendAllText($env:GITHUB_ENV, "VERSION=$version`n")
+
+      - name: Signing certificate
+        if: env.SIGN_PFX_BASE64 != ''
+        shell: powershell
+        run: |
+          $pfx = Join-Path $env:RUNNER_TEMP 'filedial-sign.pfx'
+          [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:SIGN_PFX_BASE64))
+          [IO.File]::AppendAllText($env:GITHUB_ENV, "FILEDIAL_SIGN_PFX=$pfx`n")
+
+      # Windows PowerShell 5.1 — как у пользователей (publish.ps1 в UTF-8 с BOM).
+      - name: Publish
+        shell: powershell
+        env:
+          FILEDIAL_SIGN_PASSWORD: ${{ secrets.FILEDIAL_SIGN_PASSWORD }}
+        run: .\publish.ps1 -SkipTests
+
+      - name: Remove certificate
+        if: always() && env.FILEDIAL_SIGN_PFX != ''
+        shell: powershell
+        run: Remove-Item -Force -ErrorAction SilentlyContinue $env:FILEDIAL_SIGN_PFX
+
+      - uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
+        with:
+          name: FileDial ${{ env.VERSION }}
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+          files: |
+            dist/FileDial-Setup-${{ env.VERSION }}.exe
+            dist/FileDial-${{ env.VERSION }}-win-x64.zip

@@ -61,6 +61,9 @@ public partial class SettingsWindow : Window
         ContextMenuBox.IsChecked = settings.ContextMenu;
         AnimationsBox.IsChecked = settings.Animations;
         HistoryBox.IsChecked = settings.KeepHistory;
+        UpdatesBox.IsChecked = settings.CheckForUpdates;
+        // Репозиторий для обновлений не задан при сборке — галочка ни к чему.
+        UpdatesBox.Visibility = Updates.AppUpdater.Enabled ? Visibility.Visible : Visibility.Collapsed;
         OpenFolderBox.IsChecked = settings.OpenFolderWhenDone;
         OutputFolderBox.Text = settings.OutputFolder ?? "";
         (settings.OutputFolder is null ? NextToSourceRadio : FolderRadio).IsChecked = true;
@@ -600,6 +603,7 @@ public partial class SettingsWindow : Window
             Animations = AnimationsBox.IsChecked == true,
             KeepHistory = HistoryBox.IsChecked == true,
             ContextMenu = ContextMenuBox.IsChecked == true,
+            CheckForUpdates = UpdatesBox.IsChecked == true,
             OpenFolderWhenDone = OpenFolderBox.IsChecked == true,
             OutputFolder = string.IsNullOrEmpty(folder) ? null : folder,
             FfmpegFolder = _ffmpegFolder,

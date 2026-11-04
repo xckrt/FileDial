@@ -52,8 +52,21 @@ internal sealed class TrayIcon : IDisposable
         _history.Text = Lang.T.UiTrayHistory;
         _help.Text = Lang.T.UiTrayHelp;
         _exit.Text = Lang.T.UiTrayExit;
+        foreach (var (item, text) in _extra)
+            item.Text = text();
         _header.Text = _hotkey is null ? Lang.T.UiTrayNoHotkey : $"FileDial — {_hotkey}";
         _icon.Text = _hotkey is null ? Lang.T.UiTrayTipNoHotkey : Lang.T.UiTrayTip(_hotkey);
+    }
+
+    private readonly List<(Forms.ToolStripMenuItem Item, Func<string> Text)> _extra = [];
+
+    /// <summary>Дополнительный пункт меню (перед «Выходом»); подпись берётся заново при смене языка.</summary>
+    public void AddCommand(Func<string> text, Action onClick)
+    {
+        var item = new Forms.ToolStripMenuItem(text(), null, (_, _) => onClick());
+        _extra.Add((item, text));
+        var menu = _icon.ContextMenuStrip!;
+        menu.Items.Insert(menu.Items.IndexOf(_exit), item);
     }
 
     private Action? _balloonClick;

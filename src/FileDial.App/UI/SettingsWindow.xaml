@@ -45,6 +45,8 @@
                     <CheckBox x:Name="AnimationsBox" Style="{StaticResource FlatCheckBox}" Content="{l:T UiAnimations}" />
                     <CheckBox x:Name="HistoryBox" Style="{StaticResource FlatCheckBox}"
                               Content="{l:T UiKeepHistory}" />
+                    <CheckBox x:Name="UpdatesBox" Style="{StaticResource FlatCheckBox}"
+                              Content="{l:T UpdCheckSetting}" />
 
                     <TextBlock Text="{l:T UiOutputTitle}" Style="{StaticResource SectionTitle}" />
                     <RadioButton x:Name="NextToSourceRadio" GroupName="Output" Style="{StaticResource FlatRadio}"

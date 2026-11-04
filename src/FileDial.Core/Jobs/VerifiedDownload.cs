@@ -32,8 +32,9 @@ public static class VerifiedDownload
     }
 
     /// <param name="expectedSize">Размер, если известен заранее; иначе берётся из ответа сервера (только для прогресса).</param>
+    /// <param name="expectedSha256">null — сумма неизвестна (старые выпуски GitHub): проверяется только размер.</param>
     /// <param name="stallTimeout">Сколько ждать данных без единого байта; по умолчанию 60 с.</param>
-    public static async Task DownloadAsync(HttpClient http, string url, long? expectedSize, string expectedSha256,
+    public static async Task DownloadAsync(HttpClient http, string url, long? expectedSize, string? expectedSha256,
         string partPath, IProgress<(long Done, long Total)>? progress, CancellationToken ct, TimeSpan? stallTimeout = null)
     {
         var stall = stallTimeout ?? DefaultStallTimeout;
@@ -69,7 +70,7 @@ public static class VerifiedDownload
 
             var actual = Convert.ToHexStringLower(hash.GetHashAndReset());
             if ((expectedSize is { } size && new FileInfo(partPath).Length != size) ||
-                !actual.Equals(expectedSha256.Trim(), StringComparison.OrdinalIgnoreCase))
+                (expectedSha256 is not null && !actual.Equals(expectedSha256.Trim(), StringComparison.OrdinalIgnoreCase)))
                 throw new InvalidDataException(Lang.T.JobDownloadCorrupted);
             ok = true;
         }
