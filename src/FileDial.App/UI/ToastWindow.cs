@@ -39,9 +39,11 @@ internal sealed class ToastWindow : Window
             },
         };
         border.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
-        var size = border.DesiredSize;
-        Width = size.Width;
-        Height = size.Height;
+        // Размер, измеренный до показа, — только для места у курсора: окно подстраивается под текст само.
+        // Ровно измеренная ширина при отрисовке оказывалась на долю пикселя меньше нужной — последнее слово
+        // переносилось на строку, которую обрезала высота окна.
+        var size = new Size(Math.Ceiling(border.DesiredSize.Width) + 2, Math.Ceiling(border.DesiredSize.Height) + 2);
+        SizeToContent = SizeToContent.WidthAndHeight;
         Content = border;
 
         var placement = new WindowPlacement(this, cursor, PlacementMode.NearCursor, size.Width, size.Height);
