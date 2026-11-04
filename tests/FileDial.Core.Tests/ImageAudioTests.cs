@@ -12,6 +12,10 @@ public class FileKindTests
     [InlineData(@"C:\a.jpeg", FileKind.Image)]
     [InlineData(@"C:\a.WebP", FileKind.Image)]
     [InlineData(@"C:\a.gif", FileKind.Image)]
+    [InlineData(@"C:\a.HEIC", FileKind.Image)]
+    [InlineData(@"C:\a.heif", FileKind.Image)]
+    [InlineData(@"C:\a.hif", FileKind.Image)]
+    [InlineData(@"C:\a.avif", FileKind.Image)]
     [InlineData(@"C:\a.flac", FileKind.Audio)]
     [InlineData(@"C:\a.Opus", FileKind.Audio)]
     [InlineData(@"C:\a.pdf", FileKind.Pdf)]
@@ -34,14 +38,16 @@ public class ImageActionTests
     {
         var actions = ActionCatalog.ForFile(@"C:\p\скрин.png", 500_000, Picture(3000, 2000));
 
-        Assert.Equal(8, actions.Count);
-        Assert.Equal(["Формат", "Уменьшить…", "Повернуть вправо", "Повернуть влево", "Отразить",
+        // Семь секторов: восьмой свободен для своих действий.
+        Assert.Equal(7, actions.Count);
+        Assert.Equal(["Формат", "Уменьшить…", "Повернуть", "Кадрировать…",
             "Сжать до 1\u00A0МБ", "Убрать фон", "В PDF"], actions.Select(a => a.Label));
         Assert.True(actions[0].IsGroup);
         Assert.True(actions[0].IsEnabled);
-        Assert.Equal("Файл уже меньше 1 МБ", actions[5].DisabledReason);
-        Assert.Equal(ActionIds.SetupBackground, actions[6].FixActionId); // убрать фон: без модели — к её загрузке
-        Assert.True(actions[7].IsEnabled); // В PDF
+        Assert.True(actions[2].IsGroup);
+        Assert.Equal("Файл уже меньше 1 МБ", actions[4].DisabledReason);
+        Assert.Equal(ActionIds.SetupBackground, actions[5].FixActionId); // убрать фон: без модели — к её загрузке
+        Assert.True(actions[6].IsEnabled); // В PDF
     }
 
     [Fact]

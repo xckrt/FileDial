@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using FileDial.Core.Archives;
 using FileDial.Core.Compression;
 using FileDial.Core.Documents;
@@ -17,6 +17,9 @@ internal static class Raster
 
     public static bool IsSvg(string path) => Path.GetExtension(path).Equals(".svg", StringComparison.OrdinalIgnoreCase);
 
+    /// <summary>Без сведений ffprobe (SVG, промежуточный PNG) — первая видеодорожка.</summary>
+    private static readonly ProbeInfo NoProbe = new(0, true, false, 0, 0);
+
     /// <summary>Вписать в квадрат <paramref name="side"/>: длинная сторона = side, без нулевой ширины у узких картинок.</summary>
     private static string Fit(int side)
     {
@@ -25,7 +28,9 @@ internal static class Raster
     }
 
     /// <param name="square">Дополнить прозрачными полями до квадрата (кадр значка).</param>
-    public static async Task RenderAsync(FfmpegTools tools, string source, int side, bool square, string output, CancellationToken ct)
+    /// <param name="info">Сведения ffprobe о картинке: какую дорожку брать (у HEIC — сетка плиток); null — первая.</param>
+    public static async Task RenderAsync(FfmpegTools tools, string source, int side, bool square, string output, CancellationToken ct,
+        ProbeInfo? info = null)
     {
         var args = new List<string> { "-hide_banner", "-nostdin", "-y", "-loglevel", "error" };
         if (IsSvg(source))
@@ -44,7 +49,7 @@ internal static class Raster
             var s = side.ToString(CultureInfo.InvariantCulture);
             filter += $",pad={s}:{s}:(ow-iw)/2:(oh-ih)/2:color=black@0";
         }
-        args.AddRange(["-i", source, "-map", "0:v:0", "-frames:v", "1", "-map_metadata", "-1", "-vf", filter,
+        args.AddRange(["-i", source, .. (info ?? NoProbe).PictureArguments(filter), "-frames:v", "1", "-map_metadata", "-1",
             "-c:v", "png", "-f", "image2", "-update", "1", output]);
 
         var result = await ProcessRunner.RunAsync(tools.Ffmpeg, args, null, captureOutput: false, ct).ConfigureAwait(false);
@@ -57,11 +62,11 @@ internal static class Raster
     /// Так быстрее — каждый запуск librsvg заново загружает шрифты (около 0,7 с на SVG с текстом).
     /// </summary>
     public static async Task RenderSizesAsync(FfmpegTools tools, string source, IReadOnlyList<int> sizes, bool square,
-        Func<int, string> output, IProgress<JobProgress>? progress, CancellationToken ct)
+        Func<int, string> output, IProgress<JobProgress>? progress, CancellationToken ct, ProbeInfo? info = null)
     {
         var largest = sizes.Max();
         progress?.Report(new JobProgress(Lang.T.TxtStageRendering(largest), 0));
-        await RenderAsync(tools, source, largest, square, output(largest), ct).ConfigureAwait(false);
+        await RenderAsync(tools, source, largest, square, output(largest), ct, info).ConfigureAwait(false);
         var done = 1;
         foreach (var size in sizes.Where(s => s != largest).OrderByDescending(s => s))
         {
@@ -142,10 +147,11 @@ public sealed class ToIcoJob(FfmpegTools tools, string? outputDirectory = null) 
         DocumentOutput.CheckSpace(directory, 10_000_000);
 
         IReadOnlyList<int> sizes = IcoFile.StandardSizes;
+        ProbeInfo? info = null;
         if (!Raster.IsSvg(sourcePath))
         {
             progress?.Report(new JobProgress(Lang.T.JobStageAnalyzing, null));
-            var info = await ProbeInfo.RunAsync(tools, sourcePath, ct).ConfigureAwait(false);
+            info = await ProbeInfo.RunAsync(tools, sourcePath, ct).ConfigureAwait(false);
             if (!info.HasVideo)
                 throw new CompressionException(Lang.T.JobCannotReadImage);
             sizes = SizesFor(Math.Max(info.Width, info.Height));
@@ -155,7 +161,7 @@ public sealed class ToIcoJob(FfmpegTools tools, string? outputDirectory = null) 
         try
         {
             string Frame(int size) => Path.Combine(work, $"{size}.png");
-            await Raster.RenderSizesAsync(tools, sourcePath, sizes, square: true, Frame, progress, ct).ConfigureAwait(false);
+            await Raster.RenderSizesAsync(tools, sourcePath, sizes, square: true, Frame, progress, ct, info).ConfigureAwait(false);
             var pngs = new List<byte[]>();
             foreach (var size in sizes)
                 pngs.Add(await File.ReadAllBytesAsync(Frame(size), ct).ConfigureAwait(false));

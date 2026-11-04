@@ -44,9 +44,16 @@ public static class ActionIds
     public const string ImageConvert = "image-convert";
     /// <summary>«Уменьшить…»: размер выбирается в окне перед запуском.</summary>
     public const string ResizeImage = "image-resize";
+    /// <summary>Группа «Повернуть ›»: повороты и отражения.</summary>
+    public const string ImageRotate = "image-rotate";
     public const string RotateRight = "image-rotate-right";
     public const string RotateLeft = "image-rotate-left";
+    public const string Rotate180 = "image-rotate-180";
+    /// <summary>Отражение по горизонтали (слева направо) — id с тех пор, когда оно было единственным.</summary>
     public const string Mirror = "image-mirror";
+    public const string MirrorVertical = "image-mirror-vertical";
+    /// <summary>«Кадрировать…»: пропорции и кадр выбираются в окне перед запуском.</summary>
+    public const string CropImage = "image-crop";
     public const string ImageCompress1Mb = "image-compress-1mb";
     public const string RemoveBackground = "image-remove-background";
     public const string ImageToPdf = "image-to-pdf";

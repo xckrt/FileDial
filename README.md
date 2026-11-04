@@ -9,7 +9,7 @@ appears at the cursor. Everything works offline.
 | Type | Extensions | Sectors (inactive ones in italics) |
 |------|------------|------------------------------------|
 | Video | mp4, mov, mkv, webm | Compress to 25 MB, Trim, Make GIF, Extract audio, Frame to image, Subtitles, Remove sound, **Format ›** MP4 · MKV · WebM · MOV |
-| Images | jpg, jpeg, png, webp, bmp, gif, tif, tiff | **Format ›** JPG · PNG · WebP · BMP · TIFF · GIF · ICO, Resize…, Rotate right, Rotate left, Mirror, Compress to 1 MB, Remove background, To PDF |
+| Images | jpg, jpeg, png, webp, bmp, gif, tif, tiff, heic, heif, hif, avif | **Format ›** JPG · PNG · WebP · BMP · TIFF · GIF · ICO, Resize…, **Rotate ›** Right · Left · 180° · Flip ↔ · Flip ↕, Crop…, Compress to 1 MB, Remove background, To PDF; the 8th sector is free for [My actions](#my-actions) |
 | Audio | mp3, wav, flac, m4a, aac, ogg, opus, wma | **Format ›** MP3 · M4A · WAV · FLAC · OGG · Opus, Normalize volume, Remove noise, Speed up ×1.5, Slow down ×0.75, To mono, Trim, To text |
 | Archives | zip, 7z, rar, tar, tar.gz/tgz, tar.bz2, tar.xz | Extract here, Extract to folder, Extract to…, Test archive, **Format ›** ZIP · 7z, Password-protect, Split into parts, Contents |
 | PDF | pdf | Split into pages, Extract pages, Rotate right, Rotate left, Pages to images, Recognize text, Password-protect, *Merge* (for several PDFs) |
@@ -554,7 +554,7 @@ Name: `name_trimmed.ext`.
 - The result is a new file next to the original; the original is not changed, and metadata (EXIF) is not carried
   over to the result.
 - Formats: JPG, PNG, WebP, BMP, TIFF (LZW), GIF (own palette), ICO (see [SVG and icons](#svg-and-icons)).
-  "Rotate left" gives `name_rotated_left`, "Mirror" flips horizontally, `name_mirrored`.
+  HEIC, HEIF and AVIF are read only (see [HEIC, HEIF and AVIF](#heic-heif-and-avif-iphone-photos)).
 - "To JPG" and "To BMP": transparent areas are filled with white (JPG has no transparency), quality `-q:v 2`, 4:4:4.
 - "To WebP": quality 90, transparency is kept. "To PNG" is lossless.
 - "Resize…" opens a window with the size to shrink to:
@@ -565,10 +565,36 @@ Name: `name_trimmed.ext`.
 
   Images are only made smaller, never upscaled; the window shows the result ("Result: 1920×1280.") and the
   last choice is remembered. For several images the same choice applies to each, and images that are already
-  small enough are skipped. Lanczos scaling, same format (JPG, WebP; other formats → PNG). Names:
+  small enough are skipped. Lanczos scaling, same format (JPG, WebP; HEIC/AVIF → JPG; other formats → PNG). Names:
   `name_1920px.ext`, `name_50%.ext`, `name_800x600.ext`.
-- "Rotate right": 90° clockwise. Name: `name_rotated.ext`.
-- Rotation and resizing keep the JPG/PNG/WebP format; BMP, GIF and TIFF are saved as PNG.
+- **Rotate ›** is a fan: "Right" — 90° clockwise, `name_rotated.ext`; "Left" — `name_rotated_left.ext`; "180°" —
+  `name_rotated_180.ext`; "Flip ↔" — mirror left to right, `name_mirrored.ext`; "Flip ↕" — upside down,
+  `name_flipped_vertically.ext`. The window title and the history use the full names ("Rotate right"…).
+  Right, left and mirror used to be separate sectors; their action ids did not change, so history entries and
+  batches work as before.
+- **Crop…** opens a window:
+  - one image: a preview (drawn by ffmpeg, so HEIC, AVIF and any WebP work) with a frame. Drag the frame to move it,
+    drag a corner to resize it; the arrow keys move it by one screen point, with Shift by ten. Outside the frame
+    the picture is darkened, inside there are rule-of-thirds lines;
+  - aspect ratio: Free, Original (the photo's own proportions), 1:1, 4:5, 3:4, 2:3, 9:16, 16:9, 3:2, 4:3. The ↔ button
+    turns the frame between portrait and landscape (4:5 ↔ 5:4). Picking a ratio puts the largest frame of that
+    ratio around the current center;
+  - the window shows the result in pixels ("Result: 3024×3024."); Enter crops, Esc cancels; the last ratio is
+    remembered;
+  - several images: no preview — a ratio and which part to keep (Center, Top, Bottom, Left, Right); each image gets
+    its largest frame of that ratio; images that already have that ratio are skipped.
+
+  The frame is calculated on the upright image (after EXIF or HEIC rotation); the ratio is exact up to whole
+  pixels. Same format rules as "Resize…". Names: `name_crop_1x1.ext`, `name_crop_9x16.ext`; a free frame gets its
+  size, `name_crop_1200x800.ext`. In Russian the sector is «Кадрировать…»: «Обрезать» is already taken by the
+  video and audio trim, and the two would be confusing side by side.
+- The eighth sector of the image dial is left empty on purpose: images are the most common target of
+  [My actions](#my-actions), and the first one goes straight into that sector (the second one turns it into "More ›").
+- Rotation, crop and resizing keep the JPG/PNG/WebP format; HEIC, HEIF and AVIF are saved as JPG (ffmpeg cannot
+  write HEIC, and a PNG of a 12 MP photo is 5–10 times larger); BMP, GIF and TIFF are saved as PNG.
+- Phone JPEGs with EXIF rotation: ffmpeg turns the picture upright when decoding, and FileDial takes the size from
+  the first decoded frame too, so "Resize…", "Crop…", the white background for JPG/BMP and the PDF page size use
+  the upright size.
 - For animated GIF/WebP the first frame is used.
 - "Compress to 1 MB" — a JPG with the best quality that fits into 1,000,000 bytes (binary search over the quality
   scale). If even the lowest quality does not fit, the image is downsized in 25% steps.
@@ -576,6 +602,35 @@ Name: `name_trimmed.ext`.
 - "Remove background" — see [Remove background](#remove-background).
 - Changing the format keeps the name (`photo.png` → `photo.jpg`); if the name is taken, `photo_2.jpg`.
   Converting to the file's own format is inactive ("Already PNG").
+
+### HEIC, HEIF and AVIF (iPhone photos)
+
+- Read with ffmpeg 7.1 or newer (the built-in installer downloads a recent build). Checked with ffmpeg 9.0.1
+  (gyan.dev full). There is no HEIF writer in ffmpeg, so these formats are input only: "Format ›" offers JPG, PNG,
+  WebP… but not HEIC.
+- An iPhone photo is a grid of 512×512 HEVC tiles. ffmpeg shows each tile as a separate stream plus a "tile grid"
+  stream group, and puts the full image together itself, but only inside a filter graph: `-map 0:v:0` would give
+  one tile, and `-vf` cannot be combined with the grid. So FileDial reads the size and rotation of the group
+  (`ffprobe … stream_groups`) and takes the picture as `[0:g:N]` in `-filter_complex`, in every image action
+  (formats, resize, crop, rotation, compression, PDF, ICO, background removal, crop preview).
+- Rotation (`irot`) and mirroring (`imir`) are applied by ffmpeg; the Exif orientation inside the HEIC is not
+  applied a second time. The center of the dial shows the upright resolution (for example 3024×4032).
+- If a thumbnail comes before the main picture, the main one is taken (the stream marked "default").
+- Colour: 10-bit pictures are reduced to 8 bits (PNG is written with 16 bits). There is no colour management:
+  Display P3 values are written as they are, so in viewers that assume sRGB the colours are slightly less
+  saturated. The HDR gain map is ignored (the result is the normal SDR picture). Transparency (an auxiliary alpha
+  image in HEIC/AVIF) is not supported: the result is opaque.
+- GIF from a HEIC uses a palette built from that one frame: the assembled grid does not report the end of the
+  stream, which the usual palette generator waits for.
+- An older ffmpeg (without stream groups) fails to read the HEIC: the action reports "Couldn't read this
+  HEIC/AVIF. It needs ffmpeg 7.1 or newer; update it in Settings." If ffprobe reads the file but finds no picture,
+  every sector of the dial is inactive with that reason.
+- What was checked: there was no HEIC file on the test machine and ffmpeg cannot write one, so the tests build HEIC
+  and AVIF files themselves (`tests/FileDial.Core.Tests/HeifSamples.cs`): tiles encoded with libx265 or libaom, a
+  grid larger than the image (cropped to 700×500 like iPhone grids), `irot`, a thumbnail in front, an Exif item with
+  a conflicting orientation, 10-bit. Size, upright orientation and the colour of each quarter are checked for
+  To JPG/PNG/GIF, ICO, PDF, rotation, flips, resize and crop. Not checked on a real iPhone file (Apple-specific
+  boxes, ICC profile, HDR gain map), on `.hif` from a camera and on AVIF with transparency.
 
 ### Audio
 
@@ -873,6 +928,13 @@ The scenarios assume the English interface; with the Russian interface, labels a
 | 100 | Compressed exe | Delete `%TEMP%\.net\FileDial`, start `FileDial.exe` twice (exit in between) | The first start takes ~1.5 s and creates `%TEMP%\.net\FileDial\<hash>`, the second ~0.2 s; Task Manager shows ~105 MB; after updating to another version the old hash folder is removed at startup |
 | 101 | Signing | `.\publish.ps1 -CertificateThumbprint <thumbprint>` | The exe properties have a "Digital Signatures" tab with the certificate and a timestamp; the zip and the installer contain the signed exe |
 | 102 | Quiet installation | `FileDial-Setup-0.2.0.exe --install --quiet --start` | Exit code 0, no windows; FileDial is installed with autostart, the Start menu shortcut and the context menu entry, and runs in the tray |
+| 103 | HEIC from an iPhone | Copy a portrait photo from an iPhone (HEIC), open the dial on it | The center shows "… · 3024×4032"; "Format ›" has no HEIC; "To JPG" → `name.jpg`, upright, full size, colours as on the phone |
+| 104 | HEIC: whole dial | The same photo: "Resize…" → 50%, "Rotate ›" → "Left", "Compress to 1 MB", "To PDF" | All results are upright and full; `name_50%.jpg`, `name_rotated_left.jpg` (landscape), `name_1mb.jpg`, a portrait PDF page |
+| 105 | Rotate fan | An image → hover "Rotate" and pick each of the five; then press 3 and 1–5 | `name_rotated`, `name_rotated_left`, `name_rotated_180`, `name_mirrored`, `name_flipped_vertically`; the keys work like the mouse |
+| 106 | Crop: one image | A 4032×3024 photo → "Crop…" → 1:1; drag the frame to the right edge, pull a corner; pick 4:5 and press ↔; arrows and Shift+arrows; Enter | The preview appears within a second; the frame stays inside the picture and keeps the ratio; "Result: …" follows the frame; `name_crop_1x1.jpg` (or `_crop_5x4`) has exactly the shown size and content |
+| 107 | Crop: free, Esc | "Crop…" → "Free", drag the corners, Esc; open the window again | Esc closes it without a file; the window opens with "Free" selected (last choice); "Free" without changing the frame keeps "Crop" inactive |
+| 108 | Crop: several images | Select 3 images (portrait, landscape, one HEIC) → "Crop…" → 16:9, "Top" | No preview; "Each image keeps its largest 16:9 frame, aligned to the top."; three `_crop_16x9` files, the HEIC one as `.jpg`; an image that is already 16:9 is skipped |
+| 109 | My action on images | Add your own action for images in Settings; then a second one | The first one takes the 8th sector of the image dial directly; with two, the 8th sector becomes "More ›" with both |
 
 Script for scenario 17 (holds Ctrl+Alt+K while the PowerShell window is open; Enter releases it):
 

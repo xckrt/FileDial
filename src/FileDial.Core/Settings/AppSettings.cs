@@ -27,6 +27,9 @@ public sealed record AppSettings
     /// <summary>Последний выбранный размер в «Уменьшить…» (см. <see cref="FileDial.Core.Jobs.ResizeRequest.Format"/>).</summary>
     public string Resize { get; init; } = FileDial.Core.Jobs.ResizeRequest.Default.Format();
 
+    /// <summary>Последние пропорции и край в «Кадрировать…» (см. <see cref="FileDial.Core.Jobs.CropChoice.Format"/>).</summary>
+    public string Crop { get; init; } = FileDial.Core.Jobs.CropChoice.Default.Format();
+
     /// <summary>Записывать выполненные действия в историю (хранится только на этом компьютере).</summary>
     public bool KeepHistory { get; init; } = true;
 
@@ -73,6 +76,7 @@ public sealed record AppSettings
         Hotkey = HotkeyGesture.Format(),
         Theme = Themes.Contains(Theme) ? Theme : "graphite",
         Resize = FileDial.Core.Jobs.ResizeRequest.Parse(Resize).Format(),
+        Crop = FileDial.Core.Jobs.CropChoice.Parse(Crop).Format(),
         Language = Localization.Lang.Settings.Contains(Language) ? Language : "auto",
         VideoTargetBytes = Nearest(VideoTargets, VideoTargetBytes),
         ImageTargetBytes = Nearest(ImageTargets, ImageTargetBytes),

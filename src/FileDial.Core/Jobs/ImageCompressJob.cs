@@ -90,9 +90,8 @@ public sealed class ImageCompressJob(FfmpegTools tools, long targetBytes = Image
     {
         var resize = longSide is { } side ? ConversionSpecs.ResizeFilter(side) : null;
         var flatten = ConversionSpecs.FlattenOnWhite(info, resize);
-        IReadOnlyList<string> map = flatten.Contains("-filter_complex") ? [] : ["-map", "0:v:0"];
         var args = new List<string> { "-hide_banner", "-nostdin", "-y", "-loglevel", "error", "-i", source };
-        args.AddRange([.. map, "-frames:v", "1", "-map_metadata", "-1", .. flatten, .. ConversionSpecs.ImageEncoder(".jpg", quality), output]);
+        args.AddRange([.. flatten, "-frames:v", "1", "-map_metadata", "-1", .. ConversionSpecs.ImageEncoder(".jpg", quality), output]);
 
         var result = await ProcessRunner.RunAsync(tools.Ffmpeg, args, null, captureOutput: false, ct).ConfigureAwait(false);
         if (result.ExitCode != 0 || !File.Exists(output))

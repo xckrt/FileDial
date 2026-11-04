@@ -71,7 +71,9 @@ public static class ConversionSpecs
             // --- Изображения ---
             ActionIds.RotateRight => ImageFilter(Lang.T.JobSuffixRotated, "transpose=clock"),
             ActionIds.RotateLeft => ImageFilter(Lang.T.JobSuffixRotatedLeft, "transpose=cclock"),
+            ActionIds.Rotate180 => ImageFilter(Lang.T.ImgSuffixRotated180, "hflip,vflip"),
             ActionIds.Mirror => ImageFilter(Lang.T.JobSuffixMirrored, "hflip"),
+            ActionIds.MirrorVertical => ImageFilter(Lang.T.ImgSuffixFlippedVertical, "vflip"),
 
             // --- Звук ---
             // loudnorm внутри работает на 192 кГц, поэтому частоту возвращаем к исходной (см. AudioEncoder).
@@ -193,14 +195,16 @@ public static class ConversionSpecs
     {
         // В JPG и BMP без прозрачности подкладываем белый фон, иначе прозрачное станет чёрным.
         ".jpg" or ".bmp" => Image("", (_, _) => extension, (_, info) => [.. FlattenOnWhite(info, null), .. ImageEncoder(extension)]),
-        ".png" or ".webp" or ".tiff" => Image("", (_, _) => extension, (_, _) => ImageEncoder(extension)),
-        // GIF — 256 цветов: своя палитра под картинку, а не стандартная.
-        ".gif" => Image("", (_, _) => ".gif", (_, _) =>
-            ["-filter_complex", "[0:v:0]split[a][b];[a]palettegen=reserve_transparent=1[p];[b][p]paletteuse[out]",
-                "-map", "[out]", "-f", "gif"]),
+        ".png" or ".webp" or ".tiff" => Image("", (_, _) => extension, (_, info) => [.. info.PictureArguments(null), .. ImageEncoder(extension)]),
+        // GIF — 256 цветов: своя палитра под картинку, а не стандартная. stats_mode=single — палитра по первому кадру
+        // без ожидания конца потока: у склеенной сетки HEIC ffmpeg его не сообщает, и обычный palettegen молчит.
+        ".gif" => Image("", (_, _) => ".gif", (_, info) =>
+            ["-filter_complex", $"[{info.Picture}]split[a][b];[a]palettegen=reserve_transparent=1:stats_mode=single[p];" +
+                "[b][p]paletteuse=new=1[out]", "-map", "[out]", "-f", "gif"]),
         _ => null,
     };
 
+    /// <param name="args">Выбор картинки (<see cref="ProbeInfo.PictureArguments"/>), фильтры и кодировщик.</param>
     private static ConversionSpec Image(string suffix, Func<string, ProbeInfo, string> extension,
         Func<string, ProbeInfo, IReadOnlyList<string>> args) => new()
     {
@@ -209,37 +213,44 @@ public static class ConversionSpecs
         MissingPictureMessage = Lang.T.JobCannotReadImage,
         OutputExtension = extension,
         // Первый кадр: у GIF и WebP может быть анимация, берём одно изображение.
-        Arguments = (src, info) =>
-        {
-            var specific = args(src, info);
-            // С -filter_complex поток выбирает сам граф (метка [out]); иначе — первая видеодорожка.
-            IReadOnlyList<string> map = specific.Contains("-filter_complex") ? [] : ["-map", "0:v:0"];
-            return [.. map, "-frames:v", "1", "-map_metadata", "-1", .. specific];
-        },
+        Arguments = (src, info) => [.. args(src, info), "-frames:v", "1", "-map_metadata", "-1"],
         // PNG и BMP из JPG бывают в разы больше исходника.
         EstimateBytes = (size, info) => Math.Max(size * 6, (long)info.Width * info.Height * 4) + Slack,
     };
 
-    /// <summary>Фильтр с сохранением формата (поворот, отражение, уменьшение).</summary>
     /// <summary>Уменьшение до выбранного размера: точные ширина и высота считаются по сведениям ffprobe.</summary>
     public static ConversionSpec Resize(ResizeRequest request) =>
         Image(request.Suffix, (src, _) => SameImageFormat(src), (src, info) =>
         {
             var (w, h) = request.Target(info.Width, info.Height);
             var size = string.Create(CultureInfo.InvariantCulture, $"scale={w}:{h}:flags=lanczos");
-            return [.. Filter(size), .. ImageEncoder(SameImageFormat(src))];
+            return [.. info.PictureArguments(size), .. ImageEncoder(SameImageFormat(src))];
         });
 
-    private static ConversionSpec ImageFilter(string suffix, string filter) =>
-        Image(suffix, (src, _) => SameImageFormat(src), (src, _) => [.. Filter(filter), .. ImageEncoder(SameImageFormat(src))]);
+    /// <summary>Кадрирование: прямоугольник в пикселях считается по размеру картинки после поворота.</summary>
+    public static ConversionSpec Crop(CropRequest request, string suffix) =>
+        Image(suffix, (src, _) => SameImageFormat(src), (src, info) =>
+        {
+            var r = request.Rectangle(info.Width, info.Height);
+            var crop = string.Create(CultureInfo.InvariantCulture, $"crop={r.Width}:{r.Height}:{r.X}:{r.Y}:exact=1");
+            return [.. info.PictureArguments(crop), .. ImageEncoder(SameImageFormat(src))];
+        });
 
-    /// <summary>Формат результата для поворота и уменьшения: тот же, если умеем в него писать, иначе PNG.</summary>
+    /// <summary>Фильтр с сохранением формата (поворот, отражение).</summary>
+    private static ConversionSpec ImageFilter(string suffix, string filter) =>
+        Image(suffix, (src, _) => SameImageFormat(src), (src, info) => [.. info.PictureArguments(filter), .. ImageEncoder(SameImageFormat(src))]);
+
+    /// <summary>
+    /// Формат результата для поворота, уменьшения и кадрирования: тот же, если умеем в него писать; HEIC/AVIF
+    /// (записать их ffmpeg не умеет) — в JPG, как фото; остальное — в PNG.
+    /// </summary>
     public static string SameImageFormat(string sourcePath) =>
         Path.GetExtension(sourcePath).ToLowerInvariant() switch
         {
             ".jpg" => ".jpg",
             ".jpeg" => ".jpeg",
             ".webp" => ".webp",
+            var e when FileKinds.Heif.Contains(e) => ".jpg",
             _ => ".png",
         };
 
@@ -259,22 +270,20 @@ public static class ConversionSpecs
     };
 
     /// <summary>
-    /// Подкладываем белый фон размером с картинку для форматов без прозрачности
-    /// (размер знаем из ffprobe; без него оставляем как есть).
+    /// Выбор картинки с белым фоном размером с неё — для форматов без прозрачности (размер знаем из ffprobe;
+    /// без него фон не подкладываем). <paramref name="extraFilter"/> идёт после наложения.
     /// </summary>
     public static IReadOnlyList<string> FlattenOnWhite(ProbeInfo info, string? extraFilter)
     {
         if (info.Width <= 0 || info.Height <= 0)
-            return extraFilter is null ? [] : Filter(extraFilter);
+            return info.PictureArguments(extraFilter);
 
         var size = string.Create(CultureInfo.InvariantCulture, $"{info.Width}x{info.Height}");
         var tail = extraFilter is null ? "" : "," + extraFilter;
         return ["-filter_complex",
-            $"color=c=white:s={size}[bg];[0:v:0]format=rgba[fg];[bg][fg]overlay=shortest=1:format=auto{tail}[out]",
+            $"color=c=white:s={size}[bg];[{info.Picture}]format=rgba[fg];[bg][fg]overlay=shortest=1:format=auto{tail}[out]",
             "-map", "[out]"];
     }
-
-    private static IReadOnlyList<string> Filter(string filter) => ["-vf", filter];
 
     // --- Звук ---
 
