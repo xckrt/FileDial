@@ -28,6 +28,8 @@ public sealed record JobSettings
 
     /// <summary>Свои действия пользователя (добавляются в круг поверх встроенных).</summary>
     public IReadOnlyList<Custom.CustomAction> CustomActions { get; init; } = Custom.CustomActionList.Empty;
+    /// <summary>Файл модели для «Убрать фон» (находит программа); null — модели нет.</summary>
+    public string? BackgroundModel { get; init; }
 
     public string OutputDirectoryFor(string sourcePath) =>
         string.IsNullOrWhiteSpace(OutputFolder) ? Path.GetDirectoryName(sourcePath)! : OutputFolder;
