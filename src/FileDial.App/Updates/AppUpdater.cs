@@ -4,6 +4,7 @@ using System.Reflection;
 using FileDial.App.Tray;
 using FileDial.Core.Localization;
 using FileDial.Core.Settings;
+using FileDial.Core.Setup;
 using FileDial.Core.Updates;
 
 namespace FileDial.App.Updates;
@@ -74,10 +75,36 @@ internal sealed class AppUpdater(TrayIcon tray, Func<AppSettings> settings)
             _checking = false;
         }
 
-        if (update is not null)
+        if (update is null)
+        {
+            if (manual)
+                tray.Notify("FileDial", Lang.T.UpdUpToDate(UpdateChecker.Format(Current)), () => { });
+        }
+        else if (CanInstallSilently(update))
             tray.Notify(Lang.T.UpdAvailableTitle(update.VersionText), Lang.T.UpdAvailableText, () => _ = InstallAsync(update));
-        else if (manual)
-            tray.Notify("FileDial", Lang.T.UpdUpToDate(UpdateChecker.Format(Current)), () => { });
+        else
+            tray.Notify(Lang.T.UpdAvailableTitle(update.VersionText), Lang.T.UpdManualText, () => OpenPage(update.ReleasePage));
+    }
+
+    /// <summary>
+    /// Тихо ставим, только если это установленная копия (иначе установщик поставил бы вторую рядом с переносной)
+    /// и у файла есть контрольная сумма: по одному размеру запускать скачанный exe нельзя.
+    /// </summary>
+    private static bool CanInstallSilently(UpdateInfo update) =>
+        update.Sha256 is not null && IsInstalledCopy(Environment.ProcessPath);
+
+    private static bool IsInstalledCopy(string? exe)
+    {
+        try
+        {
+            return exe is not null &&
+                   new Installer(InstallEnvironment.Current).FindInstalled() is { } installed &&
+                   Installer.SamePath(installed.ExePath, exe);
+        }
+        catch (Exception ex) when (ex is System.Security.SecurityException or UnauthorizedAccessException or IOException)
+        {
+            return false;
+        }
     }
 
     private static void TrySaveCheckTime()

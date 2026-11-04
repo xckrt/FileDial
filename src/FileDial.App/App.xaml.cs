@@ -69,7 +69,12 @@ public partial class App : Application
         _singleInstance = new Mutex(true, @"Local\FileDial.Prototype", out var created);
         if (!created && dial)
         {
-            ContextMenu.RequestDial();
+            // Прежняя версия события не слушает — говорим об этом, а не молчим на клик.
+            if (!ContextMenu.RequestDial())
+            {
+                Lang.Set(SettingsStore.Load(SettingsStore.DefaultPath).Language);
+                MessageBox.Show(Lang.T.CtxOldCopyRunning, "FileDial", MessageBoxButton.OK, MessageBoxImage.Information);
+            }
             Shutdown();
             return;
         }
@@ -93,7 +98,7 @@ public partial class App : Application
         Motion.UserEnabled = _settings.Animations;
         Palette.Apply(Theme.Resolve(_settings.Theme));
         Lang.Set(_settings.Language);
-        ContextMenu.Set(_settings.ContextMenu); // пункт меню — на этот exe и на текущем языке
+        ContextMenu.Sync(_settings.ContextMenu); // пункт меню — на этот exe (если он ничей) и на текущем языке
 
         _ = RefreshSpeechSupportAsync();
         var noFfmpeg = FfmpegLocator.LocateDefault(_settings.FfmpegFolder) is null;
@@ -208,20 +213,43 @@ public partial class App : Application
         _settingsWindow.Activate();
     }
 
-    /// <summary>Применяет настройки из окна. Сначала то, что может не получиться (клавиша, реестр), потом сохранение.</summary>
+    /// <summary>
+    /// Применяет настройки из окна. Сначала то, что может не получиться (клавиша, реестр), потом сохранение.
+    /// Не получилось на любом шаге — уже сделанное откатываем: работающая программа совпадает с сохранённым.
+    /// </summary>
     private string? ApplySettings(AppSettings settings, bool autostart)
     {
+        var previousGesture = _hotkey!.Current;
+        var previousAutostart = Autostart.IsEnabled();
+        var previousMenu = _settings.ContextMenu;
+        var menuChanged = false;
+
+        string? Rollback(string error)
+        {
+            if (previousGesture is not null)
+                _hotkey.Register(previousGesture);
+            if (Autostart.IsEnabled() != previousAutostart)
+                Autostart.Set(previousAutostart);
+            if (menuChanged)
+                ContextMenu.Set(previousMenu);
+            return error;
+        }
+
         var gesture = settings.HotkeyGesture;
-        var error = _hotkey!.Register(gesture);
+        var error = _hotkey.Register(gesture);
         if (error != 0)
             return Lang.T.ShellHotkeyChooseAnother(HotkeyManager.Describe(error, gesture));
 
-        if (autostart != Autostart.IsEnabled() && Autostart.Set(autostart) is { } autostartError)
-            return autostartError;
+        if (autostart != previousAutostart && Autostart.Set(autostart) is { } autostartError)
+            return Rollback(autostartError);
 
         var language = Lang.T.Code;
-        if (ContextMenu.Set(settings.ContextMenu) is { } menuError)
-            return menuError;
+        if (settings.ContextMenu != previousMenu)
+        {
+            if (ContextMenu.Set(settings.ContextMenu) is { } menuError)
+                return Rollback(menuError);
+            menuChanged = true;
+        }
 
         try
         {
@@ -230,7 +258,7 @@ public partial class App : Application
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             ErrorLog.Write("Сохранение настроек", ex);
-            return Lang.T.ShellSettingsSaveFailed;
+            return Rollback(Lang.T.ShellSettingsSaveFailed);
         }
 
         _settings = settings.Normalized();
@@ -378,15 +406,19 @@ public partial class App : Application
         StartJob(action, files, _ => new FileSplitJob(partSize, output));
     }
 
+    /// <summary>Размер картинки для окон «Уменьшить…» и «Кадрировать…» — в фоне: ffprobe на медленном диске не морозит трей.</summary>
+    private static Task<ProbeInfo?> ProbeAsync(FfmpegTools tools, string path) =>
+        Task.Run(() => new FfprobeMediaProbe(tools, MediaProbeTimeout).TryProbe(path));
+
     /// <summary>
     /// «Уменьшить…»: размер выбирается в окне (для одной картинки — с её размером и итогом), выбор запоминается,
     /// затем обычное окно выполнения.
     /// </summary>
-    private void AskResize(DialAction action, IReadOnlyList<string> images)
+    private async void AskResize(DialAction action, IReadOnlyList<string> images)
     {
         (int Width, int Height)? size = null;
         if (images.Count == 1 && FfmpegLocator.LocateDefault(_settings.FfmpegFolder) is { } tools &&
-            new FfprobeMediaProbe(tools, MediaProbeTimeout).TryProbe(images[0]) is { Width: > 0, Height: > 0 } info)
+            await ProbeAsync(tools, images[0]) is { Width: > 0, Height: > 0 } info)
             size = (info.Width, info.Height);
 
         var title = images.Count == 1 ? Path.GetFileName(images[0]) : Lang.T.Images(images.Count);
@@ -413,12 +445,12 @@ public partial class App : Application
     /// «Кадрировать…»: для одной картинки — превью с рамкой, для нескольких — пропорции и какую часть оставить.
     /// Выбор пропорций запоминается, затем обычное окно выполнения.
     /// </summary>
-    private void AskCrop(DialAction action, IReadOnlyList<string> images)
+    private async void AskCrop(DialAction action, IReadOnlyList<string> images)
     {
         var tools = FfmpegLocator.LocateDefault(_settings.FfmpegFolder);
         ProbeInfo? info = null;
         if (images.Count == 1 && tools is not null)
-            info = new FfprobeMediaProbe(tools, MediaProbeTimeout).TryProbe(images[0]);
+            info = await ProbeAsync(tools, images[0]);
 
         var title = images.Count == 1 ? Path.GetFileName(images[0]) : Lang.T.Images(images.Count);
         if (CropWindow.Ask(title, images.Count == 1 ? images[0] : null, tools, info, CropChoice.Parse(_settings.Crop))

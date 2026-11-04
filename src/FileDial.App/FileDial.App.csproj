@@ -27,7 +27,7 @@
     <Copyright>FileDial, 2026</Copyright>
 
     <!-- Репозиторий GitHub для проверки обновлений: «владелец/репозиторий». Пусто — проверка выключена и скрыта. -->
-    <UpdateRepository></UpdateRepository>
+    <UpdateRepository>xckrt/FileDial</UpdateRepository>
   </PropertyGroup>
 
   <ItemGroup>

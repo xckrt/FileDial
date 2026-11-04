@@ -56,12 +56,8 @@ public static class AppPaths
                         continue;
                     if (isSetup && utcNow - Directory.GetLastWriteTimeUtc(dir) < TimeSpan.FromHours(1))
                         continue;
-                    try
-                    {
-                        Directory.Delete(dir, recursive: true);
+                    if (TryDeleteUnused(dir))
                         removed++;
-                    }
-                    catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
                 }
                 if (isSetup && !Directory.EnumerateFileSystemEntries(appDir).Any())
                     TryDeleteEmpty(appDir);
@@ -69,6 +65,30 @@ public static class AppPaths
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
         return removed;
+    }
+
+    /// <summary>
+    /// Удаляет распаковку, только если ей никто не пользуется. Сначала переименовываем папку: Windows не даёт
+    /// переименовать папку с открытыми файлами (загруженными DLL работающей копии другой версии), и тогда
+    /// не тронуто ничего. Удаляй мы сразу — у работающей копии пропали бы ещё не загруженные сборки.
+    /// </summary>
+    private static bool TryDeleteUnused(string dir)
+    {
+        var doomed = dir + ".old-" + Guid.NewGuid().ToString("N")[..8];
+        try
+        {
+            Directory.Move(dir, doomed);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return false; // папкой пользуются (или нет прав) — оставляем как есть
+        }
+        try
+        {
+            Directory.Delete(doomed, recursive: true);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
+        return true;
     }
 
     private static void TryDeleteEmpty(string dir)

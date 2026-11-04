@@ -17,6 +17,8 @@ public abstract partial class Texts
     public abstract string UpdFailedText { get; }
     public abstract string UpdUpToDate(string version);
     public abstract string UpdCheckFailed { get; }
+    /// <summary>Переносная копия или выпуск без контрольной суммы: молча не ставим — открываем страницу выпуска.</summary>
+    public abstract string UpdManualText { get; }
 }
 
 public sealed partial class RuTexts
@@ -32,6 +34,7 @@ public sealed partial class RuTexts
     public override string UpdFailedText => "Нажмите, чтобы открыть страницу выпуска и скачать установщик вручную.";
     public override string UpdUpToDate(string version) => $"У вас последняя версия — {version}.";
     public override string UpdCheckFailed => "Не удалось проверить обновления. Проверьте подключение к интернету.";
+    public override string UpdManualText => "Нажмите, чтобы открыть страницу выпуска и скачать новую версию вручную.";
 }
 
 public sealed partial class EnTexts
@@ -47,4 +50,5 @@ public sealed partial class EnTexts
     public override string UpdFailedText => "Click to open the release page and download the installer manually.";
     public override string UpdUpToDate(string version) => $"You have the latest version, {version}.";
     public override string UpdCheckFailed => "Couldn't check for updates. Check your internet connection.";
+    public override string UpdManualText => "Click to open the release page and download the new version manually.";
 }

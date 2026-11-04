@@ -5,7 +5,7 @@ namespace FileDial.App.Settings;
 
 /// <summary>
 /// Пункт «Открыть в FileDial…» в контекстном меню Проводника — в HKCU, без прав администратора.
-/// Включённый пункт при каждом запуске переписывается на текущий exe (переезд между переносной и установленной копией).
+/// При запуске — <see cref="Sync"/> (ничей пункт забираем, чужой не трогаем); из настроек — <see cref="Set"/> (выбор пользователя).
 /// </summary>
 internal static class ContextMenu
 {
@@ -24,6 +24,28 @@ internal static class ContextMenu
         {
             ErrorLog.Write("Контекстное меню", ex);
             return Lang.T.CtxFailed;
+        }
+    }
+
+    /// <summary>
+    /// Сверка при запуске: включённый пункт ставим на этот exe, только если он ничей (нет пункта или его exe удалён)
+    /// или уже наш (обновить текст). Пункт другой живой копии не перехватываем; выключенный — убираем лишь свой:
+    /// иначе установленная и переносная копии отбирали бы пункт друг у друга при каждом запуске.
+    /// </summary>
+    public static void Sync(bool enabled)
+    {
+        try
+        {
+            var exe = ExePath();
+            var target = ContextMenuEntry.TargetOf(ContextMenuEntry.DefaultClassesKey);
+            if (!enabled)
+                ContextMenuEntry.Unregister(ContextMenuEntry.DefaultClassesKey, exe);
+            else if (target is null || !File.Exists(target) || Installer.SamePath(target, exe))
+                ContextMenuEntry.Register(ContextMenuEntry.DefaultClassesKey, exe, Lang.T.CtxVerb);
+        }
+        catch (Exception ex) when (ex is System.Security.SecurityException or UnauthorizedAccessException or IOException)
+        {
+            ErrorLog.Write("Контекстное меню", ex);
         }
     }
 

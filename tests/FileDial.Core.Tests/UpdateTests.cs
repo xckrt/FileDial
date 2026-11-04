@@ -300,4 +300,20 @@ public class AppPathsTests : IDisposable
         Assert.True(Directory.Exists(foreign));
         Assert.True(Directory.Exists(renamed));
     }
+
+    [Fact]
+    public void CleanOldExtractions_LeavesFolderOfRunningVersionWhole()
+    {
+        // Другая версия с тем же именем exe ещё работает: одна её DLL загружена, другая — ещё нет.
+        var current = Make("FileDial", "new");
+        var running = Make("FileDial", "running");
+        var notLoadedYet = Path.Combine(running, "PdfSharp.dll");
+        File.WriteAllText(notLoadedYet, "x");
+
+        using (File.Open(Path.Combine(running, "a.dll"), FileMode.Open, FileAccess.Read, FileShare.Read))
+            Assert.Equal(0, AppPaths.CleanOldExtractions(current, DateTime.UtcNow));
+
+        Assert.True(File.Exists(notLoadedYet)); // ничего не удалено частично
+        Assert.Single(Directory.GetDirectories(Path.GetDirectoryName(current)!), d => d == running);
+    }
 }

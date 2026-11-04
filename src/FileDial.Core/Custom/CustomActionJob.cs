@@ -1,10 +1,10 @@
 using System.ComponentModel;
 using System.Diagnostics;
-using System.Globalization;
 using System.Text;
 using FileDial.Core.Compression;
 using FileDial.Core.Jobs;
 using FileDial.Core.Localization;
+using FileDial.Core.Text;
 
 namespace FileDial.Core.Custom;
 
@@ -153,19 +153,9 @@ public sealed class CustomActionJob(CustomAction action, FfmpegTools? tools, str
         return process.ExitCode;
     }
 
-    /// <summary>ffmpeg пишет UTF-8, остальные консольные программы Windows — OEM-кодировку.</summary>
-    private static Encoding OutputEncoding(string program)
-    {
-        if (Path.GetFileNameWithoutExtension(program).StartsWith("ffmpeg", StringComparison.OrdinalIgnoreCase))
-            return Encoding.UTF8;
-        try
-        {
-            var oem = CultureInfo.CurrentCulture.TextInfo.OEMCodePage;
-            return Encoding.GetEncoding(oem is 0 or 1 ? 437 : oem);
-        }
-        catch (ArgumentException)
-        {
-            return Encoding.UTF8;
-        }
-    }
+    /// <summary>ffmpeg пишет UTF-8, остальные консольные программы Windows — OEM-кодировку системы (не формата региона).</summary>
+    private static Encoding OutputEncoding(string program) =>
+        Path.GetFileNameWithoutExtension(program).StartsWith("ffmpeg", StringComparison.OrdinalIgnoreCase)
+            ? Encoding.UTF8
+            : OemEncoding.Get(fallbackCodePage: 437);
 }
