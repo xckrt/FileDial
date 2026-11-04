@@ -50,7 +50,12 @@ public static class SelectionInterpreter
     public const int MaxBatch = 200;
 
     public static HotkeyOutcome Interpret(SelectionResult selection, IFileProbe probe, IMediaProbe? media = null,
-        Settings.JobSettings? settings = null)
+        Settings.JobSettings? settings = null) =>
+        // Свои действия пользователя добавляются поверх готового меню.
+        Custom.CustomPlacement.Apply(InterpretBuiltIn(selection, probe, media, settings), settings?.CustomActions, probe);
+
+    private static HotkeyOutcome InterpretBuiltIn(SelectionResult selection, IFileProbe probe, IMediaProbe? media,
+        Settings.JobSettings? settings)
     {
         if (!selection.IsSuccess)
             return new HotkeyOutcome.ShowToast(selection.Error!);

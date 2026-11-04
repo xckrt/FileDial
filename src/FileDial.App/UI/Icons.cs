@@ -100,7 +100,10 @@ internal static class Icons
     /// <summary>Значок размером <paramref name="size"/> с цветом <paramref name="brush"/>; null — значка нет.</summary>
     public static Path? Create(string actionId, Brush brush, double size = 20)
     {
-        if (!Data.TryGetValue(actionId, out var data))
+        // Свои действия — общий значок «консоль», группа «Ещё» — три точки.
+        if (!Data.TryGetValue(actionId, out string? data))
+            data = CustomIcons.DataFor(actionId);
+        if (data is null)
             return null;
         if (!Cache.TryGetValue(actionId, out var geometry))
         {

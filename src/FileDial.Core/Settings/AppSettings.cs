@@ -58,6 +58,7 @@ public sealed record AppSettings
         OutputFolder = string.IsNullOrWhiteSpace(OutputFolder) ? null : OutputFolder,
         WhisperModel = string.IsNullOrWhiteSpace(WhisperModel) ? null : WhisperModel,
         WhisperLanguage = WhisperLanguage,
+        CustomActions = CustomActions,
     };
 
     /// <summary>Приводит значения к допустимым: цели — к ближайшим из списка, сочетание — к рабочему.</summary>
@@ -72,10 +73,16 @@ public sealed record AppSettings
         OutputFolder = string.IsNullOrWhiteSpace(OutputFolder) ? null : OutputFolder.Trim(),
         WhisperModel = string.IsNullOrWhiteSpace(WhisperModel) ? null : WhisperModel.Trim(),
         WhisperLanguage = WhisperLanguage is "ru" or "en" ? WhisperLanguage : "auto",
+        CustomActions = Custom.CustomActions.Normalize(CustomActions),
     };
 
     private static long Nearest(IReadOnlyList<long> allowed, long value) =>
         allowed.OrderBy(a => Math.Abs(a - value)).First();
+
+    // --- Свои действия ---
+
+    /// <summary>Свои действия пользователя: программа с шаблоном аргументов (см. <see cref="Custom.CustomAction"/>).</summary>
+    public IReadOnlyList<Custom.CustomAction> CustomActions { get; init; } = Custom.CustomActionList.Empty;
 }
 
 public static class SettingsStore

@@ -112,6 +112,14 @@
                     <TextBlock x:Name="WhisperStatus" Foreground="{DynamicResource MutedBrush}" FontSize="12"
                                TextWrapping="Wrap" Margin="0,6,0,8" />
                     <WrapPanel x:Name="WhisperLanguages" />
+
+                    <!-- Мои действия: список со своими кнопками, редактор — отдельное окно. -->
+                    <TextBlock Text="{l:T CstSectionTitle}" Style="{StaticResource SectionTitle}" />
+                    <TextBlock Text="{l:T CstSectionHint}" Foreground="{DynamicResource MutedBrush}" FontSize="12"
+                               TextWrapping="Wrap" Margin="0,0,0,8" />
+                    <StackPanel x:Name="CustomList" />
+                    <Button Content="{l:T CstAdd}" Style="{StaticResource FlatButton}" HorizontalAlignment="Left"
+                            Margin="0,4,0,0" Click="OnAddCustomAction" />
                 </StackPanel>
             </ScrollViewer>
         </DockPanel>
