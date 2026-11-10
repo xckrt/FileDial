@@ -18,7 +18,7 @@
     <ApplicationIcon>FileDial.ico</ApplicationIcon>
 
     <!-- Сведения о файле (свойства exe → «Подробно»). -->
-    <Version>0.3.0</Version>
+    <Version>0.3.1</Version>
     <Product>FileDial</Product>
     <Company>FileDial</Company>
     <!-- AssemblyTitle — то, что Windows показывает как «Описание файла». -->
