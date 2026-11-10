@@ -197,22 +197,28 @@ public sealed class ArchiveCreateJob(ArchiveFormat format, string? outputDirecto
         CancellationToken ct)
     {
         long done = 0;
+        var buffer = new byte[1 << 20];
         using var stream = new FileStream(temp, FileMode.CreateNew, FileAccess.Write);
         using var zip = new ZipArchive(stream, ZipArchiveMode.Create);
 
         void AddFile(string file, string entryName)
         {
             ct.ThrowIfCancellationRequested();
-            progress?.Report(new JobProgress(Lang.T.ArchiveStageCompressingFile(Path.GetFileName(file)), total > 0 ? (double)done / total : null));
+            var stage = Lang.T.ArchiveStageCompressingFile(Path.GetFileName(file));
+            progress?.Report(new JobProgress(stage, total > 0 ? Math.Min((double)done / total, 1) : null));
             try
             {
-                zip.CreateEntryFromFile(file, entryName, CompressionLevel.Optimal);
+                using var input = File.OpenRead(file);
+                var entry = zip.CreateEntry(entryName, CompressionLevel.Optimal);
+                var modified = File.GetLastWriteTime(file);
+                entry.LastWriteTime = modified.Year is >= 1980 and <= 2107 ? modified : new DateTime(1980, 1, 1);
+                using var output = entry.Open();
+                ArchiveSupport.CopyZipData(input, output, buffer, total, ref done, stage, progress, ct);
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
                 throw new CompressionException(Lang.T.ArchiveCannotRead(Path.GetFileName(file)));
             }
-            done += new FileInfo(file).Length;
         }
 
         foreach (var path in paths)

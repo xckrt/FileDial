@@ -25,7 +25,7 @@
 
                 <DockPanel>
                     <TextBlock x:Name="PercentText" DockPanel.Dock="Right" Foreground="{DynamicResource TextBrush}"
-                               FontSize="13" />
+                               FontSize="13" Margin="10,0,0,0" />
                     <TextBlock x:Name="StageText" Foreground="{DynamicResource TextBrush}" FontSize="13"
                                TextTrimming="CharacterEllipsis" />
                 </DockPanel>

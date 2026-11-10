@@ -47,6 +47,7 @@ public partial class JobWindow : Window
         FileNameText.ToolTip = string.Join(Environment.NewLine, sourcePaths.Take(20)) +
                                (sourcePaths.Count > 20 ? Environment.NewLine + "…" : "");
         StageText.Text = Lang.T.UiJobPreparing;
+        SetProgress(0);
         Opacity = 0;
 
         var placement = new WindowPlacement(this, cursor, PlacementMode.NearCursor, Width, Height);
@@ -100,7 +101,7 @@ public partial class JobWindow : Window
         _running = true;
         var progress = new Progress<JobProgress>(p =>
         {
-            if (!_running) return; // поздние отчёты после завершения не должны перетирать итог
+            if (!_running || _cts.IsCancellationRequested) return;
             StageText.Text = p.Stage;
             SetProgress(p.Fraction);
         });
@@ -230,13 +231,16 @@ public partial class JobWindow : Window
         }
     }
 
-    /// <summary>null — бегущая полоса без процентов (короткие операции, где длительность неизвестна).</summary>
+    /// <summary>На этапе без оценки сохраняем последний известный процент.</summary>
     private void SetProgress(double? fraction)
     {
         ProgressIndicator.IsIndeterminate = fraction is null;
-        PercentText.Text = fraction is { } f ? $"{f * 100:0}%" : string.Empty;
-        if (fraction is { } value)
-            Motion.To(ProgressIndicator, RangeBase.ValueProperty, value, 200);
+        if (fraction is not { } value)
+            return;
+
+        value = Math.Clamp(value, 0, _running ? 0.99 : 1);
+        PercentText.Text = $"{value * 100:0}%";
+        Motion.To(ProgressIndicator, RangeBase.ValueProperty, value, 200);
     }
 
     /// <summary>Итог без результата (ошибка, отмена, нечего делать): пустая полоса без процентов.</summary>

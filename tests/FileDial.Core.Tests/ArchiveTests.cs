@@ -140,6 +140,32 @@ public class ArchiveIntegrationTests : IDisposable
 
     private static Task<JobResult> Run(IFileJob job, string path) => job.RunAsync(path, null, CancellationToken.None);
 
+    [Fact]
+    public async Task SingleLargeZipEntry_ReportsIntermediateProgressInBothDirections()
+    {
+        var source = Path.Combine(_root, "large.bin");
+        var data = new byte[3 * 1024 * 1024];
+        new Random(42).NextBytes(data);
+        File.WriteAllBytes(source, data);
+
+        var progress = new RecordedProgress();
+        var created = await new ArchiveCreateJob(ArchiveFormat.Zip).RunAsync(source, progress, CancellationToken.None);
+        Assert.Contains(progress.Fractions, fraction => fraction is > 0 and < 1);
+
+        progress.Fractions.Clear();
+        var extracted = await new ArchiveExtractJob(ExtractMode.ToFolder)
+            .RunAsync(created.OutputPath!, progress, CancellationToken.None);
+        Assert.Contains(progress.Fractions, fraction => fraction is > 0 and < 1);
+        Assert.Equal(data, File.ReadAllBytes(Path.Combine(extracted.OutputPath!, "large.bin")));
+    }
+
+    private sealed class RecordedProgress : IProgress<JobProgress>
+    {
+        public List<double?> Fractions { get; } = [];
+
+        public void Report(JobProgress value) => Fractions.Add(value.Fraction);
+    }
+
     [CyrillicWindowsFact]
     public async Task LegacyZip_CyrillicNames_AreReadCorrectly()
     {

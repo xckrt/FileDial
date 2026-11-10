@@ -206,7 +206,9 @@ public static class ArchiveSupport
             using var zip = ZipFile.Open(archive, ZipArchiveMode.Read, LegacyZipNames);
             var root = Path.GetFullPath(target) + Path.DirectorySeparatorChar;
             var total = Math.Max(1, zip.Entries.Sum(e => e.Length));
+            var buffer = new byte[1 << 20];
             long done = 0;
+            progress?.Report(new JobProgress(stage, 0));
             foreach (var entry in zip.Entries)
             {
                 ct.ThrowIfCancellationRequested();
@@ -220,9 +222,10 @@ public static class ArchiveSupport
                     continue;
                 }
                 Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
-                entry.ExtractToFile(destination, overwrite: false);
-                done += entry.Length;
-                progress?.Report(new JobProgress(stage, (double)done / total));
+                using (var input = entry.Open())
+                using (var output = new FileStream(destination, FileMode.CreateNew, FileAccess.Write))
+                    CopyZipData(input, output, buffer, total, ref done, stage, progress, ct);
+                File.SetLastWriteTime(destination, entry.LastWriteTime.DateTime);
             }
         }
         catch (InvalidDataException ex)
@@ -233,6 +236,22 @@ public static class ArchiveSupport
         {
             // Шифрование и экзотические методы сжатия .NET не поддерживает.
             throw new CompressionException(Lang.T.ArchiveLockedOrUnsupported, ex.Message);
+        }
+    }
+
+    internal static void CopyZipData(Stream input, Stream output, byte[] buffer, long total, ref long done,
+        string stage, IProgress<JobProgress>? progress, CancellationToken ct)
+    {
+        while (true)
+        {
+            ct.ThrowIfCancellationRequested();
+            var read = input.ReadAtLeast(buffer, buffer.Length, throwOnEndOfStream: false);
+            if (read == 0)
+                break;
+            output.Write(buffer, 0, read);
+            done += read;
+            if (total > 0)
+                progress?.Report(new JobProgress(stage, Math.Min((double)done / total, 1)));
         }
     }
 
